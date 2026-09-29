@@ -2,7 +2,7 @@
 
 The game uses Maanmittauslaitos (MML) elevation and color orthophoto data for Päijänne, Virolahti, Ilomantsi, and Kuusamo. The Pages deployment downloads the public [terrain data release](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.1.0). This tool fetches updated source data from MML's WCS API, converts it to game-ready files, and writes it under `public/terrain/areas/`.
 
-Requirements: Node.js 20.19+ or 22.12+, an MML API key, and network access. Sharp is installed as a development dependency and encodes the detailed image tiles as JPEG. The API key is used only by this local Node.js tool. It is never part of the browser app or the generated terrain files.
+Requirements: Node.js 20.19+, 22.13.x, or 24+, an MML API key, and network access. Sharp is installed as a development dependency and encodes the detailed image tiles as JPEG. The API key is used only by this local Node.js tool. It is never part of the browser app or the generated terrain files.
 
 ## Download
 

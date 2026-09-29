@@ -486,7 +486,11 @@ export function applyTranslations(root = document) {
 export function setLanguage(nextLanguage) {
   if (!validLanguages.has(nextLanguage)) return;
   language = nextLanguage;
-  try { localStorage.setItem('ilmatila-language', language); } catch {}
+  try {
+    localStorage.setItem('ilmatila-language', language);
+  } catch {
+    // Language selection still works for the current session without storage.
+  }
   applyTranslations();
   document.dispatchEvent(new CustomEvent('ilmatila:languagechange', { detail: { language } }));
 }
@@ -496,7 +500,9 @@ export function initializeLanguagePicker() {
   try {
     const stored = localStorage.getItem('ilmatila-language');
     if (validLanguages.has(stored)) saved = stored;
-  } catch {}
+  } catch {
+    // Keep English as the default when browser storage is unavailable.
+  }
   language = saved;
   const picker = document.querySelector('#language-select');
   if (picker) {

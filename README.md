@@ -6,14 +6,14 @@ The interface defaults to English and also supports Finnish. See the [changelog]
 
 ## Run locally
 
-Requirements: Node.js 20.19+ or 22.12+, npm, and a modern browser with WebGL support.
+Requirements: Node.js 20.19+, 22.13.x, or 24+, npm, and a modern browser with WebGL support.
 
 ```sh
 npm ci
 npm run dev
 ```
 
-Open the local URL printed by Vite. Create a production build with `npm run build`; `npm run preview` serves that build locally. The app does not need an API key at runtime.
+Open the local URL printed by Vite. Run the automated checks with `npm test` and `npm run lint`; `npm run test:watch` keeps Vitest running while you edit. Create a production build with `npm run build`; `npm run preview` serves that build locally. The app does not need an API key at runtime.
 
 ## GitHub Pages
 

@@ -4,6 +4,7 @@ import { GroundBattle } from './combat/ground-battle.js';
 import { CombatInput } from './combat/input.js';
 import { CombatRadar } from './combat/radar.js';
 import { pointSegmentDistanceSquared, traceFighterHit, traceVehicleHit } from './combat/hit-testing.js';
+import { advanceMissionObjective, evaluateMissionObjective, MISSION_OUTCOME } from './combat/mission-objective.js';
 import { createMissile, MISSILE_PROFILES, updateMissileMotor } from './combat/projectiles.js';
 import {
   estimateInterceptTime,
@@ -14,7 +15,6 @@ import {
 } from './combat/ballistics.js';
 import { formatNumber, t } from './i18n.js';
 
-const sphereGeo=new THREE.SphereGeometry(1,7,5);
 const effectSphereGeo=new THREE.SphereGeometry(1,14,10);
 const shockwaveGeo=new THREE.RingGeometry(.94,1,48);
 const gunTracerRoundGeo=new THREE.CylinderGeometry(.004,.012,.16,6);
@@ -107,7 +107,9 @@ export class CombatWorld {
     this.mission=missionConfig;
     this.missionObjective=missionConfig.objective??{type:'clearAir'};
     this.objectiveElapsed=0;
+    this.missionOutcome=MISSION_OUTCOME.ACTIVE;
     this.missionComplete=false;
+    this.missionFailed=false;
     this.missionNoticeTimer=null;
     this.input = new CombatInput();
     this.missiles={air:MISSILE_PROFILES.playerAir.count,ground:MISSILE_PROFILES.playerGround.count};
@@ -261,6 +263,15 @@ export class CombatWorld {
   destroyPlayer(reasonKey,params={}){
     if(this.destroyed)return;
     this.destroyed=true;
+    this.missionOutcome=evaluateMissionObjective(this.missionObjective,{
+      elapsed:this.objectiveElapsed,
+      airRemaining:this.enemies.filter(enemy=>!enemy.dead).length,
+      groundRemaining:this.redUnits.filter(unit=>!unit.dead&&unit.armed!==false).length,
+      destroyed:true,
+      outcome:this.missionOutcome,
+    });
+    this.missionComplete=this.missionOutcome===MISSION_OUTCOME.COMPLETE;
+    this.missionFailed=this.missionOutcome===MISSION_OUTCOME.FAILED;
     if(this.boundaryWarning)this.boundaryWarning.hidden=true;
     this.audio?.setGunFiring(false);
     this.audio?.playCollision();
@@ -426,19 +437,21 @@ export class CombatWorld {
     return true;
   }
   updateMissionObjective(dt){
-    if(this.destroyed||this.missionComplete)return;
-    const type=this.missionObjective.type;
-    if(type==='training')this.objectiveElapsed=Math.min(this.missionObjective.duration??90,this.objectiveElapsed+dt);
-    this.renderMissionObjective();
-
+    if(this.missionOutcome!==MISSION_OUTCOME.ACTIVE)return;
     const airRemaining=this.enemies.filter(enemy=>!enemy.dead).length;
     const groundRemaining=this.redUnits.filter(unit=>!unit.dead&&unit.armed!==false).length;
-    const complete=type==='training'
-      ? this.objectiveElapsed>=(this.missionObjective.duration??90)
-      : type==='support'
-        ? airRemaining===0&&groundRemaining===0
-        : airRemaining===0;
-    if(complete)this.completeMission();
+    const next=advanceMissionObjective(this.missionObjective,{
+      elapsed:this.objectiveElapsed,
+      outcome:this.missionOutcome,
+    },dt,{airRemaining,groundRemaining,destroyed:this.destroyed});
+    this.objectiveElapsed=next.elapsed;
+    this.missionOutcome=next.outcome;
+    this.missionFailed=next.outcome===MISSION_OUTCOME.FAILED;
+    if(next.outcome===MISSION_OUTCOME.COMPLETE){
+      this.completeMission();
+      return;
+    }
+    this.renderMissionObjective();
   }
   renderMissionObjective(){
     if(this.objectiveTitle){
@@ -478,6 +491,8 @@ export class CombatWorld {
   completeMission(){
     if(this.missionComplete)return;
     this.missionComplete=true;
+    this.missionFailed=false;
+    this.missionOutcome=MISSION_OUTCOME.COMPLETE;
     this.renderMissionObjective();
     this.renderMissionComplete();
     if(this.statusText)this.statusText.textContent=t('mission.statusComplete');

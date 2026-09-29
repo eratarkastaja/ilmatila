@@ -5,7 +5,6 @@ const CACHE_LIMIT = 12;
 
 export function createDetailStreamer({ base, metadata, terrainGeometry, parent, anisotropy = 4 }) {
   const grid = metadata.detailOrthoGrid;
-  const tilePixels = metadata.detailOrthoTilePixels;
   const tileMeters = metadata.detailOrthoTileSizeMeters;
   const areaMeters = metadata.detailOrthoAreaMeters;
   const abortController = new AbortController();

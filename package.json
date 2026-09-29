@@ -7,11 +7,14 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": "^20.19.0 || ^22.13.0 || >=24.0.0"
   },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
     "preview": "vite preview",
     "terrain:fetch": "node tools/terrain/fetch-finland-terrain.mjs",
     "assets:aircraft": "node tools/assets/convert-flightgear-aircraft.mjs"
@@ -20,11 +23,15 @@
     "three": "^0.180.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@gltf-transform/core": "^4.5.1",
     "@gltf-transform/functions": "^4.5.1",
     "assimpjs": "^0.0.10",
+    "eslint": "^10.11.0",
     "geotiff": "^3.0.5",
+    "globals": "^17.12.0",
     "sharp": "^0.35.5",
-    "vite": "^7.1.7"
+    "vite": "^7.1.7",
+    "vitest": "^4.1.11"
   }
 }
