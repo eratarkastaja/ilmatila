@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | World setup and frame orchestration | `CombatWorld` | Scene, player, terrain, air/ground battle instances, shared velocity, radar, input |
 | Weapon trigger, firing cadence, ammunition, launch gates | `WeaponSystem` | Player transform, radar lock/mode, audio/FX, scene, projectile insertion callback |
-| Projectile storage, movement, guidance, and expiry | `CombatWorld.updateShots` (next extraction) | Player/hostile projectile arrays, aircraft and ground targets, terrain, decoys, audio, collision and effects callbacks |
+| Projectile storage, movement, guidance, impacts, and expiry | `ProjectileSystem` | Shared player/hostile queues, aircraft and ground targets, terrain, decoys, audio, and narrow world callbacks for destruction and effects |
 | Player collision and swept aircraft collision | `CombatWorld.checkPlayerCollision` (planned extraction) | Player movement history, terrain bounds/heights, ground collider list, aircraft transforms and velocities, player destruction callback |
 | Player and AI countermeasures, decoy lifetime | `CombatWorld` (planned extraction) | Decoy list, player/enemy transforms and velocities, projectile seekers, scene, FX and audio |
 | Objective evaluation and mission completion UI | `CombatWorld` (planned extraction) | Objective config/progress, surviving target counts, destruction state, localized DOM elements and completion timer |
@@ -28,9 +28,9 @@
 ## Extraction order
 
 1. `WeaponSystem`: weapon firing, missile gating, ammunition, cooldown, and transient launch feedback. Regression tests cover lock gates, ammunition/domain selection, cooldown, and gun cadence.
-2. `ProjectileSystem`: player/hostile projectile storage, movement, guidance, impacts, and expiry. It will call narrow world adapters for collisions, kills, audio, and effects.
+2. `ProjectileSystem` (extracted): player/hostile projectile queues, movement, guidance, impacts, and expiry. The next stage will move the hit and collision queries into `CollisionSystem`; projectile behavior will then consume its results through a narrow resolver interface.
 3. `CollisionSystem`: swept terrain, theater-boundary, vehicle, aircraft, and projectile hit tests.
 4. `CountermeasureSystem`: player/hostile flare and chaff deployment, inventory/cooldowns, decoy movement and cleanup.
 5. `MissionSystem`: objective progress/outcome and mission completion/failure presentation.
 
-Each extraction keeps the existing update order and adds focused regression coverage before the next responsibility moves.
+Each extraction keeps the existing update order and adds focused regression coverage before the next responsibility moves. `WeaponSystem` and `ProjectileSystem` have focused tests for their launch gates, ammunition/cadence, impacts, threat indication, and projectile cleanup.

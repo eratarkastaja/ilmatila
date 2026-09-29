@@ -3,10 +3,10 @@ import { AirBattle } from './combat/air-battle.js';
 import { GroundBattle } from './combat/ground-battle.js';
 import { CombatInput } from './combat/input.js';
 import { CombatRadar } from './combat/radar.js';
-import { pointSegmentDistanceSquared, traceFighterHit, traceVehicleHit } from './combat/hit-testing.js';
+import { pointSegmentDistanceSquared } from './combat/hit-testing.js';
 import { advanceMissionObjective, evaluateMissionObjective, MISSION_OUTCOME } from './combat/mission-objective.js';
-import { MISSILE_PROFILES, updateMissileMotor } from './combat/projectiles.js';
-import { estimateInterceptTime } from './combat/ballistics.js';
+import { MISSILE_PROFILES } from './combat/projectiles.js';
+import { ProjectileSystem } from './combat/projectile-system.js';
 import { WeaponSystem } from './combat/weapon-system.js';
 import { formatNumber, t } from './i18n.js';
 
@@ -36,24 +36,6 @@ const forward=new THREE.Vector3(0,0,1);
 const stationaryVelocity=new THREE.Vector3();
 const localForward=new THREE.Vector3(0,0,1),localRight=new THREE.Vector3(1,0,0),localUp=new THREE.Vector3(0,1,0);
 const collisionOrigin=new THREE.Vector3();
-const localBulletAxis=new THREE.Vector3(0,1,0);
-const MISSILE_TURN_RATE=2.45;
-
-function turnDirection(current,desired,maxAngle){
-  if(desired.lengthSq()<1e-9){
-    return current.lengthSq()>1e-9?current.clone().normalize():forward.clone();
-  }
-  const direction=current.lengthSq()>1e-9?current.clone().normalize():desired.clone().normalize();
-  const angle=direction.angleTo(desired);
-  if(angle<=maxAngle)return direction.copy(desired);
-
-  const axis=new THREE.Vector3().crossVectors(direction,desired);
-  if(axis.lengthSq()<1e-8){
-    axis.crossVectors(direction,new THREE.Vector3(0,1,0));
-    if(axis.lengthSq()<1e-8)axis.crossVectors(direction,new THREE.Vector3(1,0,0));
-  }
-  return direction.applyAxisAngle(axis.normalize(),maxAngle).normalize();
-}
 
 function createGlowTexture(){
   const canvas=document.createElement('canvas');canvas.width=128;canvas.height=128;
@@ -74,14 +56,6 @@ function closestSegmentFractionXZ(start,end){
   const lengthSq=dx*dx+dz*dz;
   if(lengthSq<1e-9)return 0;
   return THREE.MathUtils.clamp(-(start.x*dx+start.z*dz)/lengthSq,0,1);
-}
-
-function sweptRelativeDistanceSquared(movingStart,movingEnd,targetStart,targetEnd){
-  return pointSegmentDistanceSquared(
-    collisionOrigin,
-    movingStart.clone().sub(targetStart),
-    movingEnd.clone().sub(targetEnd),
-  );
 }
 
 function addTransientGlow(parent,color,size,opacity=1,blending=THREE.AdditiveBlending){
@@ -106,7 +80,7 @@ export class CombatWorld {
     this.missionNoticeTimer=null;
     this.input = new CombatInput();
     this.score=0;
-    this.countermeasures=12; this.countermeasureCooldown=0; this.decoys=[]; this.incomingMissile=false;
+    this.countermeasures=12; this.countermeasureCooldown=0; this.decoys=[];
     this.terrain=terrain; this.playerHeading=0; this.previousPlayerPosition=player.position.clone();
     this.lastCollisionPosition=player.position.clone(); this.playerVelocity=new THREE.Vector3();
     this.airBattle = new AirBattle({
@@ -114,12 +88,12 @@ export class CombatWorld {
       playerVelocity: this.playerVelocity,
       getPlayerHeading: () => this.getPlayerHeading(),
       deployHostileCountermeasures: (enemy, seeker) => this.deployHostileCountermeasures(enemy, seeker),
-      addHostileProjectile: shot => this.hostiles.push(shot),
-      addPlayerProjectile: shot => this.playerShots.push(shot),
+      addHostileProjectile: shot => this.projectileSystem.addHostileProjectile(shot),
+      addPlayerProjectile: shot => this.projectileSystem.addPlayerProjectile(shot),
     });
     this.enemies = this.airBattle.enemies;
     this.allies = this.airBattle.allies;
-    this.groundBattle = new GroundBattle({ scene, player, playerVelocity: this.playerVelocity, terrain, mission: missionConfig, audio, fx, addProjectile: shot => this.hostiles.push(shot) });
+    this.groundBattle = new GroundBattle({ scene, player, playerVelocity: this.playerVelocity, terrain, mission: missionConfig, audio, fx, addProjectile: shot => this.projectileSystem.addHostileProjectile(shot) });
     this.friends = this.groundBattle.friends;
     this.redUnits = this.groundBattle.redUnits;
     this.colliders = this.groundBattle.colliders;
@@ -127,10 +101,20 @@ export class CombatWorld {
       air:this.enemies.length,
       ground:this.redUnits.filter(unit=>unit.armed!==false).length,
     };
+    this.projectileSystem = new ProjectileSystem({
+      scene, player, terrain, playerShots: this.playerShots, hostiles: this.hostiles,
+      enemies: this.enemies, redUnits: this.redUnits, decoys: this.decoys, fx, audio,
+      lastCollisionPosition: this.lastCollisionPosition,
+      onPlayerDestroyed: (reason, params) => this.destroyPlayer(reason, params),
+      onJetDestroyed: (enemy, credited) => this.killJet(enemy, credited),
+      onUnitDestroyed: unit => this.destroyUnit(unit),
+      addSpark: position => this.addSpark(position),
+      addExplosion: (position, intensity) => this.addExplosion(position, intensity),
+    });
     this.radar = new CombatRadar(player, audio);
     this.weaponSystem = new WeaponSystem({
       player, scene, fx, audio, radar: this.radar, playerVelocity: this.playerVelocity,
-      addProjectile: shot => this.playerShots.push(shot),
+      addProjectile: shot => this.projectileSystem.addPlayerProjectile(shot),
     });
     this.weapon=document.querySelector('#weapon'); this.ammo=document.querySelector('#ammo'); this.missileType=document.querySelector('#missile-type'); this.missileCount=document.querySelector('#missile-count'); this.scoreEl=document.querySelector('#score');
     this.countermeasureCount=document.querySelector('#countermeasure-count'); this.threatWarning=document.querySelector('#threat-warning');
@@ -194,7 +178,7 @@ export class CombatWorld {
     });
     this.groundBattle.update(dt);
     this.updateDecoys(dt);
-    this.updateShots(dt);
+    this.projectileSystem.update(dt);
     this.updateEffects(dt);
     this.updateMissionObjective(dt);
     this.updateHud();
@@ -480,131 +464,6 @@ export class CombatWorld {
       }
     }
   }
-  updateShots(dt){
-    for(let i=this.playerShots.length-1;i>=0;i--){const s=this.playerShots[i];s.life-=dt;
-      if(s.homing)updateMissileMotor(s,dt);
-      if(s.homing&&(!s.target||s.target.dead))s.life=0;
-      if(s.homing&&s.guidanceActive&&s.target&&!s.target.dead){
-        if(s.decoyTarget&&!s.decoyTarget.active)s.decoyTarget=null;
-        if(!s.decoyTarget&&s.seeker){
-          let nearest=1250, candidate=null;
-          for(const decoy of this.decoys){
-            if(!decoy.active||decoy.team!=='enemy'||decoy.source!==s.target||decoy.type!==s.seeker||s.decoyAttempts.has(decoy))continue;
-            const distance=s.mesh.position.distanceTo(decoy.position);
-            if(distance<nearest){nearest=distance;candidate=decoy;}
-          }
-          if(candidate){
-            s.decoyAttempts.add(candidate);
-            if(Math.random()<candidate.spoofChance)s.decoyTarget=candidate;
-          }
-        }
-        const missileSpeed=s.speed??(s.targetDomain==='ground'?270:350);
-        let aimPoint;
-        if(s.decoyTarget){
-          aimPoint=s.decoyTarget.position.clone().addScaledVector(s.decoyTarget.velocity,.15);
-        }else{
-          const targetVelocity=s.target.velocity??stationaryVelocity;
-          const targetOffset=s.target.mesh.position.clone().sub(s.mesh.position);
-          const leadTime=estimateInterceptTime(targetOffset,targetVelocity,missileSpeed);
-          aimPoint=s.target.mesh.position.clone().addScaledVector(targetVelocity,leadTime);
-        }
-        const desiredDirection=aimPoint.sub(s.mesh.position).normalize();
-        const direction=turnDirection(s.velocity,desiredDirection,MISSILE_TURN_RATE*dt);
-        s.velocity.copy(direction).multiplyScalar(missileSpeed);
-        s.mesh.quaternion.setFromUnitVectors(forward,direction);
-        if(Math.random()<.04)this.addSpark(s.mesh.position);
-      }
-      if(s.homing)this.audio?.updateMissileFlight(s.mesh.id,s.mesh.position.distanceTo(this.player.position),dt);
-      const previous=s.mesh.position.clone();
-      if(s.ballistic)s.velocity.y-=s.gravity*dt;
-      s.mesh.position.addScaledVector(s.velocity,dt);
-      if(s.tracer)s.mesh.quaternion.setFromUnitVectors(localBulletAxis,s.velocity.clone().normalize());
-      if(s.decoyTarget&&sweptRelativeDistanceSquared(previous,s.mesh.position,s.decoyTarget.previousPosition,s.decoyTarget.position)<12**2){
-        this.addSpark(s.mesh.position);s.life=0;
-      }
-      let hit=null,hitInfo=null;
-      if(s.life>0)for(const e of this.enemies){
-        if(e.dead)continue;
-        // Express the previous shot position in the target's current frame.
-        // Adding target motion is required here because traceFighterHit applies
-        // the current aircraft transform to both ends of the swept segment.
-        const relativeStart=previous.clone().addScaledVector(e.velocity??stationaryVelocity,dt);
-        const impact=traceFighterHit(relativeStart,s.mesh.position,e.mesh);
-        if(impact&&(!hitInfo||impact.t<hitInfo.t)){hit=e;hitInfo=impact;}
-      }
-      if(s.life>0&&!s.ally)for(const unit of this.redUnits){if(unit.dead)continue;
-        const relativeStart=previous.clone().addScaledVector(unit.velocity??stationaryVelocity,dt);
-        const impact=traceVehicleHit(relativeStart,s.mesh.position,unit.mesh,s.ballistic?1.5:undefined);
-        if(impact&&(!hitInfo||impact.t<hitInfo.t)){hit=unit;hitInfo=impact;}
-      }
-      if(hit){
-        hit.hp-=s.damage*(hitInfo.damage??1);
-        if(hit.hp<=0){if(hit.mesh.userData.faction==='red')this.destroyUnit(hit);else this.killJet(hit,!s.ally);}
-        else this.addSpark(previous.clone().lerp(s.mesh.position,hitInfo.t));
-        s.life=0;
-      }
-      if(s.life>0&&s.ballistic){
-        const groundHeight=this.terrain.sampleHeight(s.mesh.position.x,s.mesh.position.z);
-        if(s.mesh.position.y<=groundHeight){
-          s.mesh.position.y=groundHeight;
-          if(s.tracer)this.addSpark(s.mesh.position);
-          s.life=0;
-        }
-      }
-      if(s.life<=0){if(s.homing)this.audio?.stopMissileFlight(s.mesh.id);this.scene.remove(s.mesh);this.playerShots.splice(i,1);}
-    }
-    this.incomingMissile=false;
-    for(let i=this.hostiles.length-1;i>=0;i--){
-      const s=this.hostiles[i];if(!s.projectile)continue;s.life-=dt;
-      const previous=s.mesh.position.clone();
-      if(s.missile){
-        updateMissileMotor(s,dt);
-        const distanceToPlayer=s.mesh.position.distanceTo(this.player.position);
-        if(distanceToPlayer<1900){
-          this.incomingMissile=true;
-          s.warningClock-=dt;
-          if(s.warningClock<=0){this.audio?.playIncomingMissile();s.warningClock=1.25;}
-        }
-        if(s.guidanceActive){
-          if(s.decoyTarget&&!s.decoyTarget.active)s.decoyTarget=null;
-          if(!s.decoyTarget){
-            let nearest=1250;
-            for(const decoy of this.decoys){
-              if(!decoy.active||decoy.team!=='player'||decoy.type!==s.seeker)continue;
-              const d=s.mesh.position.distanceTo(decoy.position);
-              if(d<nearest){nearest=d;s.decoyTarget=decoy;}
-            }
-          }
-          const aimTarget=s.decoyTarget?s.decoyTarget.position:this.player.position;
-          const missileSpeed=s.velocity.length();
-          const wanted=aimTarget.clone().sub(s.mesh.position).normalize().multiplyScalar(missileSpeed);
-          s.velocity.lerp(wanted,1-Math.exp(3.1*dt));
-          if(s.velocity.lengthSq()>1)s.mesh.quaternion.setFromUnitVectors(forward,s.velocity.clone().normalize());
-        }
-        this.audio?.updateMissileFlight(s.mesh.id,distanceToPlayer,dt);
-        s.mesh.position.addScaledVector(s.velocity,dt);
-        if(s.decoyTarget&&sweptRelativeDistanceSquared(previous,s.mesh.position,s.decoyTarget.previousPosition,s.decoyTarget.position)<12**2){this.addSpark(s.mesh.position);s.life=0;}
-        else if(!s.decoyTarget&&sweptRelativeDistanceSquared(previous,s.mesh.position,this.lastCollisionPosition,this.player.position)<13**2){this.destroyPlayer('combat.hostileMissile');this.addExplosion(s.mesh.position,.48);s.life=0;}
-      }else if(s.flak){
-        s.mesh.position.addScaledVector(s.velocity,dt);
-        const distanceSq=sweptRelativeDistanceSquared(previous,s.mesh.position,this.lastCollisionPosition,this.player.position);
-        if(distanceSq<9**2){
-          this.destroyPlayer('combat.hostileFire');
-          this.addExplosion(s.mesh.position,.34);
-          s.life=0;
-        }else if(!s.burst&&distanceSq<42**2){
-          this.addExplosion(s.mesh.position,.24);
-          s.burst=true;
-          s.life=0;
-        }
-      }else{
-        s.mesh.position.addScaledVector(s.velocity,dt);
-        if(s.ground&&s.target&&!s.target.dead&&sweptRelativeDistanceSquared(previous,s.mesh.position,s.target.mesh.position.clone().addScaledVector(s.target.velocity??stationaryVelocity,-dt),s.target.mesh.position)<12**2){s.target.hp--;if(s.target.hp<=0)this.destroyUnit(s.target);this.addExplosion(s.mesh.position,.72);s.life=0;}
-        if(!s.ground&&sweptRelativeDistanceSquared(previous,s.mesh.position,this.lastCollisionPosition,this.player.position)<9**2){this.destroyPlayer('combat.hostileFire');s.life=0;}
-      }
-      if(s.life<=0){if(s.missile)this.audio?.stopMissileFlight(s.mesh.id);this.scene.remove(s.mesh);this.hostiles.splice(i,1);}
-    }
-  }
   killJet(e,credited=true){e.dead=true;this.scene.remove(e.mesh);if(credited)this.score+=500;this.addExplosion(e.mesh.position,1.12);}
   destroyUnit(u){u.dead=true;this.scene.remove(u.mesh);if(u.team==='red')this.score+=100;this.addExplosion(u.mesh.position,.82);}
   addSpark(pos){
@@ -671,7 +530,7 @@ export class CombatWorld {
   updateHud(){
     if(this.weapon)this.weapon.textContent=this.input.pressed.has('Space')?t('combat.firing'):t('hud.readyShort');
     if(this.countermeasureCount)this.countermeasureCount.textContent=String(this.countermeasures).padStart(2,'0');
-    if(this.threatWarning)this.threatWarning.hidden=!this.incomingMissile;
+    if(this.threatWarning)this.threatWarning.hidden=!this.projectileSystem.incomingMissile;
     if(this.boundaryWarning){
       const halfSize=this.terrain.worldSize*.5;
       const clearance=Math.max(0,Math.min(halfSize-Math.abs(this.player.position.x),halfSize-Math.abs(this.player.position.z)));
