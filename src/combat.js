@@ -5,14 +5,20 @@ import { CombatInput } from './combat/input.js';
 import { CombatRadar } from './combat/radar.js';
 import { pointSegmentDistanceSquared, traceFighterHit, traceVehicleHit } from './combat/hit-testing.js';
 import { createMissile } from './combat/projectiles.js';
-import { estimateInterceptTime, GUN_PROJECTILE_LIFETIME, GUN_PROJECTILE_SPEED } from './combat/ballistics.js';
+import {
+  estimateInterceptTime,
+  GUN_PROJECTILE_GRAVITY,
+  GUN_PROJECTILE_LIFETIME,
+  GUN_PROJECTILE_SPEED,
+  GUN_ROUNDS_PER_SECOND,
+} from './combat/ballistics.js';
 import { formatNumber, t } from './i18n.js';
 
-const flare=new THREE.MeshBasicMaterial({color:'#ffd18a'});
 const sphereGeo=new THREE.SphereGeometry(1,7,5);
 const effectSphereGeo=new THREE.SphereGeometry(1,14,10);
 const shockwaveGeo=new THREE.RingGeometry(.94,1,48);
-const gunShotGeo=new THREE.SphereGeometry(.16,6,5);
+const gunTracerRoundGeo=new THREE.CylinderGeometry(.004,.012,.16,6);
+const gunTracerRoundMaterial=new THREE.MeshBasicMaterial({color:'#ffc45e',toneMapped:false});
 const flareDecoyGeo=new THREE.SphereGeometry(1,7,5),flareDecoyMaterial=new THREE.MeshBasicMaterial({color:'#ff8c37',toneMapped:false});
 const chaffDecoyGeo=new THREE.TetrahedronGeometry(.18,0),chaffDecoyMaterial=new THREE.MeshBasicMaterial({color:'#d9e2d8',transparent:true,opacity:.72,toneMapped:false});
 const glowTexture=createGlowTexture();
@@ -36,11 +42,16 @@ const chaffParticleColor=new THREE.Color('#c9d3ce');
 const forward=new THREE.Vector3(0,0,1);
 const stationaryVelocity=new THREE.Vector3();
 const localForward=new THREE.Vector3(0,0,1),localRight=new THREE.Vector3(1,0,0),localUp=new THREE.Vector3(0,1,0);
+const collisionOrigin=new THREE.Vector3();
+const localBulletAxis=new THREE.Vector3(0,1,0);
 const MISSILE_TURN_RATE=2.45;
 const PLAYER_MISSILE={air:{speed:600,life:28},ground:{speed:400,life:18}};
 
 function turnDirection(current,desired,maxAngle){
-  const direction=current.clone().normalize();
+  if(desired.lengthSq()<1e-9){
+    return current.lengthSq()>1e-9?current.clone().normalize():forward.clone();
+  }
+  const direction=current.lengthSq()>1e-9?current.clone().normalize():desired.clone().normalize();
   const angle=direction.angleTo(desired);
   if(angle<=maxAngle)return direction.copy(desired);
 
@@ -66,6 +77,21 @@ function createGlowTexture(){
   return texture;
 }
 
+function closestSegmentFractionXZ(start,end){
+  const dx=end.x-start.x,dz=end.z-start.z;
+  const lengthSq=dx*dx+dz*dz;
+  if(lengthSq<1e-9)return 0;
+  return THREE.MathUtils.clamp(-(start.x*dx+start.z*dz)/lengthSq,0,1);
+}
+
+function sweptRelativeDistanceSquared(movingStart,movingEnd,targetStart,targetEnd){
+  return pointSegmentDistanceSquared(
+    collisionOrigin,
+    movingStart.clone().sub(targetStart),
+    movingEnd.clone().sub(targetEnd),
+  );
+}
+
 function addTransientGlow(parent,color,size,opacity=1,blending=THREE.AdditiveBlending){
   const material=glowMaterial.clone();material.color.set(color);material.opacity=opacity;material.blending=blending;material.userData.transient=true;
   const sprite=new THREE.Sprite(material);sprite.scale.setScalar(size);parent.add(sprite);return sprite;
@@ -85,10 +111,11 @@ export class CombatWorld {
     this.missionComplete=false;
     this.missionNoticeTimer=null;
     this.input = new CombatInput();
-    this.missiles=6; this.cooldown=0; this.score=0; this.gunClock=0;
+    this.missiles=6; this.cooldown=0; this.score=0; this.gunClock=0; this.gunRoundCount=0;
     this.countermeasures=12; this.countermeasureCooldown=0; this.decoys=[]; this.incomingMissile=false;
     this.missileFeedbackKey=null; this.missileFeedbackTimer=0;
-    this.terrain=terrain; this.playerHeading=0; this.previousPlayerPosition=player.position.clone(); this.playerVelocity=new THREE.Vector3();
+    this.terrain=terrain; this.playerHeading=0; this.previousPlayerPosition=player.position.clone();
+    this.lastCollisionPosition=player.position.clone(); this.playerVelocity=new THREE.Vector3();
     this.airBattle = new AirBattle({
       scene, player, aircraftAsset, mission: missionConfig, terrain, audio, fx,
       playerVelocity: this.playerVelocity,
@@ -137,7 +164,8 @@ export class CombatWorld {
     return this.playerHeading;
   }
   update(dt){
-    this.cooldown=Math.max(0,this.cooldown-dt); this.gunClock-=dt; this.countermeasureCooldown=Math.max(0,this.countermeasureCooldown-dt);
+    this.frameDelta=dt;
+    this.cooldown=Math.max(0,this.cooldown-dt); this.countermeasureCooldown=Math.max(0,this.countermeasureCooldown-dt);
     if(dt>0){this.playerVelocity.copy(this.player.position).sub(this.previousPlayerPosition).multiplyScalar(1/dt);this.previousPlayerPosition.copy(this.player.position);}
     const justPressed = this.input.consumeJustPressed();
     const radarModeRequested=justPressed.has('KeyR');
@@ -147,7 +175,17 @@ export class CombatWorld {
     if(radarModeRequested)this.radar.toggleMode();
     if(countermeasureRequested)this.deployCountermeasures();
     this.missileFeedbackTimer=Math.max(0,this.missileFeedbackTimer-dt);
-    this.audio?.setGunFiring(this.input.pressed.has('Space')&&!this.destroyed);
+    const gunFiring=this.input.pressed.has('Space')&&!this.destroyed;
+    this.audio?.setGunFiring(gunFiring);
+    if(gunFiring){
+      this.gunClock-=dt;
+      let roundsThisFrame=0;
+      while(this.gunClock<=0&&roundsThisFrame<3){
+        this.fireGun();
+        this.gunClock+=1/GUN_ROUNDS_PER_SECOND;
+        roundsThisFrame++;
+      }
+    }else this.gunClock=0;
     this.radar.updateContacts(dt, this.getPlayerHeading(), {
       airFriendly: this.allies, airHostile: this.enemies,
       groundFriendly: this.friends, groundHostile: this.redUnits,
@@ -160,35 +198,62 @@ export class CombatWorld {
       }
     }
     this.radar.updateLock(dt, this.enemies, this.redUnits);
-    if(this.input.pressed.has('Space')&&this.gunClock<=0){this.fireGun();this.gunClock=.09;}
     if(missileRequested)this.requestMissile();
     this.airBattle.update(dt, {
       lockedTarget: this.radar.targetDomain === 'air' && this.radar.lockCueConfirmed ? this.radar.target : null,
       incomingMissiles: this.playerShots.filter(shot => shot.homing && shot.targetDomain === 'air'),
     });
     this.groundBattle.update(dt);
-    this.updateShots(dt);
     this.updateDecoys(dt);
+    this.updateShots(dt);
     this.updateEffects(dt);
     this.updateMissionObjective(dt);
     this.updateHud();
   }
-  checkPlayerCollision(){
+  checkPlayerCollision(dt=this.frameDelta??0){
     if(this.destroyed)return true;
     const p=this.player.position;
-    const ground=this.terrain.sampleHeight(p.x,p.z);
-    if(p.y-3.5<=ground){this.destroyPlayer('combat.collisionTerrain');return true;}
+    const start=this.lastCollisionPosition.clone();
+    const travel=p.clone().sub(start);
+    const samples=Math.max(1,Math.ceil(travel.length()/8));
+    this.lastCollisionPosition.copy(p);
+    for(let step=0;step<=samples;step++){
+      const fraction=step/samples;
+      const x=THREE.MathUtils.lerp(start.x,p.x,fraction);
+      const y=THREE.MathUtils.lerp(start.y,p.y,fraction);
+      const z=THREE.MathUtils.lerp(start.z,p.z,fraction);
+      if(y-3.5<=this.terrain.sampleHeight(x,z)){
+        this.destroyPlayer('combat.collisionTerrain');
+        return true;
+      }
+    }
     const halfSize=this.terrain.worldSize/2;
     if(Math.abs(p.x)>halfSize-10||Math.abs(p.z)>halfSize-10){this.destroyPlayer('combat.collisionBoundary');return true;}
     for(const collider of this.colliders){
       if(collider.mesh&&!collider.mesh.parent)continue;
-      const dx=p.x-collider.x, dz=p.z-collider.z;
-      if(dx*dx+dz*dz>(collider.radius+7.5)**2)continue;
-      if(p.y+3.5>=collider.y&&p.y-3.5<=collider.y+collider.height){this.destroyPlayer(collider.collisionKey,{vehicle:collider.vehicle});return true;}
+      const centerY=collider.y+collider.height*.5;
+      const displacement=collider.velocity??stationaryVelocity;
+      const relativeStart=start.clone().addScaledVector(displacement,-dt).sub(new THREE.Vector3(collider.x,centerY,collider.z));
+      const relativeEnd=p.clone().sub(new THREE.Vector3(collider.x,centerY,collider.z));
+      const fraction=closestSegmentFractionXZ(relativeStart,relativeEnd);
+      const closestY=THREE.MathUtils.lerp(relativeStart.y,relativeEnd.y,fraction);
+      const closestX=THREE.MathUtils.lerp(relativeStart.x,relativeEnd.x,fraction);
+      const closestZ=THREE.MathUtils.lerp(relativeStart.z,relativeEnd.z,fraction);
+      if(closestX*closestX+closestZ*closestZ<=(collider.radius+7.5)**2&&Math.abs(closestY)<=collider.height*.5+3.5){
+        this.destroyPlayer(collider.collisionKey,{vehicle:collider.vehicle});
+        return true;
+      }
     }
-    for(const unit of this.enemies){if(!unit.dead&&p.distanceToSquared(unit.mesh.position)<14**2){this.destroyPlayer('combat.collisionHostile');return true;}}
-    for(const unit of this.allies){if(!unit.dead&&p.distanceToSquared(unit.mesh.position)<14**2){this.destroyPlayer('combat.collisionFriendly');return true;}}
+    for(const unit of this.enemies){if(this.sweptAircraftCollision(start,p,unit,dt)){this.destroyPlayer('combat.collisionHostile');return true;}}
+    for(const unit of this.allies){if(this.sweptAircraftCollision(start,p,unit,dt)){this.destroyPlayer('combat.collisionFriendly');return true;}}
     return false;
+  }
+  sweptAircraftCollision(start,end,unit,dt){
+    if(unit.dead)return false;
+    const displacement=unit.velocity??stationaryVelocity;
+    const relativeStart=start.clone().addScaledVector(displacement,-dt).sub(unit.mesh.position);
+    const relativeEnd=end.clone().sub(unit.mesh.position);
+    return pointSegmentDistanceSquared(collisionOrigin,relativeStart,relativeEnd)<14**2;
   }
   destroyPlayer(reasonKey,params={}){
     if(this.destroyed)return;
@@ -235,15 +300,31 @@ export class CombatWorld {
     if(this.status){this.status.classList.remove('destroyed','complete');this.status.replaceChildren(document.createElement('i'),document.createTextNode(` ${t('hud.ready')}`));}
   }
   fireGun(){
-    this.audio?.playGunBurst();
-    const dir=forward.clone().applyQuaternion(this.player.quaternion);
-    for(const side of [-1,1]){
-      const start=this.player.position.clone().add(new THREE.Vector3(side*.9,-.25,3.8).applyQuaternion(this.player.quaternion));
-      const velocity=dir.clone().multiplyScalar(GUN_PROJECTILE_SPEED).add(this.playerVelocity);
-      this.fx?.addTracer(start,start.clone().addScaledVector(velocity.clone().normalize(),29),'#fff0a4');
-      const shot=new THREE.Mesh(gunShotGeo,flare); shot.position.copy(start);this.scene.add(shot);
-      this.playerShots.push({mesh:shot,velocity,life:GUN_PROJECTILE_LIFETIME,damage:.5});
+    const attitude=this.player.quaternion;
+    const direction=forward.clone().applyQuaternion(attitude).normalize();
+    const right=localRight.clone().applyQuaternion(attitude).normalize();
+    const up=localUp.clone().applyQuaternion(attitude).normalize();
+    direction
+      .addScaledVector(right,(Math.random()-.5)*0.0009)
+      .addScaledVector(up,(Math.random()-.5)*0.0009)
+      .normalize();
+    const muzzleOffset=new THREE.Vector3(-.78,.38,2.65).applyQuaternion(attitude);
+    const start=this.player.position.clone().add(muzzleOffset);
+    const velocity=direction.multiplyScalar(GUN_PROJECTILE_SPEED).add(this.playerVelocity);
+    const tracer=this.gunRoundCount++%4===0;
+    const shot=tracer?new THREE.Mesh(gunTracerRoundGeo,gunTracerRoundMaterial):new THREE.Object3D();
+    shot.position.copy(start);
+    if(tracer){
+      shot.quaternion.setFromUnitVectors(localBulletAxis,velocity.clone().normalize());
+      this.scene.add(shot);
+      this.fx?.addMovingTracer(start,velocity,'#ffd282',{
+        life:.14,trailTime:.06,gravity:GUN_PROJECTILE_GRAVITY,
+      });
     }
+    this.playerShots.push({
+      mesh:shot,velocity,life:GUN_PROJECTILE_LIFETIME,damage:.2,
+      ballistic:true,gravity:GUN_PROJECTILE_GRAVITY,tracer,
+    });
   }
   fireMissile(){
     if(!this.radar.target||this.radar.target.dead)return;
@@ -287,7 +368,7 @@ export class CombatWorld {
       glow.position.copy(flareMesh.position);glow.userData.baseSize=glow.scale.x;glow.userData.flareGlow=true;
     }
     this.scene.add(flareCloud);
-    this.decoys.push({team:'player',type:'ir',mesh:flareCloud,position:flareCloud.position,velocity:this.playerVelocity.clone().addScaledVector(rear,115).addScaledVector(right,(Math.random()-.5)*18).addScaledVector(up,18),life:2.7,maxLife:2.7,active:true,age:0,trailClock:0});
+    this.decoys.push({team:'player',type:'ir',mesh:flareCloud,position:flareCloud.position,previousPosition:flareCloud.position.clone(),velocity:this.playerVelocity.clone().addScaledVector(rear,115).addScaledVector(right,(Math.random()-.5)*18).addScaledVector(up,18),life:2.7,maxLife:2.7,active:true,age:0,trailClock:0});
 
     const chaffCloud=new THREE.Group();
     chaffCloud.position.copy(this.player.position).addScaledVector(rear,4).addScaledVector(up,-1);
@@ -297,7 +378,7 @@ export class CombatWorld {
       piece.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);chaffCloud.add(piece);
     }
     this.scene.add(chaffCloud);
-    this.decoys.push({team:'player',type:'radar',mesh:chaffCloud,position:chaffCloud.position,velocity:this.playerVelocity.clone().addScaledVector(rear,62).addScaledVector(right,(Math.random()-.5)*12).addScaledVector(up,-5),life:2.7,maxLife:2.7,active:true,age:0,trailClock:0});
+    this.decoys.push({team:'player',type:'radar',mesh:chaffCloud,position:chaffCloud.position,previousPosition:chaffCloud.position.clone(),velocity:this.playerVelocity.clone().addScaledVector(rear,62).addScaledVector(right,(Math.random()-.5)*12).addScaledVector(up,-5),life:2.7,maxLife:2.7,active:true,age:0,trailClock:0});
     this.audio?.playCountermeasure();this.updateHud();
   }
   deployHostileCountermeasures(enemy,seeker=null){
@@ -336,7 +417,7 @@ export class CombatWorld {
         .addScaledVector(rear,type==='ir'?105:62)
         .addScaledVector(right,(Math.random()-.5)*18)
         .addScaledVector(up,type==='ir'?18:-5);
-      this.decoys.push({team:'enemy',source:enemy, type,mesh:cloud,position:cloud.position,velocity,life:2.7,maxLife:2.7,active:true,age:0,trailClock:0,spoofChance:type==='ir'?.62:.58});
+      this.decoys.push({team:'enemy',source:enemy, type,mesh:cloud,position:cloud.position,previousPosition:cloud.position.clone(),velocity,life:2.7,maxLife:2.7,active:true,age:0,trailClock:0,spoofChance:type==='ir'?.62:.58});
     }
     return true;
   }
@@ -412,7 +493,7 @@ export class CombatWorld {
     for(let i=this.decoys.length-1;i>=0;i--){
       const decoy=this.decoys[i];
       if(decoy.active){
-        decoy.life-=dt;decoy.age+=dt;decoy.mesh.position.addScaledVector(decoy.velocity,dt);
+        decoy.life-=dt;decoy.age+=dt;decoy.previousPosition.copy(decoy.position);decoy.mesh.position.addScaledVector(decoy.velocity,dt);
         decoy.velocity.multiplyScalar(Math.exp(-.24*dt));
         decoy.mesh.rotation.y+=dt*(decoy.type==='ir'?1.5:.4);
         const progress=1-decoy.life/decoy.maxLife;
@@ -483,8 +564,10 @@ export class CombatWorld {
       }
       if(s.homing)this.audio?.updateMissileFlight(s.mesh.id,s.mesh.position.distanceTo(this.player.position),dt);
       const previous=s.mesh.position.clone();
+      if(s.ballistic)s.velocity.y-=s.gravity*dt;
       s.mesh.position.addScaledVector(s.velocity,dt);
-      if(s.decoyTarget&&pointSegmentDistanceSquared(s.decoyTarget.position,previous,s.mesh.position)<12**2){
+      if(s.tracer)s.mesh.quaternion.setFromUnitVectors(localBulletAxis,s.velocity.clone().normalize());
+      if(s.decoyTarget&&sweptRelativeDistanceSquared(previous,s.mesh.position,s.decoyTarget.previousPosition,s.decoyTarget.position)<12**2){
         this.addSpark(s.mesh.position);s.life=0;
       }
       let hit=null,hitInfo=null;
@@ -492,16 +575,28 @@ export class CombatWorld {
         if(e.dead)continue;
         // AirBattle advances aircraft before projectiles. Sweep the shot against
         // the target's movement during this frame so fast crossings do not tunnel.
-        const relativeStart=previous.clone().addScaledVector(e.velocity??stationaryVelocity,dt);
+        const relativeStart=previous.clone().addScaledVector(e.velocity??stationaryVelocity,-dt);
         const impact=traceFighterHit(relativeStart,s.mesh.position,e.mesh);
         if(impact&&(!hitInfo||impact.t<hitInfo.t)){hit=e;hitInfo=impact;}
       }
-      if(s.life>0&&!s.ally)for(const unit of this.redUnits){if(unit.dead)continue;const impact=traceVehicleHit(previous,s.mesh.position,unit.mesh);if(impact&&(!hitInfo||impact.t<hitInfo.t)){hit=unit;hitInfo=impact;}}
+      if(s.life>0&&!s.ally)for(const unit of this.redUnits){if(unit.dead)continue;
+        const relativeStart=previous.clone().addScaledVector(unit.velocity??stationaryVelocity,-dt);
+        const impact=traceVehicleHit(relativeStart,s.mesh.position,unit.mesh);
+        if(impact&&(!hitInfo||impact.t<hitInfo.t)){hit=unit;hitInfo=impact;}
+      }
       if(hit){
         hit.hp-=s.damage*(hitInfo.damage??1);
         if(hit.hp<=0){if(hit.mesh.userData.faction==='red')this.destroyUnit(hit);else this.killJet(hit,!s.ally);}
         else this.addSpark(previous.clone().lerp(s.mesh.position,hitInfo.t));
         s.life=0;
+      }
+      if(s.life>0&&s.ballistic){
+        const groundHeight=this.terrain.sampleHeight(s.mesh.position.x,s.mesh.position.z);
+        if(s.mesh.position.y<=groundHeight){
+          s.mesh.position.y=groundHeight;
+          if(s.tracer)this.addSpark(s.mesh.position);
+          s.life=0;
+        }
       }
       if(s.life<=0){if(s.homing)this.audio?.stopMissileFlight(s.mesh.id);this.scene.remove(s.mesh);this.playerShots.splice(i,1);}
     }
@@ -516,6 +611,7 @@ export class CombatWorld {
           s.warningClock-=dt;
           if(s.warningClock<=0){this.audio?.playIncomingMissile();s.warningClock=1.25;}
         }
+        if(s.decoyTarget&&!s.decoyTarget.active)s.decoyTarget=null;
         if(!s.decoyTarget){
           let nearest=1250;
           for(const decoy of this.decoys){
@@ -531,12 +627,12 @@ export class CombatWorld {
         if(s.velocity.lengthSq()>1)s.mesh.quaternion.setFromUnitVectors(forward,s.velocity.clone().normalize());
         this.audio?.updateMissileFlight(s.mesh.id,distanceToPlayer,dt);
         s.mesh.position.addScaledVector(s.velocity,dt);
-        if(s.decoyTarget&&pointSegmentDistanceSquared(s.decoyTarget.position,previous,s.mesh.position)<12**2){this.addSpark(s.mesh.position);s.life=0;}
-        else if(!s.decoyTarget&&pointSegmentDistanceSquared(this.player.position,previous,s.mesh.position)<13**2){this.destroyPlayer('combat.hostileMissile');this.addExplosion(s.mesh.position,.48);s.life=0;}
+        if(s.decoyTarget&&sweptRelativeDistanceSquared(previous,s.mesh.position,s.decoyTarget.previousPosition,s.decoyTarget.position)<12**2){this.addSpark(s.mesh.position);s.life=0;}
+        else if(!s.decoyTarget&&sweptRelativeDistanceSquared(previous,s.mesh.position,this.lastCollisionPosition,this.player.position)<13**2){this.destroyPlayer('combat.hostileMissile');this.addExplosion(s.mesh.position,.48);s.life=0;}
       }else{
         s.mesh.position.addScaledVector(s.velocity,dt);
-        if(s.ground&&s.target&&!s.target.dead&&s.mesh.position.distanceTo(s.target.mesh.position)<12){s.target.hp--;if(s.target.hp<=0)this.destroyUnit(s.target);this.addExplosion(s.mesh.position,.72);s.life=0;}
-        if(!s.ground&&pointSegmentDistanceSquared(this.player.position,previous,s.mesh.position)<9**2){this.destroyPlayer('combat.hostileFire');s.life=0;}
+        if(s.ground&&s.target&&!s.target.dead&&sweptRelativeDistanceSquared(previous,s.mesh.position,s.target.mesh.position.clone().addScaledVector(s.target.velocity??stationaryVelocity,-dt),s.target.mesh.position)<12**2){s.target.hp--;if(s.target.hp<=0)this.destroyUnit(s.target);this.addExplosion(s.mesh.position,.72);s.life=0;}
+        if(!s.ground&&sweptRelativeDistanceSquared(previous,s.mesh.position,this.lastCollisionPosition,this.player.position)<9**2){this.destroyPlayer('combat.hostileFire');s.life=0;}
       }
       if(s.life<=0){if(s.missile)this.audio?.stopMissileFlight(s.mesh.id);this.scene.remove(s.mesh);this.hostiles.splice(i,1);}
     }

@@ -21,7 +21,6 @@ export class GameAudio {
     this.engine = null;
     this.gunLoop = null;
     this.missileLoops = new Map();
-    this.lastGunBurst = -Infinity;
     this.lastDistantShot = -Infinity;
     this.lastIncomingWarning = -Infinity;
     this.lastEngineUpdate = 0;
@@ -339,68 +338,93 @@ export class GameAudio {
     if (active && !this.gunLoop) {
       const bus = ctx.createGain();
       bus.gain.setValueAtTime(0.0001, ctx.currentTime);
-      bus.gain.linearRampToValueAtTime(0.36, ctx.currentTime + 0.025);
+      bus.gain.linearRampToValueAtTime(0.31, ctx.currentTime + 0.04);
       bus.connect(this.effects);
+      const sources = [];
       const cannonSample = this.sampleBuffers.cannonLoop;
       if (cannonSample) {
         const source = ctx.createBufferSource();
         source.buffer = cannonSample;
         source.loop = true;
-        source.loopStart = 0;
-        source.loopEnd = cannonSample.duration;
-        source.connect(bus);
+        // Compress the slower recording to match the GAU-22/A's 55-round cadence.
+        source.playbackRate.value = 3.93;
+        const gritFilter = ctx.createBiquadFilter();
+        gritFilter.type = 'lowpass';
+        gritFilter.frequency.value = 1350;
+        const gritGain = ctx.createGain();
+        gritGain.gain.value = 0.19;
+        source.connect(gritFilter);
+        gritFilter.connect(gritGain);
+        gritGain.connect(bus);
         source.start();
-        this.gunLoop = { bus, sources: [source], sampled: true };
-        return;
+        sources.push(source);
       }
-      // Short, low-mid noise pulses make a regular cannon rattle instead of a hiss.
+
+      // A fast, muted mechanical pulse gives the cannon its rotary cadence.
       const noise = ctx.createBufferSource();
       noise.buffer = this.noiseBuffer;
       noise.loop = true;
       const band = ctx.createBiquadFilter();
       band.type = 'bandpass';
-      band.frequency.value = 690;
-      band.Q.value = 0.86;
+      band.frequency.value = 390;
+      band.Q.value = 0.58;
       const pulse = ctx.createGain();
-      pulse.gain.value = 0.17;
+      pulse.gain.value = 0.22;
       noise.connect(band);
       band.connect(pulse);
       pulse.connect(bus);
 
-      // A gated low thump gives each pulse some body without adding a ringing tone.
+      // Low barrel and muzzle energy carries more weight than a sharp machine-gun crack.
       const body = ctx.createOscillator();
-      body.type = 'sawtooth';
-      body.frequency.value = 74;
+      body.type = 'triangle';
+      body.frequency.value = 82;
       const bodyFilter = ctx.createBiquadFilter();
       bodyFilter.type = 'lowpass';
-      bodyFilter.frequency.value = 175;
+      bodyFilter.frequency.value = 190;
       const bodyGain = ctx.createGain();
-      bodyGain.gain.value = 0.14;
+      bodyGain.gain.value = 0.16;
       body.connect(bodyFilter);
       bodyFilter.connect(bodyGain);
       bodyGain.connect(pulse);
 
       const sub = ctx.createOscillator();
       sub.type = 'sine';
-      sub.frequency.value = 46;
+      sub.frequency.value = 48;
       const subGain = ctx.createGain();
-      subGain.gain.value = 0.085;
+      subGain.gain.value = 0.11;
       sub.connect(subGain);
       subGain.connect(pulse);
 
-      // The gate makes a dense mechanical rattle rather than a continuous hiss.
+      // The real GAU-22/A cycles at roughly 55 rounds per second.
       const gate = ctx.createOscillator();
       gate.type = 'square';
-      gate.frequency.value = 38;
+      gate.frequency.value = 55;
       const gateDepth = ctx.createGain();
-      gateDepth.gain.value = 0.15;
+      gateDepth.gain.value = 0.12;
       gate.connect(gateDepth);
       gateDepth.connect(pulse.gain);
+
+      // A restrained spool-up whine separates the rotary cannon from discrete gunfire.
+      const rotor = ctx.createOscillator();
+      rotor.type = 'sawtooth';
+      rotor.frequency.setValueAtTime(92, ctx.currentTime);
+      rotor.frequency.exponentialRampToValueAtTime(178, ctx.currentTime + 0.14);
+      const rotorFilter = ctx.createBiquadFilter();
+      rotorFilter.type = 'lowpass';
+      rotorFilter.frequency.value = 430;
+      const rotorGain = ctx.createGain();
+      rotorGain.gain.value = 0.024;
+      rotor.connect(rotorFilter);
+      rotorFilter.connect(rotorGain);
+      rotorGain.connect(bus);
+
       noise.start();
       body.start();
       sub.start();
       gate.start();
-      this.gunLoop = { bus, sources: [noise, body, sub, gate] };
+      rotor.start();
+      sources.push(noise, body, sub, gate, rotor);
+      this.gunLoop = { bus, sources };
     } else if (!active && this.gunLoop) {
       const loop = this.gunLoop;
       this.gunLoop = null;
@@ -408,21 +432,6 @@ export class GameAudio {
       loop.bus.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.035);
       window.setTimeout(() => loop.sources.forEach(source => { try { source.stop(); } catch { /* already stopped */ } }), 240);
     }
-  }
-
-  playGunBurst() {
-    const ctx = this.getContext();
-    if (!ctx) return;
-    if (this.gunLoop?.sampled) return;
-    const now = ctx.currentTime;
-    if (now - this.lastGunBurst < 0.075) return;
-    this.lastGunBurst = now;
-    // A close crack, a short pressure thump and a falling low end give each
-    // twin-barrel shot a distinct attack over the continuous firing rattle.
-    this.playNoise(0.045, 0.21, { low: 2400, high: 520, type: 'lowpass', q: 0.72 });
-    this.playNoise(0.085, 0.2, { low: 460, high: 78, type: 'lowpass', q: 0.48 });
-    this.playTone(118, 42, 0.105, 0.25, 'sawtooth', 'effects');
-    this.playTone(58, 30, 0.14, 0.16, 'sine', 'effects', 0.012);
   }
 
   playDistantGun(distance = 500, source = 'air') {

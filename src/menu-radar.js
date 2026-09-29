@@ -55,8 +55,8 @@ export class MenuRadar {
   }
 
   setMission(missionId) {
+    if (!Object.hasOwn(MISSIONS, missionId) || this.missionId === missionId || !this.scope) return;
     const mission = MISSIONS[missionId];
-    if (!mission || this.missionId === missionId || !this.scope) return;
 
     for (const contact of this.contacts) contact.element.remove();
     this.contacts = [];

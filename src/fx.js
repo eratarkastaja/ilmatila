@@ -171,11 +171,21 @@ export class FlightFX {
     this._vaporSide = new THREE.Vector3();
     this._vaporPrev = new THREE.Vector3();
     this._vaporNext = new THREE.Vector3();
+    this._tracerHead = new THREE.Vector3();
+    this._tracerTail = new THREE.Vector3();
   }
 
   addTracer(start, end, color = '#fff1ad') {
     if (this.tracers.length >= this.tracerCapacity) this.tracers.shift();
-    this.tracers.push({ start: start.clone(), end: end.clone(), color: new THREE.Color(color), life: 0.085 });
+    this.tracers.push({ start: start.clone(), end: end.clone(), color: new THREE.Color(color), life: 0.085, maxLife: 0.085 });
+  }
+
+  addMovingTracer(start, velocity, color = '#ffd282', { life = 0.14, trailTime = 0.06, gravity = 0 } = {}) {
+    if (this.tracers.length >= this.tracerCapacity) this.tracers.shift();
+    this.tracers.push({
+      start: start.clone(), velocity: velocity.clone(), color: new THREE.Color(color),
+      life, maxLife: life, age: 0, trailTime, gravity,
+    });
   }
 
   update(dt, aircraft, missiles, terrain, weather, camera) {
@@ -540,22 +550,34 @@ export class FlightFX {
     for (let i = this.tracers.length - 1; i >= 0; i--) {
       const tracer = this.tracers[i];
       tracer.life -= dt;
+      if (tracer.velocity) tracer.age += dt;
       if (tracer.life <= 0) this.tracers.splice(i, 1);
     }
     for (const tracer of this.tracers) {
       if (count >= this.tracerCapacity) break;
       const offset = count * 6;
-      this.tracerPositions[offset] = tracer.start.x;
-      this.tracerPositions[offset + 1] = tracer.start.y;
-      this.tracerPositions[offset + 2] = tracer.start.z;
-      this.tracerPositions[offset + 3] = tracer.end.x;
-      this.tracerPositions[offset + 4] = tracer.end.y;
-      this.tracerPositions[offset + 5] = tracer.end.z;
+      let start = tracer.start;
+      let end = tracer.end;
+      if (tracer.velocity) {
+        const headAge = tracer.age;
+        const tailAge = Math.max(0, headAge - tracer.trailTime);
+        end = this._tracerHead.copy(tracer.start).addScaledVector(tracer.velocity, headAge);
+        end.y -= 0.5 * tracer.gravity * headAge * headAge;
+        start = this._tracerTail.copy(tracer.start).addScaledVector(tracer.velocity, tailAge);
+        start.y -= 0.5 * tracer.gravity * tailAge * tailAge;
+      }
+      this.tracerPositions[offset] = start.x;
+      this.tracerPositions[offset + 1] = start.y;
+      this.tracerPositions[offset + 2] = start.z;
+      this.tracerPositions[offset + 3] = end.x;
+      this.tracerPositions[offset + 4] = end.y;
+      this.tracerPositions[offset + 5] = end.z;
+      const fade = Math.min(1, tracer.life / tracer.maxLife);
       for (let vertex = 0; vertex < 2; vertex++) {
         const colorOffset = offset + vertex * 3;
-        this.tracerColors[colorOffset] = tracer.color.r;
-        this.tracerColors[colorOffset + 1] = tracer.color.g;
-        this.tracerColors[colorOffset + 2] = tracer.color.b;
+        this.tracerColors[colorOffset] = tracer.color.r * fade;
+        this.tracerColors[colorOffset + 1] = tracer.color.g * fade;
+        this.tracerColors[colorOffset + 2] = tracer.color.b * fade;
       }
       count++;
     }

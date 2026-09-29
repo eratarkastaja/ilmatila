@@ -5,7 +5,7 @@ import { makeClouds } from './clouds.js';
 import { MenuRadar } from './menu-radar.js';
 import { FlightControls } from './controls.js';
 import { CombatWorld } from './combat.js';
-import { createPreviewTerrain, TERRAIN_AREAS } from './terrain.js';
+import { createPreviewTerrain, disposeTerrain, TERRAIN_AREAS } from './terrain.js';
 import { FlightFX } from './fx.js';
 import { GameAudio } from './audio.js';
 import { TacticalHud } from './hud.js';
@@ -31,7 +31,7 @@ initializeLanguagePicker();
 const missionCards = [...document.querySelectorAll('[data-mission]')];
 const urlParams = new URLSearchParams(location.search);
 const areaAliases = new Map([['vironlahti', 'virolahti']]);
-let selectedMissionId = MISSIONS[urlParams.get('mission')] ? urlParams.get('mission') : 'intercept';
+let selectedMissionId = Object.hasOwn(MISSIONS, urlParams.get('mission')) ? urlParams.get('mission') : 'intercept';
 let menuRadar = null;
 const theaterAreas = TERRAIN_AREAS;
 if (!menuTheater.options.length) {
@@ -102,6 +102,10 @@ let menuStatusDescriptor = { key: 'menu.statusReady', params: {}, state: 'ready'
 let launchProgressDescriptor = { progress: 0, titleKey: 'menu.launchButton', detailKey: 'menu.launchReadyStatus', params: {} };
 document.addEventListener('ilmatila:languagechange', () => {
   selectMission(selectedMissionId);
+  const areaLabel = menuStatusDescriptor.key === 'menu.statusTerrainError'
+    ? terrain
+    : theaterAreas.find(area => area.id === selectedAreaId);
+  updateMenuArea(areaLabel);
   renderMenuStatus();
   renderLaunchProgress();
 });
@@ -153,7 +157,7 @@ function ensureTerrainLoaded(areaId, onProgress, signal) {
 }
 
 function selectMission(id) {
-  if (!MISSIONS[id]) return;
+  if (!Object.hasOwn(MISSIONS, id)) return;
   selectedMissionId = id;
   menuRadar?.setMission(id);
   for (const card of missionCards) {
@@ -167,18 +171,20 @@ function selectMission(id) {
 }
 
 function updateMenuArea(area) {
-  const name = (area.metadata?.region || area.label || 'ESIMERKKIMAA').toUpperCase();
-  document.querySelector('#theater-area-name').textContent = name;
+  const name = area?.real
+    ? area.metadata?.region || area.label
+    : area?.id && area.id !== 'preview'
+      ? area.label
+      : t('terrain.previewAreaName');
+  document.querySelector('#theater-area-name').textContent = name.toUpperCase();
 }
 
-function disposeTerrain(area) {
-  scene.remove(area.mesh);
-  area.mesh.geometry.dispose();
-  const materials = Array.isArray(area.mesh.material) ? area.mesh.material : [area.mesh.material];
-  for (const material of materials) {
-    material.map?.dispose();
-    material.dispose();
-  }
+function installTerrain(replacement) {
+  if (replacement === terrain) return;
+  const previous = terrain;
+  scene.add(replacement.mesh);
+  disposeTerrain(previous);
+  terrain = replacement;
 }
 
 updateMenuArea(theaterAreas.find(area => area.id === initialAreaId));
@@ -189,32 +195,44 @@ menuTheater.disabled = false;
 launchButton.disabled = false;
 
 let terrainRequest = 0;
+let menuTerrainController = null;
 async function loadTerrainForMenu(requestedId) {
   const requestId = ++terrainRequest;
+  menuTerrainController?.abort();
   const requestedArea = theaterAreas.find(area => area.id === requestedId);
-  if (!requestedArea || requestedId === loadedAreaId || gameStarted) return;
+  if (!requestedArea || gameStarted) return;
+  if (requestedId === loadedAreaId) {
+    if (!launchInProgress && terrain.real) {
+      setMenuStatus('menu.statusAreaReady', 'ready', { area: terrain.label.toUpperCase() });
+    }
+    return;
+  }
+  const controller = new AbortController();
+  menuTerrainController = controller;
   if (!launchInProgress) setMenuStatus('menu.statusAreaLoading', 'loading', { area: requestedArea.label.toUpperCase() });
   try {
-    const replacement = await ensureTerrainLoaded(requestedId);
+    const replacement = await ensureTerrainLoaded(requestedId, null, controller.signal);
     if (requestId !== terrainRequest || gameStarted) {
       if (replacement !== terrain) disposeTerrain(replacement);
       return;
     }
-    if (replacement !== terrain) {
-      const previous = terrain;
-      scene.add(replacement.mesh);
-      disposeTerrain(previous);
-      terrain = replacement;
-    }
+    installTerrain(replacement);
     loadedAreaId = replacement.id;
     needsMenuRender = true;
     updateMenuArea(terrain);
     if (!launchInProgress) setMenuStatus('menu.statusAreaReady', 'ready', { area: terrain.label.toUpperCase() });
   } catch (error) {
+    if (controller.signal.aborted) return;
     console.error('Theater terrain failed to load.', error);
     if (requestId === terrainRequest && !gameStarted && !launchInProgress) {
+      const preview = createPreviewTerrain();
+      installTerrain(preview);
+      loadedAreaId = preview.id;
+      updateMenuArea(preview);
       setMenuStatus('menu.statusTerrainError', 'warning');
     }
+  } finally {
+    if (menuTerrainController === controller) menuTerrainController = null;
   }
 }
 
@@ -297,7 +315,9 @@ function returnToMenu() {
   launchButton.setAttribute('aria-busy', 'false');
   menuTheater.disabled = false;
   setLaunchProgress(0, 'menu.launchButton', 'menu.launchReadyStatus');
-  setMenuStatus('menu.statusReady', 'ready');
+  updateMenuArea(terrain);
+  if (terrain.real) setMenuStatus('menu.statusAreaReady', 'ready', { area: terrain.label.toUpperCase() });
+  else setMenuStatus('menu.statusTerrainError', 'warning');
   const nextUrl = new URL(location.href);
   nextUrl.searchParams.set('mission', selectedMissionId);
   nextUrl.searchParams.set('area', selectedAreaId);
@@ -322,6 +342,9 @@ document.addEventListener('keydown', event => {
 
 launchButton.addEventListener('click', async () => {
   if (gameStarted || launchInProgress || launchButton.disabled) return;
+  const supersededMenuTerrain = menuTerrainController;
+  terrainRequest++;
+  menuTerrainController = null;
   launchInProgress = true;
   launchButton.disabled = true;
   launchButton.setAttribute('aria-busy', 'true');
@@ -347,13 +370,16 @@ launchButton.addEventListener('click', async () => {
   setMenuStatus('menu.statusPreparingArea', 'loading', { area: selectedArea.label.toUpperCase() });
   const terrainLoadController = new AbortController();
   const aircraftLoadController = new AbortController();
+  let pendingTerrain = null;
+  let launchFailed = false;
   try {
+    const terrainRequestPromise = ensureTerrainLoaded(selectedAreaId, (progress, detail) => {
+      terrainProgress = progress;
+      terrainDetail = detail;
+      updateProgress();
+    }, terrainLoadController.signal);
     const terrainPromise = withTimeout(
-      ensureTerrainLoaded(selectedAreaId, (progress, detail) => {
-        terrainProgress = progress;
-        terrainDetail = detail;
-        updateProgress();
-      }, terrainLoadController.signal),
+      terrainRequestPromise,
       25000,
       'Terrain data load timed out',
       () => terrainLoadController.abort(),
@@ -361,6 +387,15 @@ launchButton.addEventListener('click', async () => {
       value => ({ status: 'ready', value }),
       error => ({ status: 'fallback', error }),
     );
+    // Register the launch as a subscriber before aborting a stale menu load.
+    supersededMenuTerrain?.abort();
+    void terrainRequestPromise.then(replacement => {
+      if (launchFailed || usingPreviewTerrain) {
+        if (replacement !== terrain) disposeTerrain(replacement);
+      } else {
+        pendingTerrain = replacement;
+      }
+    }, () => {});
     const aircraftPromise = withTimeout(
       assets.ensureAircraftLoaded(progress => {
         aircraftProgress = progress;
@@ -374,12 +409,8 @@ launchButton.addEventListener('click', async () => {
 
     if (terrainResult.status === 'ready') {
       const replacement = terrainResult.value;
-      if (replacement !== terrain) {
-        const previous = terrain;
-        scene.add(replacement.mesh);
-        disposeTerrain(previous);
-        terrain = replacement;
-      }
+      installTerrain(replacement);
+      pendingTerrain = null;
       loadedAreaId = replacement.id;
       updateMenuArea(replacement);
       terrainProgress = 1;
@@ -388,6 +419,12 @@ launchButton.addEventListener('click', async () => {
       usingPreviewTerrain = true;
       terrainDetail = { key: 'terrain.preview' };
       console.warn('Selected terrain unavailable; launching with preview terrain.', terrainResult.error);
+      if (pendingTerrain && pendingTerrain !== terrain) disposeTerrain(pendingTerrain);
+      pendingTerrain = null;
+      installTerrain(createPreviewTerrain());
+      loadedAreaId = terrain.id;
+      updateMenuArea(terrain);
+      document.querySelector('#area-name').textContent = t('terrain.previewAreaName').toUpperCase();
     }
 
     setLaunchProgress(96,
@@ -416,6 +453,8 @@ launchButton.addEventListener('click', async () => {
     setTimeout(() => { if (gameStarted) startMenu.hidden = true; }, 460);
   } catch (error) {
     console.error('Mission launch failed.', error);
+    launchFailed = true;
+    if (pendingTerrain && pendingTerrain !== terrain) disposeTerrain(pendingTerrain);
     terrainLoadController.abort();
     aircraftLoadController.abort();
     launchInProgress = false;
@@ -457,7 +496,7 @@ function animate() {
       controls.update(dt);
       audio.updateEngine(controls.speed, Boolean(player.userData.boosting), dt);
       combat.update(dt);
-      combat.checkPlayerCollision();
+      combat.checkPlayerCollision(dt);
     } else {
       combat.updateEffects(dt);
     }

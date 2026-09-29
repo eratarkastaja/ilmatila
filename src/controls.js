@@ -3,6 +3,11 @@ import * as THREE from 'three';
 const LOCAL_RIGHT = new THREE.Vector3(1, 0, 0);
 const LOCAL_FORWARD = new THREE.Vector3(0, 0, 1);
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
+const GAME_KEY_CODES = new Set([
+  'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE',
+  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+  'ShiftLeft', 'ShiftRight', 'Space', 'KeyM', 'KeyR', 'KeyT', 'KeyC',
+]);
 
 export class FlightControls {
   constructor(plane, camera, canvas) {
@@ -25,9 +30,14 @@ export class FlightControls {
     this.rollRotation = new THREE.Quaternion();
     this.yawRotation = new THREE.Quaternion();
     addEventListener('keydown', e => {
+      if (!GAME_KEY_CODES.has(e.code)) return;
+      if (e.ctrlKey || e.altKey || e.metaKey) {
+        e.preventDefault();
+        return;
+      }
       if (!this.enabled) return;
       this.keys.add(e.code);
-      if (['Space','KeyM','KeyC','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+      e.preventDefault();
     });
     addEventListener('keyup', e => this.keys.delete(e.code));
     addEventListener('blur', () => this.keys.clear());

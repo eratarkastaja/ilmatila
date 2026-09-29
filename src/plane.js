@@ -41,8 +41,12 @@ const MIG29_HIT_ZONES = [
   { x: 1.55, y: 1.45, z: -6.1, rx: 0.57, ry: 1.55, rz: 0.44, damage: 0.9 },
 ];
 
-export async function loadCombatAircraft(onProgress) {
-  const loader = new GLTFLoader();
+export async function loadCombatAircraft(onProgress, signal) {
+  if (signal?.aborted) throw signal.reason ?? new DOMException('The operation was aborted.', 'AbortError');
+  const manager = new THREE.LoadingManager();
+  const abort = () => manager.abort();
+  signal?.addEventListener('abort', abort, { once: true });
+  const loader = new GLTFLoader(manager);
   const files = [
     'assets/f35/f35-lightning.glb',
     'assets/aircraft/su27/su27.glb',
@@ -50,24 +54,29 @@ export async function loadCombatAircraft(onProgress) {
   ];
   const progress = files.map(() => 0);
   const reportProgress = () => onProgress?.({ loaded: progress.reduce((sum, value) => sum + value, 0), total: files.length });
-  const loaded = await Promise.all(files.map((file, index) => loader.loadAsync(
-    `${import.meta.env.BASE_URL}${file}`,
-    event => {
-      if (event.total > 0) {
-        progress[index] = THREE.MathUtils.clamp(event.loaded / event.total, 0, 1);
-        reportProgress();
-      }
-    },
-  ).then(gltf => {
-    progress[index] = 1;
-    reportProgress();
-    return gltf.scene;
-  })));
+  try {
+    const loaded = await Promise.all(files.map((file, index) => loader.loadAsync(
+      `${import.meta.env.BASE_URL}${file}`,
+      event => {
+        if (event.total > 0) {
+          progress[index] = THREE.MathUtils.clamp(event.loaded / event.total, 0, 1);
+          reportProgress();
+        }
+      },
+    ).then(gltf => {
+      progress[index] = 1;
+      reportProgress();
+      return gltf.scene;
+    })));
 
-  return {
-    player: loaded[0],
-    hostiles: { su27: loaded[1], mig29: loaded[2] },
-  };
+    if (signal?.aborted) throw signal.reason ?? new DOMException('The operation was aborted.', 'AbortError');
+    return {
+      player: loaded[0],
+      hostiles: { su27: loaded[1], mig29: loaded[2] },
+    };
+  } finally {
+    signal?.removeEventListener('abort', abort);
+  }
 }
 
 export function createFighter({ enemy = false, friendly = false, aircraftAsset = null, aircraftVariant = 'su27' } = {}) {

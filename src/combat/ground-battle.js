@@ -41,8 +41,8 @@ export class GroundBattle {
       const blueUnit={mesh:blue,hp:blueSpec.hp,maxHp:blueSpec.hp,team:'blue',cool:1+i*.33,phase:i*.8,armed:true,speed:blueSpec.kind==='tracked'?10.5+rnd()*2:14+rnd()*2.5,flank:i%2===0?1:-1,velocity:new THREE.Vector3()};
       const redUnit={mesh:red,hp:redSpec.hp,maxHp:redSpec.hp,team:'red',cool:2+i*.25,phase:i*.8+1,armed:true,speed:redSpec.kind==='tracked'?10+rnd()*2:13.5+rnd()*2.5,flank:i%2===0?-1:1,velocity:new THREE.Vector3()};
       this.friends.push(blueUnit);this.redUnits.push(redUnit);
-      blueUnit.collider={type:'vehicle',mesh:blue,x:bluePos.x,y:bluePos.y,z:bluePos.z,radius:blueSpec.radius,height:blueSpec.totalHeight,collisionKey:'combat.collisionFriendlyVehicle',vehicle:blueSpec.name};
-      redUnit.collider={type:'vehicle',mesh:red,x:redPos.x,y:redPos.y,z:redPos.z,radius:redSpec.radius,height:redSpec.totalHeight,collisionKey:'combat.collisionHostileVehicle',vehicle:redSpec.name};
+      blueUnit.collider={type:'vehicle',mesh:blue,x:bluePos.x,y:bluePos.y,z:bluePos.z,radius:blueSpec.radius,height:blueSpec.totalHeight,velocity:blueUnit.velocity,collisionKey:'combat.collisionFriendlyVehicle',vehicle:blueSpec.name};
+      redUnit.collider={type:'vehicle',mesh:red,x:redPos.x,y:redPos.y,z:redPos.z,radius:redSpec.radius,height:redSpec.totalHeight,velocity:redUnit.velocity,collisionKey:'combat.collisionHostileVehicle',vehicle:redSpec.name};
       this.colliders.push(blueUnit.collider,redUnit.collider);
     }
     for(let i=0;i<this.mission.groundTrucks;i++){
@@ -51,7 +51,7 @@ export class GroundBattle {
       truck.position.set(x,this.terrain.sampleHeight(x,z),z); truck.rotation.y=(rnd()-.5)*1.2; this.scene.add(truck);
       const convoy={mesh:truck,hp:spec.hp,maxHp:spec.hp,team:'red',cool:0,phase:rnd()*Math.PI*2,armed:false,speed:12+rnd()*3,flank:1,velocity:new THREE.Vector3(),routeOrigin:new THREE.Vector3(x,truck.position.y,z),routeHeading:new THREE.Vector3((rnd()-.5)*.5,0,1).normalize(),routeTravel:0,routeSign:1};
       this.redUnits.push(convoy);
-      convoy.collider={type:'vehicle',mesh:truck,x,z,y:truck.position.y,radius:spec.radius,height:spec.totalHeight,collisionKey:'combat.collisionHostileVehicle',vehicle:spec.name};
+      convoy.collider={type:'vehicle',mesh:truck,x,z,y:truck.position.y,radius:spec.radius,height:spec.totalHeight,velocity:convoy.velocity,collisionKey:'combat.collisionHostileVehicle',vehicle:spec.name};
       this.colliders.push(convoy.collider);
     }
   }

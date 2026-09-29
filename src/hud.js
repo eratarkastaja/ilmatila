@@ -1,5 +1,10 @@
 import * as THREE from 'three';
-import { estimateInterceptTime, GUN_PROJECTILE_LIFETIME, GUN_PROJECTILE_SPEED } from './combat/ballistics.js';
+import {
+  estimateInterceptTime,
+  GUN_PROJECTILE_GRAVITY,
+  GUN_PROJECTILE_LIFETIME,
+  GUN_PROJECTILE_SPEED,
+} from './combat/ballistics.js';
 import { formatNumber, t } from './i18n.js';
 
 const wrapHeading = degrees => THREE.MathUtils.euclideanModulo(degrees, 360);
@@ -121,6 +126,7 @@ export class TacticalHud {
     this.gunAimPoint.copy(player.position)
       .addScaledVector(this.gunAimOffset, 1)
       .addScaledVector(this.gunAimVelocity, flightTime);
+    this.gunAimPoint.y += 0.5 * GUN_PROJECTILE_GRAVITY * flightTime * flightTime;
     if (this.gunAimTarget !== target || !this.hasGunAimPoint) {
       this.smoothedGunAimPoint.copy(this.gunAimPoint);
       this.gunAimTarget = target;

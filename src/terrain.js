@@ -24,26 +24,33 @@ export function loadTerrainAreas() {
   return terrainIndexPromise;
 }
 
-export async function createTerrain({ areaId, fallback = true, onProgress } = {}) {
+export async function createTerrain({ areaId, fallback = true, onProgress, signal } = {}) {
   const report = (progress, detail) => onProgress?.(THREE.MathUtils.clamp(progress, 0, 1), detail);
   try {
+    throwIfAborted(signal);
     report(0.01, { key: 'terrain.fetchingArea' });
     const areas = await loadTerrainAreas();
+    throwIfAborted(signal);
     const requested = areaId || new URLSearchParams(location.search).get('area');
     const areaConfig = TERRAIN_AREAS.find(area => area.id === requested || area.dataId === requested);
     const dataId = areaConfig?.dataId ?? areaConfig?.id ?? requested;
     const selected = areas.find(area => area.id === dataId) || areas.find(area => area.id === 'paijanne') || areas[0];
     if(!selected)throw new Error('no terrain areas are available');
     const base=`${TERRAIN_PATH}/areas/${selected.id}`;
-    const metaResponse = await fetch(`${base}/terrain.json`);
+    const metaResponse = await fetch(`${base}/terrain.json`, { signal });
     if (!metaResponse.ok) throw new Error('selected terrain metadata is missing');
     const metadata = await metaResponse.json();
+    validateTerrainMetadata(metadata);
+    throwIfAborted(signal);
     report(0.04, { key: 'terrain.areaFound' });
-    const heightResponse = await fetch(`${base}/height.f32`);
+    const heightResponse = await fetch(`${base}/height.f32`, { signal });
     if (!heightResponse.ok) throw new Error('height grid is missing');
     const bytes = await heightResponse.arrayBuffer();
+    if (bytes.byteLength % Float32Array.BYTES_PER_ELEMENT !== 0) throw new Error('height grid has an invalid byte length');
     const values = new Float32Array(bytes);
     if (values.length !== metadata.width * metadata.height) throw new Error('height grid dimensions do not match metadata');
+    if (values.some(value => !Number.isFinite(value))) throw new Error('height grid contains invalid elevation values');
+    throwIfAborted(signal);
     report(0.09, { key: 'terrain.elevationLoaded' });
 
     const areaMeters=metadata.areaMeters??FALLBACK_AREA_METERS;
@@ -58,9 +65,10 @@ export async function createTerrain({ areaId, fallback = true, onProgress } = {}
       { key: 'terrain.imageryProgress', params: { imagery: orthoLoaded, total: tileCount, water: waterLoaded } },
     );
     const [texture, water] = await Promise.all([
-      loadOrthophotoAtlas(base, orthoGrid, tilePixels, (loaded) => { orthoLoaded = loaded; reportTiles(); }),
-      loadWaterAtlas(base, orthoGrid, tilePixels, (loaded) => { waterLoaded = loaded; reportTiles(); }),
+      loadOrthophotoAtlas(base, orthoGrid, tilePixels, (loaded) => { orthoLoaded = loaded; reportTiles(); }, signal),
+      loadWaterAtlas(base, orthoGrid, tilePixels, (loaded) => { waterLoaded = loaded; reportTiles(); }, signal),
     ]);
+    throwIfAborted(signal);
     report(0.95, { key: 'terrain.finalizing' });
     const material = new THREE.MeshStandardMaterial({
       color: '#d1d6ca', map: texture, roughness: 1, metalness: 0, flatShading: true,
@@ -78,6 +86,7 @@ export async function createTerrain({ areaId, fallback = true, onProgress } = {}
     report(1, { key: 'terrain.ready' });
     return terrain;
   } catch (error) {
+    if (signal?.aborted || error?.name === 'AbortError') throw error;
     if (!fallback) throw error;
     console.info(`Finnish terrain package unavailable; using preview terrain (${error.message}).`);
     report(1, { key: 'terrain.preview' });
@@ -85,15 +94,55 @@ export async function createTerrain({ areaId, fallback = true, onProgress } = {}
   }
 }
 
+function validateTerrainMetadata(metadata) {
+  const validGrid = Number.isInteger(metadata?.width) && Number.isInteger(metadata?.height)
+    && metadata.width >= 2 && metadata.height >= 2
+    && metadata.width <= 2048 && metadata.height <= 2048
+    && metadata.width * metadata.height <= 1_000_000;
+  if (!validGrid) throw new Error('terrain metadata contains invalid height grid dimensions');
+  if (!Number.isFinite(metadata.referenceHeight)) throw new Error('terrain metadata has an invalid reference height');
+  if (!Number.isFinite(metadata.areaMeters) || metadata.areaMeters <= 0 || metadata.areaMeters > 1_000_000) {
+    throw new Error('terrain metadata has an invalid area size');
+  }
+  const grid = metadata.orthoGrid ?? ORTHO_GRID;
+  const tilePixels = metadata.orthoTilePixels ?? TILE_PIXELS;
+  if (!Number.isInteger(grid) || grid < 1 || grid > 12 || !Number.isInteger(tilePixels) || tilePixels < 32 || tilePixels > 1024) {
+    throw new Error('terrain metadata has invalid imagery dimensions');
+  }
+  if (grid * tilePixels > 4096) throw new Error('terrain imagery atlas is too large');
+  const imageryExtent = metadata.orthoAreaMeters ?? grid * ORTHO_TILE_METERS;
+  if (!Number.isFinite(imageryExtent) || imageryExtent <= 0 || imageryExtent > 1_000_000) {
+    throw new Error('terrain metadata has an invalid imagery extent');
+  }
+}
+
+function throwIfAborted(signal) {
+  if (signal?.aborted) throw signal.reason ?? new DOMException('The operation was aborted.', 'AbortError');
+}
+
 export function createPreviewTerrain() {
   return { ...makePreviewTerrain(), id: 'preview', label: 'Esimerkkimaa' };
+}
+
+export function disposeTerrain(terrain) {
+  if (!terrain?.mesh) return;
+  terrain.mesh.removeFromParent();
+  terrain.mesh.geometry.dispose();
+  const materials = Array.isArray(terrain.mesh.material) ? terrain.mesh.material : [terrain.mesh.material];
+  for (const material of materials) {
+    material?.map?.dispose();
+    material?.dispose();
+  }
 }
 
 function makeHeightGeometry(values, width, height, referenceHeight, areaMeters) {
   const geometry = new THREE.BufferGeometry();
   const positions = new Float32Array(width * height * 3);
   const uvs = new Float32Array(width * height * 2);
-  const indices = [];
+  const indexLength = (width - 1) * (height - 1) * 6;
+  const IndexArray = width * height > 65535 ? Uint32Array : Uint16Array;
+  const indices = new IndexArray(indexLength);
+  let indexOffset = 0;
   for (let row = 0; row < height; row++) {
     for (let col = 0; col < width; col++) {
       const i = row * width + col;
@@ -105,13 +154,18 @@ function makeHeightGeometry(values, width, height, referenceHeight, areaMeters) 
       uvs[i * 2 + 1] = 1 - row / (height - 1);
       if (col < width - 1 && row < height - 1) {
         const a = i, b = i + 1, c = i + width, d = c + 1;
-        indices.push(a, b, c, b, d, c);
+        indices[indexOffset++] = a;
+        indices[indexOffset++] = b;
+        indices[indexOffset++] = c;
+        indices[indexOffset++] = b;
+        indices[indexOffset++] = d;
+        indices[indexOffset++] = c;
       }
     }
   }
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-  geometry.setIndex(indices);
+  geometry.setIndex(new THREE.BufferAttribute(indices, 1));
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
   return geometry;
@@ -127,7 +181,7 @@ function sampleHeight(values, width, height, referenceHeight, areaMeters, x, z) 
   return -250 + THREE.MathUtils.lerp(a, b, tz) - referenceHeight;
 }
 
-async function loadOrthophotoAtlas(base,grid,tilePixels,onProgress) {
+async function loadOrthophotoAtlas(base,grid,tilePixels,onProgress,signal) {
   const canvas = document.createElement('canvas');
   canvas.width = grid * tilePixels;
   canvas.height = grid * tilePixels;
@@ -138,8 +192,8 @@ async function loadOrthophotoAtlas(base,grid,tilePixels,onProgress) {
   const tileCount = grid * grid;
   const tiles = await Promise.all(Array.from({length:tileCount}, async (_,i) => {
     const row=Math.floor(i/grid),col=i%grid;
-    try{return {row,col,image:await loadImage(`${base}/ortho-${row}-${col}.png`)};}
-    catch{return null;}
+    try{return {row,col,image:await loadImage(`${base}/ortho-${row}-${col}.png`,signal)};}
+    catch(error){if(signal?.aborted)throw error;return null;}
     finally{onProgress?.(++completed,tileCount);}
   }));
   for (const tile of tiles) {
@@ -155,13 +209,13 @@ async function loadOrthophotoAtlas(base,grid,tilePixels,onProgress) {
   return texture;
 }
 
-async function loadWaterAtlas(base,grid,tilePixels,onProgress){
+async function loadWaterAtlas(base,grid,tilePixels,onProgress,signal){
   const atlas=new Uint8Array(grid*tilePixels*grid*tilePixels);
   let completed = 0;
   const requests=Array.from({length:grid*grid},async(_,i)=>{
     const row=Math.floor(i/grid),col=i%grid;
-    try{const response=await fetch(`${base}/water-${row}-${col}.bin`);if(!response.ok)return null;return{row,col,data:new Uint8Array(await response.arrayBuffer())};}
-    catch{return null;}
+    try{const response=await fetch(`${base}/water-${row}-${col}.bin`,{signal});if(!response.ok)return null;return{row,col,data:new Uint8Array(await response.arrayBuffer())};}
+    catch(error){if(signal?.aborted)throw error;return null;}
     finally{onProgress?.(++completed,grid*grid);}
   });
   const tiles=await Promise.all(requests),width=grid*tilePixels;
@@ -180,9 +234,27 @@ function sampleWater(mask,grid,tilePixels,areaMeters,x,z){
   return mask[row*size+col]===1;
 }
 
-function loadImage(src) {
+function loadImage(src, signal) {
   return new Promise((resolve, reject) => {
-    const image = new Image(); image.onload = () => resolve(image); image.onerror = reject; image.src = src;
+    if (signal?.aborted) {
+      reject(signal.reason ?? new DOMException('The operation was aborted.', 'AbortError'));
+      return;
+    }
+    const image = new Image();
+    const finish = (callback, value) => {
+      image.onload = null;
+      image.onerror = null;
+      signal?.removeEventListener('abort', abort);
+      callback(value);
+    };
+    const abort = () => {
+      image.src = '';
+      finish(reject, signal.reason ?? new DOMException('The operation was aborted.', 'AbortError'));
+    };
+    image.onload = () => finish(resolve, image);
+    image.onerror = () => finish(reject, new Error(`image failed to load: ${src}`));
+    signal?.addEventListener('abort', abort, { once: true });
+    image.src = src;
   });
 }
 

@@ -111,6 +111,7 @@ const dictionaries = {
     'terrain.finalizing': 'Building terrain display',
     'terrain.ready': 'Terrain ready',
     'terrain.preview': 'Preview terrain active',
+    'terrain.previewAreaName': 'Preview area',
     'credits.kicker': 'ILMATILA / ASSETS',
     'credits.title': 'Assets & licenses',
     'credits.close': 'Close assets and licenses',
@@ -328,6 +329,7 @@ const dictionaries = {
     'terrain.finalizing': 'Muodostetaan maastonäkymää',
     'terrain.ready': 'Maasto valmis',
     'terrain.preview': 'Yleismaasto käytössä',
+    'terrain.previewAreaName': 'Yleismaasto',
     'credits.kicker': 'ILMATILA / AINEISTOT',
     'credits.title': 'Aineistot ja lisenssit',
     'credits.close': 'Sulje aineisto- ja lisenssitiedot',
@@ -467,8 +469,6 @@ export function applyTranslations(root = document) {
   });
   document.documentElement.lang = language;
   document.title = t('document.title');
-  const languageCode = document.querySelector('#language-code');
-  if (languageCode) languageCode.textContent = language.toUpperCase() + ' / 01';
 }
 
 export function setLanguage(nextLanguage) {
