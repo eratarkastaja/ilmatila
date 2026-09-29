@@ -5,20 +5,13 @@ import { CombatInput } from './combat/input.js';
 import { CombatRadar } from './combat/radar.js';
 import { pointSegmentDistanceSquared, traceFighterHit, traceVehicleHit } from './combat/hit-testing.js';
 import { advanceMissionObjective, evaluateMissionObjective, MISSION_OUTCOME } from './combat/mission-objective.js';
-import { createMissile, MISSILE_PROFILES, updateMissileMotor } from './combat/projectiles.js';
-import {
-  estimateInterceptTime,
-  GUN_PROJECTILE_GRAVITY,
-  GUN_PROJECTILE_LIFETIME,
-  GUN_PROJECTILE_SPEED,
-  GUN_ROUNDS_PER_SECOND,
-} from './combat/ballistics.js';
+import { MISSILE_PROFILES, updateMissileMotor } from './combat/projectiles.js';
+import { estimateInterceptTime } from './combat/ballistics.js';
+import { WeaponSystem } from './combat/weapon-system.js';
 import { formatNumber, t } from './i18n.js';
 
 const effectSphereGeo=new THREE.SphereGeometry(1,14,10);
 const shockwaveGeo=new THREE.RingGeometry(.94,1,48);
-const gunTracerRoundGeo=new THREE.CylinderGeometry(.004,.012,.16,6);
-const gunTracerRoundMaterial=new THREE.MeshBasicMaterial({color:'#ffc45e',toneMapped:false});
 const flareDecoyGeo=new THREE.SphereGeometry(1,7,5),flareDecoyMaterial=new THREE.MeshBasicMaterial({color:'#ff8c37',toneMapped:false});
 const chaffDecoyGeo=new THREE.TetrahedronGeometry(.18,0),chaffDecoyMaterial=new THREE.MeshBasicMaterial({color:'#d9e2d8',transparent:true,opacity:.72,toneMapped:false});
 const glowTexture=createGlowTexture();
@@ -112,10 +105,8 @@ export class CombatWorld {
     this.missionFailed=false;
     this.missionNoticeTimer=null;
     this.input = new CombatInput();
-    this.missiles={air:MISSILE_PROFILES.playerAir.count,ground:MISSILE_PROFILES.playerGround.count};
-    this.cooldown=0; this.score=0; this.gunClock=0; this.gunRoundCount=0;
+    this.score=0;
     this.countermeasures=12; this.countermeasureCooldown=0; this.decoys=[]; this.incomingMissile=false;
-    this.missileFeedbackKey=null; this.missileFeedbackTimer=0;
     this.terrain=terrain; this.playerHeading=0; this.previousPlayerPosition=player.position.clone();
     this.lastCollisionPosition=player.position.clone(); this.playerVelocity=new THREE.Vector3();
     this.airBattle = new AirBattle({
@@ -137,6 +128,10 @@ export class CombatWorld {
       ground:this.redUnits.filter(unit=>unit.armed!==false).length,
     };
     this.radar = new CombatRadar(player, audio);
+    this.weaponSystem = new WeaponSystem({
+      player, scene, fx, audio, radar: this.radar, playerVelocity: this.playerVelocity,
+      addProjectile: shot => this.playerShots.push(shot),
+    });
     this.weapon=document.querySelector('#weapon'); this.ammo=document.querySelector('#ammo'); this.missileType=document.querySelector('#missile-type'); this.missileCount=document.querySelector('#missile-count'); this.scoreEl=document.querySelector('#score');
     this.countermeasureCount=document.querySelector('#countermeasure-count'); this.threatWarning=document.querySelector('#threat-warning');
     this.boundaryWarning=document.querySelector('#boundary-warning');
@@ -170,7 +165,7 @@ export class CombatWorld {
   }
   update(dt){
     this.frameDelta=dt;
-    this.cooldown=Math.max(0,this.cooldown-dt); this.countermeasureCooldown=Math.max(0,this.countermeasureCooldown-dt);
+    this.countermeasureCooldown=Math.max(0,this.countermeasureCooldown-dt);
     if(dt>0){this.playerVelocity.copy(this.player.position).sub(this.previousPlayerPosition).multiplyScalar(1/dt);this.previousPlayerPosition.copy(this.player.position);}
     const justPressed = this.input.consumeJustPressed();
     const radarModeRequested=justPressed.has('KeyR');
@@ -179,31 +174,20 @@ export class CombatWorld {
     const countermeasureRequested=justPressed.has('KeyC');
     if(radarModeRequested)this.radar.toggleMode();
     if(countermeasureRequested)this.deployCountermeasures();
-    this.missileFeedbackTimer=Math.max(0,this.missileFeedbackTimer-dt);
     const gunFiring=this.input.pressed.has('Space')&&!this.destroyed;
-    this.audio?.setGunFiring(gunFiring);
-    if(gunFiring){
-      this.gunClock-=dt;
-      let roundsThisFrame=0;
-      while(this.gunClock<=0&&roundsThisFrame<3){
-        this.fireGun();
-        this.gunClock+=1/GUN_ROUNDS_PER_SECOND;
-        roundsThisFrame++;
-      }
-    }else this.gunClock=0;
     this.radar.updateContacts(dt, this.getPlayerHeading(), {
       airFriendly: this.allies, airHostile: this.enemies,
       groundFriendly: this.friends, groundHostile: this.redUnits,
     });
     if(targetCycleRequested){
       if(this.radar.cycleTarget(this.enemies,this.redUnits)){
-        this.missileFeedbackKey=null;this.missileFeedbackTimer=0;
+        this.weaponSystem.clearFeedback();
       }else{
-        this.missileFeedbackKey='combat.noRadarTargets';this.missileFeedbackTimer=1.5;this.audio?.playWeaponNoLock();
+        this.weaponSystem.showFeedback('combat.noRadarTargets',1.5);
       }
     }
     this.radar.updateLock(dt, this.enemies, this.redUnits);
-    if(missileRequested)this.requestMissile();
+    this.weaponSystem.update(dt,{gunFiring,missileRequested});
     this.airBattle.update(dt, {
       lockedTarget: this.radar.targetDomain === 'air' && this.radar.lockCueConfirmed ? this.radar.target : null,
       incomingMissiles: this.playerShots.filter(shot => shot.homing && shot.targetDomain === 'air'),
@@ -273,7 +257,7 @@ export class CombatWorld {
     this.missionComplete=this.missionOutcome===MISSION_OUTCOME.COMPLETE;
     this.missionFailed=this.missionOutcome===MISSION_OUTCOME.FAILED;
     if(this.boundaryWarning)this.boundaryWarning.hidden=true;
-    this.audio?.setGunFiring(false);
+    this.weaponSystem.stopGun();
     this.audio?.playCollision();
     this.audio?.stopEngine();
     for(const shot of this.playerShots)if(shot.homing)this.audio?.stopMissileFlight(shot.mesh.id);
@@ -286,7 +270,7 @@ export class CombatWorld {
   }
   clearInput(){
     this.input.clear();
-    this.audio?.setGunFiring(false);
+    this.weaponSystem.stopGun();
   }
   dispose(){
     this.clearInput();
@@ -313,58 +297,6 @@ export class CombatWorld {
     if(designator){designator.hidden=true;designator.classList.remove('ground-target','locked');}
     if(this.threatWarning)this.threatWarning.hidden=true;
     if(this.status){this.status.classList.remove('destroyed','complete');this.status.replaceChildren(document.createElement('i'),document.createTextNode(` ${t('hud.ready')}`));}
-  }
-  fireGun(){
-    const attitude=this.player.quaternion;
-    const direction=forward.clone().applyQuaternion(attitude).normalize();
-    const right=localRight.clone().applyQuaternion(attitude).normalize();
-    const up=localUp.clone().applyQuaternion(attitude).normalize();
-    direction
-      .addScaledVector(right,(Math.random()-.5)*0.0009)
-      .addScaledVector(up,(Math.random()-.5)*0.0009)
-      .normalize();
-    const muzzleOffset=new THREE.Vector3(-.78,.38,2.65).applyQuaternion(attitude);
-    const start=this.player.position.clone().add(muzzleOffset);
-    const velocity=direction.multiplyScalar(GUN_PROJECTILE_SPEED).add(this.playerVelocity);
-    const tracer=this.gunRoundCount++%4===0;
-    const shot=tracer?new THREE.Mesh(gunTracerRoundGeo,gunTracerRoundMaterial):new THREE.Object3D();
-    shot.position.copy(start);
-    if(tracer){
-      shot.quaternion.setFromUnitVectors(localBulletAxis,velocity.clone().normalize());
-      this.scene.add(shot);
-      this.fx?.addMovingTracer(start,velocity,'#ffd282',{
-        life:.14,trailTime:.06,gravity:GUN_PROJECTILE_GRAVITY,
-      });
-    }
-    this.playerShots.push({
-      mesh:shot,velocity,life:GUN_PROJECTILE_LIFETIME,damage:.34,
-      ballistic:true,gravity:GUN_PROJECTILE_GRAVITY,tracer,
-    });
-  }
-  fireMissile(){
-    if(!this.radar.target||this.radar.target.dead)return;
-    const targetDomain=this.radar.targetDomain;
-    const missileProfile=targetDomain==='ground'?MISSILE_PROFILES.playerGround:MISSILE_PROFILES.playerAir;
-    this.missiles[targetDomain]--;this.cooldown=2.8;
-    this.missileFeedbackKey=null; this.missileFeedbackTimer=0;
-    const missileSpeed=missileProfile.speed;
-    const missileLife=missileProfile.life;
-    const dir=forward.clone().applyQuaternion(this.player.quaternion).normalize();
-    const mesh=createMissile('#d3d9d2');
-    mesh.position.copy(this.player.position).addScaledVector(dir,5);
-    mesh.quaternion.setFromUnitVectors(forward,dir);
-    this.scene.add(mesh);
-    this.audio?.playMissileLaunch();
-    this.audio?.startMissileFlight(mesh.id);
-    if(mesh.userData.engineFlame)mesh.userData.engineFlame.visible=true;
-    this.playerShots.push({mesh,velocity:dir.clone().multiplyScalar(missileSpeed),speed:missileSpeed,life:missileLife,burnRemaining:missileProfile.burnTime,coastDrag:missileProfile.coastDrag,motorBurning:true,guidanceActive:true,damage:missileProfile.damage,homing:true,target:this.radar.target,targetDomain,seeker:missileProfile.seeker,decoyTarget:null,decoyAttempts:new Set(),trail:0});
-  }
-  requestMissile(){
-    if(this.cooldown>0||this.missiles[this.radar.mode]<=0){this.audio?.playWeaponNoLock();return;}
-    if(!this.radar.target||this.radar.target.dead){this.missileFeedbackKey='combat.aimAtHostile';this.missileFeedbackTimer=1.5;this.audio?.playWeaponNoLock();return;}
-    if(!this.radar.inLockEnvelope){this.missileFeedbackKey='combat.outOfRange';this.missileFeedbackTimer=1.5;this.audio?.playWeaponNoLock();return;}
-    if(!this.radar.lockCueConfirmed){this.missileFeedbackKey='combat.lockNotReady';this.missileFeedbackTimer=1.3;this.audio?.playWeaponNoLock();return;}
-    this.fireMissile();
   }
   deployCountermeasures(){
     if(this.countermeasureCooldown>0||this.countermeasures<=0){this.audio?.playWeaponNoLock();return;}
@@ -757,9 +689,9 @@ export class CombatWorld {
     }
     if(this.ammo){
       let seeker;
-      if(this.missileFeedbackTimer>0&&this.missileFeedbackKey)seeker=t(this.missileFeedbackKey);
-      else if(this.missiles[this.radar.mode]<=0)seeker=t('combat.noMissiles');
-      else if(this.cooldown>0)seeker=t('combat.cooling',{seconds:formatNumber(this.cooldown,{minimumFractionDigits:1,maximumFractionDigits:1})});
+      if(this.weaponSystem.missileFeedbackTimer>0&&this.weaponSystem.missileFeedbackKey)seeker=t(this.weaponSystem.missileFeedbackKey);
+      else if(this.weaponSystem.missiles[this.radar.mode]<=0)seeker=t('combat.noMissiles');
+      else if(this.weaponSystem.cooldown>0)seeker=t('combat.cooling',{seconds:formatNumber(this.weaponSystem.cooldown,{minimumFractionDigits:1,maximumFractionDigits:1})});
       else if(this.radar.target&&!this.radar.inLockEnvelope)seeker=t('combat.outOfRange');
       else if(this.radar.target&&this.radar.lockCueConfirmed)seeker=t('combat.locked');
       else if(this.radar.target&&this.radar.lockCueTarget)seeker=t('combat.locking',{percent:Math.round(this.radar.lock*100)});
@@ -777,7 +709,7 @@ export class CombatWorld {
       const profile=this.radar.mode==='ground'?MISSILE_PROFILES.playerGround:MISSILE_PROFILES.playerAir;
       if(this.missileType.textContent!==profile.designation)this.missileType.textContent=profile.designation;
     }
-    if(this.missileCount)this.missileCount.textContent=String(this.missiles[this.radar.mode]).padStart(2,'0');
+    if(this.missileCount)this.missileCount.textContent=String(this.weaponSystem.missiles[this.radar.mode]).padStart(2,'0');
     if(this.scoreEl)this.scoreEl.textContent=String(this.score).padStart(5,'0');
   }
 }
