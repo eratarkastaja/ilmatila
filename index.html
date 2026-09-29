@@ -153,6 +153,7 @@
       <div class="gun-aim-cue" id="gun-aim-cue" data-i18n-aria-label="hud.gunAimCue" hidden><i></i><i></i><i></i><i></i></div>
       <div class="target-designator" id="target-designator" hidden><i></i><i></i><i></i><i></i><b id="target-code"></b><small id="target-state"></small></div>
       <div class="threat-warning" id="threat-warning" hidden role="status"><i></i><b data-i18n="hud.missileInbound">HOSTILE MISSILE · C</b></div>
+      <div class="boundary-warning" id="boundary-warning" hidden role="status" aria-live="polite"><i></i><b id="boundary-warning-text"></b><span id="boundary-warning-distance" aria-hidden="true"></span></div>
       <section class="mission-objective" id="mission-objective" data-i18n-aria-label="mission.objectiveLabel">
         <small data-i18n="mission.objectiveLabel">MISSION OBJECTIVE</small>
         <strong id="mission-objective-title"></strong>
@@ -162,7 +163,7 @@
         <div class="mission-complete-card"><small><i></i> <span data-i18n="mission.objectiveAchieved">MISSION OBJECTIVE ACHIEVED</span></small><h2 id="mission-complete-title" data-i18n="mission.objectiveAchieved">MISSION OBJECTIVE ACHIEVED</h2><p id="mission-complete-detail"></p></div>
       </section>
       <section class="radar" data-i18n-aria-label="hud.radar"><div class="radar-screen" data-i18n-aria-label="hud.radarScreen"><i class="range-ring ring-inner"></i><i class="range-ring ring-middle"></i><i class="range-ring ring-outer"></i><i class="azimuth-line"></i><i class="ownship"></i><span class="radar-mode-indicator" id="radar-mode-indicator">AIR</span></div></section>
-      <section class="weapons"><div class="weapon-row"><i class="weapon-icon gun-icon"></i><div><small data-i18n="hud.gun">GAU-22/A · 25 mm</small><strong id="weapon">READY</strong></div></div><div class="weapon-row"><i class="weapon-icon missile-icon"></i><div><small data-i18n="hud.missile">GUIDED MISSILE</small><strong id="ammo">AIR SEARCH</strong></div><b class="ammo-count" id="missile-count">06</b><kbd>M</kbd></div><div class="weapon-row countermeasure-row"><i class="weapon-icon countermeasure-icon"></i><div><small data-i18n="hud.countermeasures">FLARES / CHAFF</small><strong id="countermeasure-count">12</strong></div><kbd>C</kbd></div><div class="score-row"><span data-i18n="hud.score">MISSION SCORE</span><b id="score">00000</b></div></section>
+      <section class="weapons"><div class="weapon-row"><i class="weapon-icon gun-icon"></i><div><small data-i18n="hud.gun">GAU-22/A · 25 mm</small><strong id="weapon">READY</strong></div></div><div class="weapon-row"><i class="weapon-icon missile-icon"></i><div><small id="missile-type">AIM-120C · AMRAAM</small><strong id="ammo">AIR SEARCH</strong></div><b class="ammo-count" id="missile-count">06</b><kbd>M</kbd></div><div class="weapon-row countermeasure-row"><i class="weapon-icon countermeasure-icon"></i><div><small data-i18n="hud.countermeasures">FLARES / CHAFF</small><strong id="countermeasure-count">12</strong></div><kbd>C</kbd></div><div class="score-row"><span data-i18n="hud.score">MISSION SCORE</span><b id="score">00000</b></div></section>
       <div class="reticle-label"><span data-i18n="hud.area">AREA</span> <b id="area-name">PÄIJÄNNE</b> <span>›</span></div>
     </main>
     <section id="death-screen" class="death-screen" hidden aria-live="assertive" aria-labelledby="death-title">

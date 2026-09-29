@@ -1,6 +1,6 @@
 # ILMATILA
 
-**ILMATILA 0.1.0-alpha.4** is an independent browser-based air-combat game by **ERÄGAMES**, built with Three.js. It is an early playable prototype: aircraft handling, radar, weapons, opponents, and ground battles are game simulations and are not intended for real-world training or operational use.
+**ILMATILA 0.1.0-alpha.5** is an independent browser-based air-combat game by **ERÄGAMES**, built with Three.js. It is an early playable prototype: aircraft handling, radar, weapons, opponents, and ground battles are game simulations and are not intended for real-world training or operational use.
 
 The interface defaults to English and also supports Finnish. See the [changelog](CHANGELOG.md) for this alpha's updates.
 
@@ -37,6 +37,10 @@ Generated MML terrain packages stay out of Git history. The Pages workflow downl
 | R | Switch radar between air and ground modes |
 | C | Deploy flares and chaff |
 | Esc | Pause the sortie |
+
+## Weapons and radar
+
+The heading-up radar keeps the aircraft's nose at the top of the display. Press `R` to choose air or ground mode, then `T` to select a hostile track. The cannon lead cue shows the predicted firing point for the selected aircraft or ground vehicle. The missile cue and count follow the selected radar mode: six AIM-120C AMRAAM air-to-air missiles and four AGM-65D Maverick air-to-ground missiles are carried as separate game inventories. Missile guidance ends after its powered flight phase; a missile cannot pursue a target indefinitely.
 
 ## Audio
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.0-alpha.5 — 2026-09-29
+
+### English
+
+- Added distinct air and ground missile inventories, with AIM-120C AMRAAM and AGM-65D Maverick designations shown for the active radar mode.
+- Limited missile powered flight and guidance, with a coast phase after motor burnout.
+- Reworked the cannon lead cue around the actual aircraft boresight and gun muzzle; it now supports air and ground targets and accounts for target motion, aircraft velocity, and projectile drop.
+- Tuned cannon damage and hit tolerance, including a forgiving near-hit envelope against ground vehicles.
+- Corrected heading-up radar contact orientation so left and right match the aircraft's perspective, and added warnings near the theater boundary.
+- Refined atmospheric haze, afterburner wakes, and missile smoke appearance.
+
+Alpha 5 remains an early prototype. Flight, radar, weapons, AI, and battlefield behavior are simplified game systems, not real-world training or operational tools.
+
 ## 0.1.0-alpha.4 — 2026-09-29
 
 ### English

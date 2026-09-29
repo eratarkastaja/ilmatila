@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
-const MISSILE_SMOKE_FRESH = new THREE.Color('#4d5559');
-const MISSILE_SMOKE_AGED = new THREE.Color('#858f93');
+const MISSILE_SMOKE_FRESH = new THREE.Color('#929b9f');
+const MISSILE_SMOKE_AGED = new THREE.Color('#c1c8ca');
 const WING_VAPOR_COLOR = [0.88, 0.94, 0.97];
 
 export class FlightFX {
@@ -458,7 +458,7 @@ export class FlightFX {
         }
         while (trail.count > 0) {
           const oldest = (trail.head - trail.count + this.trailPointCapacity) % this.trailPointCapacity;
-          if (trail.ages[oldest] < 14) break;
+          if (trail.ages[oldest] < (trail.lifetimes[oldest] || 14)) break;
           trail.count--;
         }
         hasPoints ||= trail.count > 0;
@@ -469,7 +469,12 @@ export class FlightFX {
     for (const aircraftMesh of aircraft) {
       if (!aircraftMesh?.parent || aircraftMesh.userData.destroyed) continue;
       const altitude = aircraftMesh.position.y - terrain.sampleHeight(aircraftMesh.position.x, aircraftMesh.position.z);
-      const density = THREE.MathUtils.smoothstep(altitude, base, full) * moisture;
+      const cruiseContrail = THREE.MathUtils.smoothstep(altitude, base, full) * moisture;
+      const afterburnerWake = aircraftMesh.userData.boosting
+        ? THREE.MathUtils.smoothstep(altitude, 1800, 3600) * moisture * 0.24
+        : 0;
+      const density = Math.max(cruiseContrail, afterburnerWake);
+      const shortAfterburnerWake = afterburnerWake > cruiseContrail;
       let state = this.contrailStates.get(aircraftMesh);
       if (!state) {
         const offsets = aircraftMesh.userData.trailOffsets ?? [[0, 0, -7]];
@@ -477,6 +482,7 @@ export class FlightFX {
           positions: new Float32Array(this.trailPointCapacity * 3),
           ages: new Float32Array(this.trailPointCapacity),
           strengths: new Float32Array(this.trailPointCapacity),
+          lifetimes: new Float32Array(this.trailPointCapacity),
           head: 0,
           count: 0,
           timer: 0,
@@ -498,7 +504,8 @@ export class FlightFX {
         trail.positions[positionOffset + 1] = this._world.y;
         trail.positions[positionOffset + 2] = this._world.z;
         trail.ages[index] = 0;
-        trail.strengths[index] = density * 0.62;
+        trail.lifetimes[index] = shortAfterburnerWake ? 4.5 : 14;
+        trail.strengths[index] = density * (shortAfterburnerWake ? 0.31 : 0.62);
         trail.head = (index + 1) % this.trailPointCapacity;
         trail.count = Math.min(trail.count + 1, this.trailPointCapacity);
         trail.timer = 0.07;
@@ -517,8 +524,8 @@ export class FlightFX {
         for (let i = 0; i < trail.count - 1 && segments < this.maxTrailSegments; i++) {
           const a = (oldest + i) % this.trailPointCapacity;
           const b = (a + 1) % this.trailPointCapacity;
-          const ageA = trail.ages[a] / 14;
-          const ageB = trail.ages[b] / 14;
+          const ageA = trail.ages[a] / (trail.lifetimes[a] || 14);
+          const ageB = trail.ages[b] / (trail.lifetimes[b] || 14);
           const fadeA = trail.strengths[a] * THREE.MathUtils.smoothstep(ageA, 0, 0.018) * (1 - THREE.MathUtils.smoothstep(ageA, 0.68, 1));
           const fadeB = trail.strengths[b] * THREE.MathUtils.smoothstep(ageB, 0, 0.018) * (1 - THREE.MathUtils.smoothstep(ageB, 0.68, 1));
           if (fadeA < 0.006 && fadeB < 0.006) continue;
@@ -574,7 +581,7 @@ export class FlightFX {
 
     for (const missile of missiles) {
       const mesh = missile.mesh;
-      if (!missile.homing || !mesh?.parent) continue;
+      if (!missile.homing || !missile.motorBurning || !mesh?.parent) continue;
       let trail = this.missileTrailStates.get(mesh);
       if (!trail) {
         trail = {
@@ -652,7 +659,7 @@ export class FlightFX {
           this.missileTrailColors[colorOffset] = this._missileColor.r;
           this.missileTrailColors[colorOffset + 1] = this._missileColor.g;
           this.missileTrailColors[colorOffset + 2] = this._missileColor.b;
-          this.missileTrailAlphas[vertex] = fade * opacity[edge] * 0.84;
+          this.missileTrailAlphas[vertex] = fade * opacity[edge] * 0.62;
           this.missileTrailUvs[uvOffset] = ageRatio;
           this.missileTrailUvs[uvOffset + 1] = edge / (crossSection - 1);
         }

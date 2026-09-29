@@ -4,7 +4,7 @@ const inverseWorld = new THREE.Matrix4();
 const localStart = new THREE.Vector3();
 const localEnd = new THREE.Vector3();
 const localDelta = new THREE.Vector3();
-const PROJECTILE_HIT_ASSIST = 1.18;
+const PROJECTILE_HIT_ASSIST = 1.25;
 
 /** Segment against the aircraft's authored ellipsoid hit zones, in local space. */
 export function traceFighterHit(start, end, fighter) {
@@ -40,7 +40,7 @@ export function traceFighterHit(start, end, fighter) {
 }
 
 /** Segment against the vehicle's local axis-aligned authored hit bounds. */
-export function traceVehicleHit(start, end, vehicle) {
+export function traceVehicleHit(start, end, vehicle, hitAssist = PROJECTILE_HIT_ASSIST) {
   vehicle.updateWorldMatrix(true, false);
   inverseWorld.copy(vehicle.matrixWorld).invert();
   const a = localStart.copy(start).applyMatrix4(inverseWorld);
@@ -54,7 +54,7 @@ export function traceVehicleHit(start, end, vehicle) {
     const key = ['x', 'y', 'z'][axis];
     const velocity = delta[key];
     const center = (bounds.min[axis] + bounds.max[axis]) * .5;
-    const halfExtent = (bounds.max[axis] - bounds.min[axis]) * .5 * PROJECTILE_HIT_ASSIST;
+    const halfExtent = (bounds.max[axis] - bounds.min[axis]) * .5 * hitAssist;
     const minimum = center - halfExtent;
     const maximum = center + halfExtent;
     if (Math.abs(velocity) < 1e-9) {

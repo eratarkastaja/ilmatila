@@ -179,6 +179,7 @@
   pointer-events: none;
   filter: drop-shadow(0 0 2px rgba(2, 18, 10, .7));
 }
+.gun-aim-cue.ground-aim { color: #e6cf87; }
 .gun-aim-cue[hidden] { display: none; }
 .gun-aim-cue::before {
   content: '';
@@ -269,7 +270,7 @@
 .ring-middle { width: 60%; height: 60%; }
 .ring-outer { width: 90%; height: 90%; border-color: #9ab9aa45; }
 .azimuth-line { position: absolute; z-index: 1; top: 5%; bottom: 5%; left: 50%; border-left: 1px solid #9ab9aa26; pointer-events: none; }
-.ownship { position: absolute; z-index: 2; top: 50%; left: 50%; width: 10px; height: 12px; border: 0; background: #d9eee0; clip-path: polygon(50% 0,100% 100%,50% 76%,0 100%); transform: translate(-50%,-50%) rotate(var(--ownship-heading, 0deg)); filter: drop-shadow(0 0 2px #d9eee088); }
+.ownship { position: absolute; z-index: 2; top: 50%; left: 50%; width: 10px; height: 12px; border: 0; background: #d9eee0; clip-path: polygon(50% 0,100% 100%,50% 76%,0 100%); transform: translate(-50%,-50%); filter: drop-shadow(0 0 2px #d9eee088); }
 .radar-mode-indicator { position: absolute; z-index: 4; top: 8px; left: 50%; transform: translateX(-50%); padding: 1px 5px; border: 1px solid #8fc8a45e; border-radius: 2px; color: #b8e4c5; background: #071713d9; font: 700 9px 'Rajdhani', sans-serif; letter-spacing: .12em; line-height: 1.2; }
 .radar-screen.ground-mode .radar-mode-indicator { border-color: #cfb46e66; color: #e7d49b; background: #1a180fd9; }
 .radar-contact { position: absolute; z-index: 3; display: block; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border: 0; background: transparent; color: #ff9476; transform: none; }
@@ -305,6 +306,29 @@
 .threat-warning[hidden] { display: none; }
 .threat-warning i { width: 7px; height: 7px; border-radius: 50%; background: #ff704f; box-shadow: 0 0 10px #ff704f; }
 @keyframes missile-warning { 50% { border-color: #ff9b6c55; color: #f2b99d; } }
+
+.boundary-warning {
+  position: absolute;
+  z-index: 7;
+  top: calc(17% + 42px);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 11px;
+  transform: translateX(-50%);
+  border: 1px solid #d5b96c78;
+  border-left: 2px solid #e7c66f;
+  background: #211d10d9;
+  color: #f0dda0;
+  font: 700 11px 'Rajdhani', sans-serif;
+  letter-spacing: .12em;
+  text-shadow: 0 1px 3px #100e07;
+}
+.boundary-warning[hidden] { display: none; }
+.boundary-warning i { width: 6px; height: 6px; border: 1px solid currentColor; transform: rotate(45deg); }
+.boundary-warning span { padding-left: 8px; border-left: 1px solid currentColor; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.boundary-warning.critical { border-color: #ff805ca8; border-left-color: #ff704f; background: #220f0de8; color: #ffd2b6; animation: missile-warning .8s steps(2, jump-none) infinite; }
 
 .mission-objective {
   position: absolute;
@@ -428,6 +452,7 @@
   .climb { display: none; }
 }
 @media (max-width: 700px) {
+  .boundary-warning { top: calc(17% + 42px); max-width: calc(100vw - 24px); gap: 7px; padding: 5px 8px; font-size: 9px; letter-spacing: .07em; }
   .readout { top: 61px; min-width: 75px; }
   .speed { right: 14px; }
   .altitude { right: 108px; }

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ATMOSPHERE } from './atmosphere.js';
 
 export function makeClouds() {
   const group = new THREE.Group();
@@ -12,8 +13,8 @@ export function makeClouds() {
   const cloudMesh = new THREE.InstancedMesh(cloudGeometry, new THREE.ShaderMaterial({
     uniforms: {
       cloudTexture: { value: texture },
-      fogColor: { value: new THREE.Color('#9baeb4') },
-      fogDensity: { value: 0.000055 },
+      fogColor: { value: new THREE.Color(ATMOSPHERE.hazeColor) },
+      fogDensity: { value: ATMOSPHERE.cloudFogDensity },
     },
     vertexShader: `
       #include <common>

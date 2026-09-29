@@ -4,7 +4,7 @@ import { GroundBattle } from './combat/ground-battle.js';
 import { CombatInput } from './combat/input.js';
 import { CombatRadar } from './combat/radar.js';
 import { pointSegmentDistanceSquared, traceFighterHit, traceVehicleHit } from './combat/hit-testing.js';
-import { createMissile } from './combat/projectiles.js';
+import { createMissile, MISSILE_PROFILES, updateMissileMotor } from './combat/projectiles.js';
 import {
   estimateInterceptTime,
   GUN_PROJECTILE_GRAVITY,
@@ -45,7 +45,6 @@ const localForward=new THREE.Vector3(0,0,1),localRight=new THREE.Vector3(1,0,0),
 const collisionOrigin=new THREE.Vector3();
 const localBulletAxis=new THREE.Vector3(0,1,0);
 const MISSILE_TURN_RATE=2.45;
-const PLAYER_MISSILE={air:{speed:600,life:28},ground:{speed:400,life:18}};
 
 function turnDirection(current,desired,maxAngle){
   if(desired.lengthSq()<1e-9){
@@ -111,7 +110,8 @@ export class CombatWorld {
     this.missionComplete=false;
     this.missionNoticeTimer=null;
     this.input = new CombatInput();
-    this.missiles=6; this.cooldown=0; this.score=0; this.gunClock=0; this.gunRoundCount=0;
+    this.missiles={air:MISSILE_PROFILES.playerAir.count,ground:MISSILE_PROFILES.playerGround.count};
+    this.cooldown=0; this.score=0; this.gunClock=0; this.gunRoundCount=0;
     this.countermeasures=12; this.countermeasureCooldown=0; this.decoys=[]; this.incomingMissile=false;
     this.missileFeedbackKey=null; this.missileFeedbackTimer=0;
     this.terrain=terrain; this.playerHeading=0; this.previousPlayerPosition=player.position.clone();
@@ -135,8 +135,11 @@ export class CombatWorld {
       ground:this.redUnits.filter(unit=>unit.armed!==false).length,
     };
     this.radar = new CombatRadar(player, audio);
-    this.weapon=document.querySelector('#weapon'); this.ammo=document.querySelector('#ammo'); this.missileCount=document.querySelector('#missile-count'); this.scoreEl=document.querySelector('#score');
+    this.weapon=document.querySelector('#weapon'); this.ammo=document.querySelector('#ammo'); this.missileType=document.querySelector('#missile-type'); this.missileCount=document.querySelector('#missile-count'); this.scoreEl=document.querySelector('#score');
     this.countermeasureCount=document.querySelector('#countermeasure-count'); this.threatWarning=document.querySelector('#threat-warning');
+    this.boundaryWarning=document.querySelector('#boundary-warning');
+    this.boundaryWarningText=document.querySelector('#boundary-warning-text');
+    this.boundaryWarningDistance=document.querySelector('#boundary-warning-distance');
     this.status=document.querySelector('.status'); this.deathScreen=document.querySelector('#death-screen'); this.deathReason=document.querySelector('#death-reason');
     this.statusText=this.status?.querySelector('[data-i18n]');
     this.objectiveTitle=document.querySelector('#mission-objective-title');
@@ -258,6 +261,7 @@ export class CombatWorld {
   destroyPlayer(reasonKey,params={}){
     if(this.destroyed)return;
     this.destroyed=true;
+    if(this.boundaryWarning)this.boundaryWarning.hidden=true;
     this.audio?.setGunFiring(false);
     this.audio?.playCollision();
     this.audio?.stopEngine();
@@ -322,16 +326,16 @@ export class CombatWorld {
       });
     }
     this.playerShots.push({
-      mesh:shot,velocity,life:GUN_PROJECTILE_LIFETIME,damage:.28,
+      mesh:shot,velocity,life:GUN_PROJECTILE_LIFETIME,damage:.34,
       ballistic:true,gravity:GUN_PROJECTILE_GRAVITY,tracer,
     });
   }
   fireMissile(){
     if(!this.radar.target||this.radar.target.dead)return;
-    this.missiles--;this.cooldown=2.8;
-    this.missileFeedbackKey=null; this.missileFeedbackTimer=0;
     const targetDomain=this.radar.targetDomain;
-    const missileProfile=targetDomain==='ground'?PLAYER_MISSILE.ground:PLAYER_MISSILE.air;
+    const missileProfile=targetDomain==='ground'?MISSILE_PROFILES.playerGround:MISSILE_PROFILES.playerAir;
+    this.missiles[targetDomain]--;this.cooldown=2.8;
+    this.missileFeedbackKey=null; this.missileFeedbackTimer=0;
     const missileSpeed=missileProfile.speed;
     const missileLife=missileProfile.life;
     const dir=forward.clone().applyQuaternion(this.player.quaternion).normalize();
@@ -342,10 +346,10 @@ export class CombatWorld {
     this.audio?.playMissileLaunch();
     this.audio?.startMissileFlight(mesh.id);
     if(mesh.userData.engineFlame)mesh.userData.engineFlame.visible=true;
-    this.playerShots.push({mesh,velocity:dir.clone().multiplyScalar(missileSpeed),speed:missileSpeed,life:missileLife,damage:5,homing:true,target:this.radar.target,targetDomain,seeker:targetDomain==='air'?'ir':'radar',decoyTarget:null,decoyAttempts:new Set(),trail:0});
+    this.playerShots.push({mesh,velocity:dir.clone().multiplyScalar(missileSpeed),speed:missileSpeed,life:missileLife,burnRemaining:missileProfile.burnTime,coastDrag:missileProfile.coastDrag,motorBurning:true,guidanceActive:true,damage:missileProfile.damage,homing:true,target:this.radar.target,targetDomain,seeker:missileProfile.seeker,decoyTarget:null,decoyAttempts:new Set(),trail:0});
   }
   requestMissile(){
-    if(this.cooldown>0||this.missiles<=0){this.audio?.playWeaponNoLock();return;}
+    if(this.cooldown>0||this.missiles[this.radar.mode]<=0){this.audio?.playWeaponNoLock();return;}
     if(!this.radar.target||this.radar.target.dead){this.missileFeedbackKey='combat.aimAtHostile';this.missileFeedbackTimer=1.5;this.audio?.playWeaponNoLock();return;}
     if(!this.radar.inLockEnvelope){this.missileFeedbackKey='combat.outOfRange';this.missileFeedbackTimer=1.5;this.audio?.playWeaponNoLock();return;}
     if(!this.radar.lockCueConfirmed){this.missileFeedbackKey='combat.lockNotReady';this.missileFeedbackTimer=1.3;this.audio?.playWeaponNoLock();return;}
@@ -531,8 +535,9 @@ export class CombatWorld {
   }
   updateShots(dt){
     for(let i=this.playerShots.length-1;i>=0;i--){const s=this.playerShots[i];s.life-=dt;
+      if(s.homing)updateMissileMotor(s,dt);
       if(s.homing&&(!s.target||s.target.dead))s.life=0;
-      if(s.homing&&s.target&&!s.target.dead){
+      if(s.homing&&s.guidanceActive&&s.target&&!s.target.dead){
         if(s.decoyTarget&&!s.decoyTarget.active)s.decoyTarget=null;
         if(!s.decoyTarget&&s.seeker){
           let nearest=1250, candidate=null;
@@ -582,7 +587,7 @@ export class CombatWorld {
       }
       if(s.life>0&&!s.ally)for(const unit of this.redUnits){if(unit.dead)continue;
         const relativeStart=previous.clone().addScaledVector(unit.velocity??stationaryVelocity,dt);
-        const impact=traceVehicleHit(relativeStart,s.mesh.position,unit.mesh);
+        const impact=traceVehicleHit(relativeStart,s.mesh.position,unit.mesh,s.ballistic?1.5:undefined);
         if(impact&&(!hitInfo||impact.t<hitInfo.t)){hit=unit;hitInfo=impact;}
       }
       if(hit){
@@ -606,26 +611,29 @@ export class CombatWorld {
       const s=this.hostiles[i];if(!s.projectile)continue;s.life-=dt;
       const previous=s.mesh.position.clone();
       if(s.missile){
+        updateMissileMotor(s,dt);
         const distanceToPlayer=s.mesh.position.distanceTo(this.player.position);
         if(distanceToPlayer<1900){
           this.incomingMissile=true;
           s.warningClock-=dt;
           if(s.warningClock<=0){this.audio?.playIncomingMissile();s.warningClock=1.25;}
         }
-        if(s.decoyTarget&&!s.decoyTarget.active)s.decoyTarget=null;
-        if(!s.decoyTarget){
-          let nearest=1250;
-          for(const decoy of this.decoys){
-            if(!decoy.active||decoy.team!=='player'||decoy.type!==s.seeker)continue;
-            const d=s.mesh.position.distanceTo(decoy.position);
-            if(d<nearest){nearest=d;s.decoyTarget=decoy;}
+        if(s.guidanceActive){
+          if(s.decoyTarget&&!s.decoyTarget.active)s.decoyTarget=null;
+          if(!s.decoyTarget){
+            let nearest=1250;
+            for(const decoy of this.decoys){
+              if(!decoy.active||decoy.team!=='player'||decoy.type!==s.seeker)continue;
+              const d=s.mesh.position.distanceTo(decoy.position);
+              if(d<nearest){nearest=d;s.decoyTarget=decoy;}
+            }
           }
+          const aimTarget=s.decoyTarget?s.decoyTarget.position:this.player.position;
+          const missileSpeed=s.velocity.length();
+          const wanted=aimTarget.clone().sub(s.mesh.position).normalize().multiplyScalar(missileSpeed);
+          s.velocity.lerp(wanted,1-Math.exp(3.1*dt));
+          if(s.velocity.lengthSq()>1)s.mesh.quaternion.setFromUnitVectors(forward,s.velocity.clone().normalize());
         }
-        const aimTarget=s.decoyTarget?s.decoyTarget.position:this.player.position;
-        const missileSpeed=305;
-        const wanted=aimTarget.clone().sub(s.mesh.position).normalize().multiplyScalar(missileSpeed);
-        s.velocity.lerp(wanted,1-Math.exp(3.1*dt));
-        if(s.velocity.lengthSq()>1)s.mesh.quaternion.setFromUnitVectors(forward,s.velocity.clone().normalize());
         this.audio?.updateMissileFlight(s.mesh.id,distanceToPlayer,dt);
         s.mesh.position.addScaledVector(s.velocity,dt);
         if(s.decoyTarget&&sweptRelativeDistanceSquared(previous,s.mesh.position,s.decoyTarget.previousPosition,s.decoyTarget.position)<12**2){this.addSpark(s.mesh.position);s.life=0;}
@@ -717,10 +725,25 @@ export class CombatWorld {
     if(this.weapon)this.weapon.textContent=this.input.pressed.has('Space')?t('combat.firing'):t('hud.readyShort');
     if(this.countermeasureCount)this.countermeasureCount.textContent=String(this.countermeasures).padStart(2,'0');
     if(this.threatWarning)this.threatWarning.hidden=!this.incomingMissile;
+    if(this.boundaryWarning){
+      const halfSize=this.terrain.worldSize*.5;
+      const clearance=Math.max(0,Math.min(halfSize-Math.abs(this.player.position.x),halfSize-Math.abs(this.player.position.z)));
+      const critical=clearance<=900;
+      this.boundaryWarning.hidden=this.destroyed||clearance>2200;
+      this.boundaryWarning.classList.toggle('critical',critical);
+      if(!this.boundaryWarning.hidden&&this.boundaryWarningText){
+        const warningText=t(critical?'hud.boundaryCritical':'hud.boundaryWarning');
+        if(this.boundaryWarningText.textContent!==warningText)this.boundaryWarningText.textContent=warningText;
+        if(this.boundaryWarningDistance){
+          const distanceText=`${formatNumber(clearance/1000,{minimumFractionDigits:1,maximumFractionDigits:1})} KM`;
+          if(this.boundaryWarningDistance.textContent!==distanceText)this.boundaryWarningDistance.textContent=distanceText;
+        }
+      }
+    }
     if(this.ammo){
       let seeker;
       if(this.missileFeedbackTimer>0&&this.missileFeedbackKey)seeker=t(this.missileFeedbackKey);
-      else if(this.missiles<=0)seeker=t('combat.noMissiles');
+      else if(this.missiles[this.radar.mode]<=0)seeker=t('combat.noMissiles');
       else if(this.cooldown>0)seeker=t('combat.cooling',{seconds:formatNumber(this.cooldown,{minimumFractionDigits:1,maximumFractionDigits:1})});
       else if(this.radar.target&&!this.radar.inLockEnvelope)seeker=t('combat.outOfRange');
       else if(this.radar.target&&this.radar.lockCueConfirmed)seeker=t('combat.locked');
@@ -735,7 +758,11 @@ export class CombatWorld {
       this.ammo.classList.toggle('out-of-range',Boolean(this.radar.target&&!this.radar.inLockEnvelope));
       this.ammo.classList.toggle('ground-target',this.radar.targetDomain==='ground');
     }
-    if(this.missileCount)this.missileCount.textContent=String(this.missiles).padStart(2,'0');
+    if(this.missileType){
+      const profile=this.radar.mode==='ground'?MISSILE_PROFILES.playerGround:MISSILE_PROFILES.playerAir;
+      if(this.missileType.textContent!==profile.designation)this.missileType.textContent=profile.designation;
+    }
+    if(this.missileCount)this.missileCount.textContent=String(this.missiles[this.radar.mode]).padStart(2,'0');
     if(this.scoreEl)this.scoreEl.textContent=String(this.score).padStart(5,'0');
   }
 }

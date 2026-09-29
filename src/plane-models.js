@@ -86,7 +86,7 @@ export function buildF35Asset(plane, aircraftAsset, friendly) {
   nozzleInterior.position.set(0, -0.02, -7.95);
   plane.add(nozzleInterior);
 
-  const afterburner = createAfterburnerFlame({ radius: 0.42, length: 2.5 });
+  const afterburner = createAfterburnerFlame({ radius: 0.46, length: 2.75 });
   afterburner.position.set(0, -0.02, -7.9);
   afterburner.visible = false;
   afterburner.userData.keepSeparate = true;
@@ -126,7 +126,7 @@ export function buildImportedEnemyAircraft(plane, aircraftAsset, variant) {
   const afterburner = new THREE.Group();
   afterburner.visible = false;
   for (const side of [-1, 1]) {
-    const flame = createAfterburnerFlame({ radius: 0.31, length: 2.35 });
+    const flame = createAfterburnerFlame({ radius: 0.34, length: 2.55 });
     flame.position.set(side * engineSpacing, -0.18, exhaustZ - 0.12);
     afterburner.add(flame);
   }
@@ -179,7 +179,7 @@ export function buildFlanker(plane, m) {
     nozzle.rotation.x = Math.PI / 2;
     nozzle.position.set(side * 0.84, -0.25, -8.8);
     plane.add(nozzle);
-    const flame = createAfterburnerFlame({ radius: 0.48, length: 2.8 });
+    const flame = createAfterburnerFlame({ radius: 0.52, length: 3.0 });
     flame.position.set(side * 0.84, -0.25, -8.95);
     afterburners.add(flame);
   }

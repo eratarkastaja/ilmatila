@@ -10,6 +10,7 @@ import { FlightFX } from './fx.js';
 import { GameAudio } from './audio.js';
 import { TacticalHud } from './hud.js';
 import { SunEffects, SUN_DIRECTION } from './sun.js';
+import { ATMOSPHERE } from './atmosphere.js';
 import { MISSIONS } from './missions.js';
 import { getLanguage, initializeLanguagePicker, t } from './i18n.js';
 import './style.css';
@@ -56,8 +57,8 @@ menuTheater.value = initialAreaId;
 let selectedAreaId = initialAreaId;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color('#8fa9b7');
-scene.fog = new THREE.FogExp2('#9baeb4', 0.00016);
+scene.background = new THREE.Color(ATMOSPHERE.hazeColor);
+scene.fog = new THREE.FogExp2(ATMOSPHERE.hazeColor, ATMOSPHERE.sceneFogDensity);
 
 const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 22000);
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -471,6 +472,7 @@ const speedEl = document.querySelector('#speed');
 const altitudeEl = document.querySelector('#altitude');
 const headingEl = document.querySelector('#heading');
 const gunReticle = document.querySelector('.crosshair');
+const gunBoresightPoint = new THREE.Vector3();
 let previousAltitude = player.position.y;
 let needsMenuRender = true;
 const assets = new AssetRepository({
@@ -520,10 +522,16 @@ function animate() {
     headingEl.textContent = String(Math.round(THREE.MathUtils.euclideanModulo(THREE.MathUtils.radToDeg(controls.heading), 360))).padStart(3, '0');
     tacticalHud.update(controls, player, camera, combat, verticalSpeed, dt);
     if (gunReticle) {
-      const bankCue = THREE.MathUtils.clamp(Math.sin(controls.roll) * innerHeight * 0.02, -24, 24);
-      const pitchCue = THREE.MathUtils.clamp(controls.pitch * innerHeight * 0.012, -18, 18);
-      gunReticle.style.setProperty('--aim-shift-x', `${bankCue}px`);
-      gunReticle.style.setProperty('--aim-shift-y', `${pitchCue}px`);
+      // Project the aircraft's real nose axis into the chase view; pitch/bank
+      // heuristics can otherwise misalign the reticle from the cannon rounds.
+      camera.updateMatrixWorld(true);
+      const boresight = gunBoresightPoint.copy(player.position)
+        .addScaledVector(controls.forward, 1000)
+        .project(camera);
+      const shiftX = THREE.MathUtils.clamp(boresight.x * innerWidth * 0.5, -innerWidth * 0.46, innerWidth * 0.46);
+      const shiftY = THREE.MathUtils.clamp(-boresight.y * innerHeight * 0.5, -innerHeight * 0.44, innerHeight * 0.44);
+      gunReticle.style.setProperty('--aim-shift-x', `${shiftX}px`);
+      gunReticle.style.setProperty('--aim-shift-y', `${shiftY}px`);
     }
     // Let the cloud field drift across the camera slowly with the wind instead of locking it in place.
     clouds.position.x = player.position.x * 0.98 + weather.wind.x * clock.elapsedTime;

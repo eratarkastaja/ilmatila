@@ -19,7 +19,6 @@ export class CombatRadar {
     this.lockCueConfirmed = false;
     this.tracks = new Map();
     this.screen = document.querySelector('.radar-screen');
-    this.ownship = this.screen?.querySelector('.ownship');
     this.modeIndicator = document.querySelector('#radar-mode-indicator');
     this.crosshair = document.querySelector('.crosshair');
     this.renderMode();
@@ -54,15 +53,13 @@ export class CombatRadar {
     const contacts = this.mode === 'ground'
       ? [...this.liveContacts(groundFriendly, 'friendly', 'ground'), ...this.liveContacts(groundHostile, 'hostile', 'ground')]
       : [...this.liveContacts(airFriendly, 'friendly', 'air'), ...this.liveContacts(airHostile, 'hostile', 'air')];
-    if (this.ownship) this.ownship.style.setProperty('--ownship-heading', `${THREE.MathUtils.radToDeg(playerHeading)}deg`);
-
     for (const contact of contacts) {
       const delta = contact.mesh.position.clone().sub(this.player.position);
       const distance = delta.length();
       if (distance > this.range) continue;
-      // Keep the display north-up so contacts do not sweep across the screen
-      // opposite to a turn. The ownship symbol carries the aircraft heading.
-      const bearing = Math.atan2(delta.x, delta.z);
+      // Keep the aircraft nose fixed at the top of the scope. Contacts rotate
+      // around ownship with heading so the display reads as a heading-up radar.
+      const bearing = Math.atan2(delta.x, delta.z) - playerHeading;
       let track = this.tracks.get(contact.mesh);
       if (!track) {
         track = { age: 0, node: document.createElement('span') };
@@ -75,7 +72,7 @@ export class CombatRadar {
       const selected = this.target?.mesh === contact.mesh;
       track.node.className = ['radar-contact', contact.domain, contact.team, selected ? 'target' : '', selected && this.lockCueConfirmed ? 'locked' : ''].filter(Boolean).join(' ');
       const radius = THREE.MathUtils.clamp(distance / this.range, 0, 1) * 43;
-      track.node.style.left = `${50 + Math.sin(bearing) * radius}%`;
+      track.node.style.left = `${50 - Math.sin(bearing) * radius}%`;
       track.node.style.top = `${50 - Math.cos(bearing) * radius}%`;
       track.node.style.opacity = '1';
     }

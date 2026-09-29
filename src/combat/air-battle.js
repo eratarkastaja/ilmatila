@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createFighter } from '../plane.js';
-import { createMissile } from './projectiles.js';
+import { createMissile, MISSILE_PROFILES } from './projectiles.js';
 
 const allyShotGeo = new THREE.SphereGeometry(.12, 5, 4);
 const hostileShotGeo = new THREE.SphereGeometry(.3, 7, 5);
@@ -543,7 +543,8 @@ export class AirBattle {
   launchEnemyMissile(enemy) {
     const direction = forward.clone().applyQuaternion(enemy.mesh.quaternion).normalize();
     const start = enemy.mesh.position.clone().addScaledVector(direction, 5);
-    const predicted = leadPoint(start, this.player.position, this.playerVelocity, 305, 2.5);
+    const missileProfile = MISSILE_PROFILES.hostile;
+    const predicted = leadPoint(start, this.player.position, this.playerVelocity, missileProfile.speed, 2.5);
     const aim = predicted.sub(start).normalize();
     const mesh = createMissile('#c5c5bc');
     mesh.position.copy(start);
@@ -557,8 +558,12 @@ export class AirBattle {
       homing: true,
       seeker,
       mesh,
-      velocity: aim.multiplyScalar(305),
-      life: 15,
+      velocity: aim.multiplyScalar(missileProfile.speed),
+      burnRemaining: missileProfile.burnTime,
+      coastDrag: missileProfile.coastDrag,
+      motorBurning: true,
+      guidanceActive: true,
+      life: missileProfile.life,
       warningClock: 0,
       decoyTarget: null,
     });

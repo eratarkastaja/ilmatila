@@ -19,6 +19,8 @@ export class TacticalHud {
     this.verticalSpeed = document.querySelector('#vertical-speed');
     this.lastLabeledHeading = null;
     this.cameraForward = new THREE.Vector3();
+    this.gunMuzzlePosition = new THREE.Vector3();
+    this.gunMuzzleOffset = new THREE.Vector3();
     this.gunAimOffset = new THREE.Vector3();
     this.gunAimVelocity = new THREE.Vector3();
     this.gunAimPoint = new THREE.Vector3();
@@ -104,18 +106,27 @@ export class TacticalHud {
 
   updateGunAimCue(player, camera, combat, dt) {
     const target = combat.radar.target;
-    if (!this.gunAimCue || !target || target.dead || combat.radar.targetDomain !== 'air') {
+    const targetDomain = combat.radar.targetDomain;
+    const groundTarget = targetDomain === 'ground';
+    if (!this.gunAimCue || !target || target.dead || (targetDomain !== 'air' && targetDomain !== 'ground')) {
       if (this.gunAimCue) this.gunAimCue.hidden = true;
+      this.gunAimCue?.classList.remove('ground-aim');
       this.gunAimTarget = null;
       this.hasGunAimPoint = false;
       return;
     }
 
-    this.gunAimOffset.copy(target.mesh.position).sub(player.position);
+    this.gunMuzzlePosition.copy(player.position).add(
+      this.gunMuzzleOffset.set(-0.78, 0.38, 2.65).applyQuaternion(player.quaternion),
+    );
+    this.gunAimPoint.copy(target.mesh.position);
+    if (groundTarget) this.gunAimPoint.y += (target.mesh.userData.vehicleSpec?.totalHeight ?? 2.5) * 0.55;
+    this.gunAimOffset.copy(this.gunAimPoint).sub(this.gunMuzzlePosition);
     this.gunAimVelocity.copy(target.velocity ?? new THREE.Vector3()).sub(combat.playerVelocity);
     const flightTime = estimateInterceptTime(this.gunAimOffset, this.gunAimVelocity, GUN_PROJECTILE_SPEED);
     if (flightTime <= 0 || flightTime > GUN_PROJECTILE_LIFETIME) {
       this.gunAimCue.hidden = true;
+      this.gunAimCue.classList.remove('ground-aim');
       this.gunAimTarget = null;
       this.hasGunAimPoint = false;
       return;
@@ -123,7 +134,7 @@ export class TacticalHud {
 
     // The cue marks the direction to hold from the aircraft, accounting for
     // target motion and the aircraft's inherited velocity in the gun rounds.
-    this.gunAimPoint.copy(player.position)
+    this.gunAimPoint.copy(this.gunMuzzlePosition)
       .addScaledVector(this.gunAimOffset, 1)
       .addScaledVector(this.gunAimVelocity, flightTime);
     this.gunAimPoint.y += 0.5 * GUN_PROJECTILE_GRAVITY * flightTime * flightTime;
@@ -137,6 +148,7 @@ export class TacticalHud {
 
     const onScreen = this.placeWorldMarker(this.gunAimCue, this.smoothedGunAimPoint, camera);
     this.gunAimCue.hidden = !onScreen;
+    this.gunAimCue.classList.toggle('ground-aim', groundTarget);
   }
 
   placeWorldMarker(element, position, camera) {
