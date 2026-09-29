@@ -15,6 +15,12 @@ npm run dev
 
 Open the local URL printed by Vite. Create a production build with `npm run build`; `npm run preview` serves that build locally. The app does not need an API key at runtime.
 
+## GitHub Pages
+
+The site is built and deployed automatically when changes are pushed to `master`. The workflow can also be started manually from the repository's Actions tab. The project site is published at <https://eratarkastaja.github.io/ilmatila/>.
+
+Generated MML terrain packages are intentionally excluded from Git. A clean GitHub Actions build therefore uses the preview terrain until terrain packages are hosted and added to the deployment separately. The game and its aircraft still load without an API key.
+
 ## Flight controls
 
 | Input | Action |

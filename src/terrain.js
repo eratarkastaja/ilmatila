@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-const TERRAIN_PATH = '/terrain';
+const TERRAIN_PATH = `${import.meta.env.BASE_URL}terrain`;
 const FALLBACK_AREA_METERS = 16000;
 const ORTHO_TILE_METERS = 2000;
 const TILE_PIXELS = 320;

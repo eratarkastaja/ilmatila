@@ -15,6 +15,12 @@ npm run dev
 
 Avaa Viten tulostama paikallinen osoite. Tuotantoversion voi muodostaa komennolla `npm run build` ja esikatsella komennolla `npm run preview`. Peli ei tarvitse API-avainta toimiakseen.
 
+## GitHub Pages
+
+Sivusto rakentuu ja julkaistaan automaattisesti, kun `master`-haaraan tulee muutoksia. Julkaisun voi käynnistää myös käsin repositorion Actions-välilehdeltä. Pelin osoite on <https://eratarkastaja.github.io/ilmatila/>.
+
+Luodut MML:n maastopaketit on jätetty tarkoituksella Gitin ulkopuolelle. Siksi puhdas GitHub Actions -julkaisu käyttää esikatselumaastoa, kunnes maastopaketit julkaistaan erikseen ja liitetään käyttöönottoon. Peli ja lentokone toimivat ilman API-avainta.
+
 ## Ohjaimet
 
 | Näppäin | Toiminto |

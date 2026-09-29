@@ -30,7 +30,7 @@ const FLANKER_HIT_ZONES = [
 ];
 
 export async function loadF35Aircraft(onProgress) {
-  const gltf = await new GLTFLoader().loadAsync('/assets/f35/f35-lightning.glb', onProgress);
+  const gltf = await new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}assets/f35/f35-lightning.glb`, onProgress);
   return gltf.scene;
 }
 
