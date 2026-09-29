@@ -1,10 +1,12 @@
 import * as THREE from 'three';
+import { createDetailStreamer } from './terrain/detail-streamer.js';
 
 const TERRAIN_PATH = `${import.meta.env.BASE_URL}terrain`;
 const FALLBACK_AREA_METERS = 16000;
 const ORTHO_TILE_METERS = 2000;
 const TILE_PIXELS = 320;
 const ORTHO_GRID = 8;
+const DETAIL_WINDOW_TILES = 3;
 let terrainIndexPromise;
 
 export const TERRAIN_AREAS = [
@@ -24,7 +26,7 @@ export function loadTerrainAreas() {
   return terrainIndexPromise;
 }
 
-export async function createTerrain({ areaId, fallback = true, onProgress, signal } = {}) {
+export async function createTerrain({ areaId, fallback = true, onProgress, signal, textureAnisotropy = 4 } = {}) {
   const report = (progress, detail) => onProgress?.(THREE.MathUtils.clamp(progress, 0, 1), detail);
   try {
     throwIfAborted(signal);
@@ -65,21 +67,26 @@ export async function createTerrain({ areaId, fallback = true, onProgress, signa
       { key: 'terrain.imageryProgress', params: { imagery: orthoLoaded, total: tileCount, water: waterLoaded } },
     );
     const [texture, water] = await Promise.all([
-      loadOrthophotoAtlas(base, orthoGrid, tilePixels, (loaded) => { orthoLoaded = loaded; reportTiles(); }, signal),
+      loadOrthophotoAtlas(base, orthoGrid, tilePixels, textureAnisotropy, (loaded) => { orthoLoaded = loaded; reportTiles(); }, signal),
       loadWaterAtlas(base, orthoGrid, tilePixels, (loaded) => { waterLoaded = loaded; reportTiles(); }, signal),
     ]);
     throwIfAborted(signal);
     report(0.95, { key: 'terrain.finalizing' });
     const material = new THREE.MeshStandardMaterial({
-      color: '#d1d6ca', map: texture, roughness: 1, metalness: 0, flatShading: true,
+      color: '#d1d6ca', map: texture, roughness: 1, metalness: 0,
     });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.y = -250;
     mesh.receiveShadow = true;
+    const detailStreamer = hasMovingDetailMetadata(metadata)
+      ? createDetailStreamer({ base, metadata, terrainGeometry: geometry, parent: mesh, anisotropy: textureAnisotropy })
+      : null;
     const terrain = {
       id:areaConfig?.id ?? selected.id, label:areaConfig?.label ?? selected.label, mesh, real: true, metadata, worldSize:areaMeters,
       sampleHeight: (x, z) => sampleHeight(values, metadata.width, metadata.height, metadata.referenceHeight, areaMeters, x, z),
       isWater: (x, z) => sampleWater(water, orthoGrid, tilePixels, orthoAreaMeters, x, z),
+      updateDetailPosition: (x, z) => detailStreamer?.update(x, z),
+      detailStreamer,
     };
     const areaLabel = document.querySelector('#area-name');
     if (areaLabel && metadata.region) areaLabel.textContent = metadata.region.toUpperCase();
@@ -114,6 +121,23 @@ function validateTerrainMetadata(metadata) {
   if (!Number.isFinite(imageryExtent) || imageryExtent <= 0 || imageryExtent > 1_000_000) {
     throw new Error('terrain metadata has an invalid imagery extent');
   }
+  if (metadata.detailOrthoGrid !== undefined || metadata.detailOrthoTilePixels !== undefined
+    || metadata.detailOrthoAreaMeters !== undefined || metadata.detailOrthoTileSizeMeters !== undefined) {
+    if (!hasMovingDetailMetadata(metadata)) throw new Error('terrain metadata has invalid moving detailed imagery dimensions');
+  }
+}
+
+function hasMovingDetailMetadata(metadata) {
+  const grid = metadata?.detailOrthoGrid;
+  const pixels = metadata?.detailOrthoTilePixels;
+  const extent = metadata?.detailOrthoAreaMeters;
+  const tileSize = metadata?.detailOrthoTileSizeMeters;
+  return Number.isInteger(grid) && grid >= DETAIL_WINDOW_TILES && grid <= 12
+    && Number.isInteger(pixels) && pixels >= 128 && pixels <= 2048
+    && Number.isFinite(extent) && extent > 0 && extent <= 24_000
+    && Number.isFinite(tileSize) && tileSize > 0 && tileSize <= 4_000
+    && Math.abs(grid * tileSize - extent) < 1
+    && extent === (metadata.orthoAreaMeters ?? (metadata.orthoGrid ?? ORTHO_GRID) * ORTHO_TILE_METERS);
 }
 
 function throwIfAborted(signal) {
@@ -126,13 +150,23 @@ export function createPreviewTerrain() {
 
 export function disposeTerrain(terrain) {
   if (!terrain?.mesh) return;
+  terrain.detailStreamer?.dispose();
   terrain.mesh.removeFromParent();
-  terrain.mesh.geometry.dispose();
-  const materials = Array.isArray(terrain.mesh.material) ? terrain.mesh.material : [terrain.mesh.material];
-  for (const material of materials) {
-    material?.map?.dispose();
-    material?.dispose();
-  }
+  const geometries = new Set();
+  const materials = new Set();
+  const textures = new Set();
+  terrain.mesh.traverse(object => {
+    if (object.geometry) geometries.add(object.geometry);
+    const objectMaterials = Array.isArray(object.material) ? object.material : [object.material];
+    for (const material of objectMaterials) {
+      if (!material) continue;
+      materials.add(material);
+      for (const value of Object.values(material)) if (value?.isTexture) textures.add(value);
+    }
+  });
+  for (const geometry of geometries) geometry.dispose();
+  for (const texture of textures) texture.dispose();
+  for (const material of materials) material.dispose();
 }
 
 function makeHeightGeometry(values, width, height, referenceHeight, areaMeters) {
@@ -181,7 +215,7 @@ function sampleHeight(values, width, height, referenceHeight, areaMeters, x, z) 
   return -250 + THREE.MathUtils.lerp(a, b, tz) - referenceHeight;
 }
 
-async function loadOrthophotoAtlas(base,grid,tilePixels,onProgress,signal) {
+async function loadOrthophotoAtlas(base,grid,tilePixels,anisotropy,onProgress,signal) {
   const canvas = document.createElement('canvas');
   canvas.width = grid * tilePixels;
   canvas.height = grid * tilePixels;
@@ -205,7 +239,10 @@ async function loadOrthophotoAtlas(base,grid,tilePixels,onProgress,signal) {
   if (!loaded) return null;
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 4;
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.anisotropy = Math.max(1, anisotropy);
   return texture;
 }
 

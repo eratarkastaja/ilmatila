@@ -4,6 +4,7 @@ const inverseWorld = new THREE.Matrix4();
 const localStart = new THREE.Vector3();
 const localEnd = new THREE.Vector3();
 const localDelta = new THREE.Vector3();
+const PROJECTILE_HIT_ASSIST = 1.18;
 
 /** Segment against the aircraft's authored ellipsoid hit zones, in local space. */
 export function traceFighterHit(start, end, fighter) {
@@ -14,12 +15,15 @@ export function traceFighterHit(start, end, fighter) {
   let best = null;
 
   for (const zone of fighter.userData.hitZones ?? []) {
-    const ox = (a.x - zone.x) / zone.rx;
-    const oy = (a.y - zone.y) / zone.ry;
-    const oz = (a.z - zone.z) / zone.rz;
-    const dx = (b.x - a.x) / zone.rx;
-    const dy = (b.y - a.y) / zone.ry;
-    const dz = (b.z - a.z) / zone.rz;
+    const rx = zone.rx * PROJECTILE_HIT_ASSIST;
+    const ry = zone.ry * PROJECTILE_HIT_ASSIST;
+    const rz = zone.rz * PROJECTILE_HIT_ASSIST;
+    const ox = (a.x - zone.x) / rx;
+    const oy = (a.y - zone.y) / ry;
+    const oz = (a.z - zone.z) / rz;
+    const dx = (b.x - a.x) / rx;
+    const dy = (b.y - a.y) / ry;
+    const dz = (b.z - a.z) / rz;
     const quadratic = dx * dx + dy * dy + dz * dz;
     const linear = 2 * (ox * dx + oy * dy + oz * dz);
     const constant = ox * ox + oy * oy + oz * oz - 1;
@@ -49,12 +53,16 @@ export function traceVehicleHit(start, end, vehicle) {
   for (let axis = 0; axis < 3; axis++) {
     const key = ['x', 'y', 'z'][axis];
     const velocity = delta[key];
+    const center = (bounds.min[axis] + bounds.max[axis]) * .5;
+    const halfExtent = (bounds.max[axis] - bounds.min[axis]) * .5 * PROJECTILE_HIT_ASSIST;
+    const minimum = center - halfExtent;
+    const maximum = center + halfExtent;
     if (Math.abs(velocity) < 1e-9) {
-      if (a[key] < bounds.min[axis] || a[key] > bounds.max[axis]) return null;
+      if (a[key] < minimum || a[key] > maximum) return null;
       continue;
     }
-    let near = (bounds.min[axis] - a[key]) / velocity;
-    let far = (bounds.max[axis] - a[key]) / velocity;
+    let near = (minimum - a[key]) / velocity;
+    let far = (maximum - a[key]) / velocity;
     if (near > far) [near, far] = [far, near];
     enter = Math.max(enter, near);
     leave = Math.min(leave, far);

@@ -21,15 +21,17 @@ SOURCE_URL = "https://www.maanmittauslaitos.fi/ortokuvien-ja-korkeusmallien-kyse
 
 
 def attribution(metadata: dict) -> str:
-    retrieved = metadata["downloadedAt"]
+    retrieved = metadata.get("retrievalDates", [metadata["downloadedAt"]])
+    retrieved_text = ", ".join(retrieved)
     region = metadata["region"]
+    modifications = metadata.get("attribution", {}).get("modifications", "orthophotos were cropped, resampled, tiled, and recompressed")
     return f"""# Terrain data attribution — {region}
 
-© National Land Survey of Finland. Contains its open data: Elevation Model 2 m and Colour Orthophotos (ortokuva_vari), retrieved {retrieved}.
+© National Land Survey of Finland. Contains its open data: Elevation Model 2 m and Colour Orthophotos (ortokuva_vari), retrieved {retrieved_text}.
 
 Source: [National Land Survey of Finland WCS](<{SOURCE_URL}>).
 
-This package modifies the source data: elevation samples were downsampled to a 400 × 400 grid; orthophotos were cropped, resampled, tiled, and recompressed; water masks were derived from orthophoto colors. Orthophoto capture years can vary by tile.
+This package modifies the source data: {modifications} Orthophoto capture years can vary by tile.
 
 Licensed under [Creative Commons Attribution 4.0 International (CC BY 4.0)](<{LICENSE_URL}>).
 """
@@ -37,7 +39,7 @@ Licensed under [Creative Commons Attribution 4.0 International (CC BY 4.0)](<{LI
 
 def expected_files(metadata: dict) -> set[str]:
     grid = int(metadata["orthoGrid"])
-    return {
+    files = {
         "terrain.json",
         "height.f32",
         *(
@@ -47,6 +49,14 @@ def expected_files(metadata: dict) -> set[str]:
             for name in (f"ortho-{row}-{col}.png", f"water-{row}-{col}.bin")
         ),
     }
+    detail_grid = metadata.get("detailOrthoGrid")
+    if detail_grid is not None:
+        files.update(
+            f"detail-ortho-{row}-{col}.jpg"
+            for row in range(int(detail_grid))
+            for col in range(int(detail_grid))
+        )
+    return files
 
 
 def validate_area(area_id: str) -> tuple[Path, dict, list[Path]]:
@@ -61,6 +71,22 @@ def validate_area(area_id: str) -> tuple[Path, dict, list[Path]]:
     if metadata.get("attribution", {}).get("license") != "CC BY 4.0":
         raise ValueError(f"{area_id}: missing CC BY 4.0 attribution metadata")
     date.fromisoformat(metadata["downloadedAt"])
+    detail_grid = metadata.get("detailOrthoGrid")
+    detail_pixels = metadata.get("detailOrthoTilePixels")
+    detail_extent = metadata.get("detailOrthoAreaMeters")
+    detail_tile_size = metadata.get("detailOrthoTileSizeMeters")
+    if any(value is not None for value in (detail_grid, detail_pixels, detail_extent, detail_tile_size)):
+        if not isinstance(detail_grid, int) or not 3 <= detail_grid <= 12:
+            raise ValueError(f"{area_id}: invalid moving detailed orthophoto grid")
+        if not isinstance(detail_pixels, int) or not 128 <= detail_pixels <= 2048:
+            raise ValueError(f"{area_id}: invalid moving detailed orthophoto tile size")
+        if not isinstance(detail_extent, (int, float)) or not 0 < detail_extent <= 24_000:
+            raise ValueError(f"{area_id}: invalid moving detailed orthophoto extent")
+        if not isinstance(detail_tile_size, (int, float)) or abs(detail_grid * detail_tile_size - detail_extent) >= 1:
+            raise ValueError(f"{area_id}: moving detailed orthophoto tile grid does not cover its area")
+        if detail_extent != metadata.get("orthoAreaMeters"):
+            raise ValueError(f"{area_id}: moving detailed orthophoto extent does not match the terrain area")
+        date.fromisoformat(metadata["detailOrthoRetrievedAt"])
 
     actual = {path.name for path in area_dir.iterdir() if path.is_file()}
     expected = expected_files(metadata)
@@ -88,7 +114,49 @@ def validate_area(area_id: str) -> tuple[Path, dict, list[Path]]:
             if water_path.stat().st_size != pixels * pixels:
                 raise ValueError(f"{area_id}: {water_path.name} size does not match metadata")
 
+    if detail_grid is not None:
+        for row in range(detail_grid):
+            for col in range(detail_grid):
+                image_path = area_dir / f"detail-ortho-{row}-{col}.jpg"
+                image_width, image_height = jpeg_dimensions(image_path)
+                if (image_width, image_height) != (detail_pixels, detail_pixels):
+                    raise ValueError(f"{area_id}: {image_path.name} dimensions do not match metadata")
+
     return area_dir, metadata, sorted(area_dir.iterdir(), key=lambda path: path.name)
+
+
+def jpeg_dimensions(path: Path) -> tuple[int, int]:
+    data = path.read_bytes()
+    if data[:2] != b"\xff\xd8":
+        raise ValueError(f"{path.name} is not a JPEG image")
+
+    offset = 2
+    start_of_frame = {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}
+    while offset < len(data):
+        if data[offset] != 0xFF:
+            offset += 1
+            continue
+        while offset < len(data) and data[offset] == 0xFF:
+            offset += 1
+        if offset >= len(data):
+            break
+        marker = data[offset]
+        offset += 1
+        if marker in {0xD8, 0xD9, 0x01} or 0xD0 <= marker <= 0xD7:
+            continue
+        if offset + 2 > len(data):
+            break
+        segment_length = int.from_bytes(data[offset:offset + 2], "big")
+        if segment_length < 2 or offset + segment_length > len(data):
+            break
+        if marker in start_of_frame:
+            if segment_length < 7:
+                break
+            height = int.from_bytes(data[offset + 3:offset + 5], "big")
+            width = int.from_bytes(data[offset + 5:offset + 7], "big")
+            return width, height
+        offset += segment_length
+    raise ValueError(f"{path.name} has no valid JPEG frame header")
 
 
 def write_zip(area_id: str, output_dir: Path) -> tuple[Path, str]:

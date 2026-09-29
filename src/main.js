@@ -474,6 +474,7 @@ const gunReticle = document.querySelector('.crosshair');
 let previousAltitude = player.position.y;
 let needsMenuRender = true;
 const assets = new AssetRepository({
+  terrainAnisotropy: Math.min(renderer.capabilities.getMaxAnisotropy(), 12),
   onAircraftLoaded: aircraftAssets => {
     const aircraftVisual = createFighter({ aircraftAsset: aircraftAssets.player });
     for (const child of [...aircraftVisual.children]) player.add(child);
@@ -500,6 +501,7 @@ function animate() {
     } else {
       combat.updateEffects(dt);
     }
+    terrain.updateDetailPosition?.(player.position.x, player.position.z);
     const activeAircraft = combat.destroyed ? [] : [
       player,
       ...combat.enemies.filter(unit => !unit.dead).map(unit => unit.mesh),

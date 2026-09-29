@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
-const MISSILE_SMOKE_COLOR = new THREE.Color('#929b9a');
-const MISSILE_FIRE_COLOR = new THREE.Color('#ff8b37');
+const MISSILE_SMOKE_FRESH = new THREE.Color('#4d5559');
+const MISSILE_SMOKE_AGED = new THREE.Color('#858f93');
 const WING_VAPOR_COLOR = [0.88, 0.94, 0.97];
 
 export class FlightFX {
@@ -140,6 +140,74 @@ export class FlightFX {
     this.wingVaporRibbon.frustumCulled = false;
     this.scene.add(this.wingVaporRibbon);
 
+    this.missileTrailCapacity = 192;
+    this.maxMissileTrails = 24;
+    this.missileTrailCrossSection = 9;
+    this.missileTrailLifetime = 4.8;
+    this.maxMissileTrailVertices = this.missileTrailCapacity * this.missileTrailCrossSection * this.maxMissileTrails;
+    this.missileTrailPositions = new Float32Array(this.maxMissileTrailVertices * 3);
+    this.missileTrailColors = new Float32Array(this.maxMissileTrailVertices * 3);
+    this.missileTrailAlphas = new Float32Array(this.maxMissileTrailVertices);
+    this.missileTrailUvs = new Float32Array(this.maxMissileTrailVertices * 2);
+    this.missileTrailIndices = new Uint32Array(
+      (this.missileTrailCapacity - 1) * (this.missileTrailCrossSection - 1) * 6 * this.maxMissileTrails,
+    );
+    const missileTrailGeometry = new THREE.BufferGeometry();
+    missileTrailGeometry.setAttribute('position', new THREE.BufferAttribute(this.missileTrailPositions, 3).setUsage(THREE.DynamicDrawUsage));
+    missileTrailGeometry.setAttribute('color', new THREE.BufferAttribute(this.missileTrailColors, 3).setUsage(THREE.DynamicDrawUsage));
+    missileTrailGeometry.setAttribute('alpha', new THREE.BufferAttribute(this.missileTrailAlphas, 1).setUsage(THREE.DynamicDrawUsage));
+    missileTrailGeometry.setAttribute('trailUv', new THREE.BufferAttribute(this.missileTrailUvs, 2).setUsage(THREE.DynamicDrawUsage));
+    missileTrailGeometry.setIndex(new THREE.BufferAttribute(this.missileTrailIndices, 1).setUsage(THREE.DynamicDrawUsage));
+    missileTrailGeometry.setDrawRange(0, 0);
+    this.missileTrailMaterial = new THREE.ShaderMaterial({
+      uniforms: { time: { value: 0 } },
+      vertexShader: `
+        attribute vec3 color;
+        attribute float alpha;
+        attribute vec2 trailUv;
+        varying vec3 vColor;
+        varying float vAlpha;
+        varying vec2 vTrailUv;
+        void main() {
+          vColor = color;
+          vAlpha = alpha;
+          vTrailUv = trailUv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float time;
+        varying vec3 vColor;
+        varying float vAlpha;
+        varying vec2 vTrailUv;
+        float hash(vec2 p) {
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+        }
+        float noise(vec2 p) {
+          vec2 cell = floor(p);
+          vec2 fraction = fract(p);
+          fraction = fraction * fraction * (3.0 - 2.0 * fraction);
+          float a = hash(cell);
+          float b = hash(cell + vec2(1.0, 0.0));
+          float c = hash(cell + vec2(0.0, 1.0));
+          float d = hash(cell + vec2(1.0, 1.0));
+          return mix(mix(a, b, fraction.x), mix(c, d, fraction.x), fraction.y);
+        }
+        void main() {
+          float turbulence = noise(vTrailUv * vec2(118.0, 7.0) + vec2(time * 0.7, -time * 0.16));
+          float wisps = mix(0.72, 1.12, turbulence);
+          gl_FragColor = vec4(vColor, vAlpha * wisps);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      toneMapped: false,
+    });
+    this.missileTrailMesh = new THREE.Mesh(missileTrailGeometry, this.missileTrailMaterial);
+    this.missileTrailMesh.frustumCulled = false;
+    this.scene.add(this.missileTrailMesh);
+
     this.tracerCapacity = 256;
     this.tracers = [];
     this.tracerPositions = new Float32Array(this.tracerCapacity * 2 * 3);
@@ -161,9 +229,8 @@ export class FlightFX {
 
     this.contrailStates = new Map();
     this.wingVaporStates = new Map();
-    this.missileTimers = new Map();
+    this.missileTrailStates = new Map();
     this._world = new THREE.Vector3();
-    this._velocity = new THREE.Vector3();
     this._wind = new THREE.Vector3();
     this._jitter = new THREE.Vector3();
     this._vaporTangent = new THREE.Vector3();
@@ -171,6 +238,13 @@ export class FlightFX {
     this._vaporSide = new THREE.Vector3();
     this._vaporPrev = new THREE.Vector3();
     this._vaporNext = new THREE.Vector3();
+    this._missileTangent = new THREE.Vector3();
+    this._missileView = new THREE.Vector3();
+    this._missileSide = new THREE.Vector3();
+    this._missilePrev = new THREE.Vector3();
+    this._missileNext = new THREE.Vector3();
+    this._missileCenter = new THREE.Vector3();
+    this._missileColor = new THREE.Color();
     this._tracerHead = new THREE.Vector3();
     this._tracerTail = new THREE.Vector3();
   }
@@ -191,7 +265,7 @@ export class FlightFX {
   update(dt, aircraft, missiles, terrain, weather, camera) {
     this.updateWingVapor(dt, aircraft, terrain, weather, camera);
     this.updateContrails(dt, aircraft, terrain, weather);
-    this.emitMissileTrails(dt, missiles);
+    this.emitMissileTrails(dt, missiles, camera);
     this.updateParticles(dt);
     this.updateTracers(dt);
   }
@@ -199,7 +273,7 @@ export class FlightFX {
   reset() {
     this.contrailStates.clear();
     this.wingVaporStates.clear();
-    this.missileTimers.clear();
+    this.missileTrailStates.clear();
     this.tracers.length = 0;
     this.lifetimes.fill(0);
     this.alphas.fill(0);
@@ -208,11 +282,13 @@ export class FlightFX {
     this.vaporAlphas.fill(0);
     this.contrailLines.geometry.setDrawRange(0, 0);
     this.wingVaporRibbon.geometry.setDrawRange(0, 0);
+    this.missileTrailMesh.geometry.setDrawRange(0, 0);
     this.tracerLines.geometry.setDrawRange(0, 0);
     this.particles.geometry.attributes.alpha.needsUpdate = true;
     this.particles.geometry.attributes.glow.needsUpdate = true;
     this.contrailLines.geometry.attributes.alpha.needsUpdate = true;
     this.wingVaporRibbon.geometry.attributes.alpha.needsUpdate = true;
+    this.missileTrailMesh.geometry.attributes.alpha.needsUpdate = true;
   }
 
   updateWingVapor(dt, aircraft, terrain, weather, camera) {
@@ -472,24 +548,140 @@ export class FlightFX {
     geometry.setDrawRange(0, segments * 2);
   }
 
-  emitMissileTrails(dt, missiles) {
+  emitMissileTrails(dt, missiles, camera) {
     const active = new Set();
+    const wind = this._wind.set(5, 0.15, -3);
     for (const missile of missiles) {
-      if (!missile.homing || !missile.mesh?.parent) continue;
-      active.add(missile.mesh);
-      const remaining = (this.missileTimers.get(missile.mesh) ?? 0) - dt;
-      if (remaining <= 0) {
-        const rear = missile.mesh.localToWorld(new THREE.Vector3(0, 0, -1.85));
-        this._velocity.copy(missile.velocity).multiplyScalar(0.025);
-        this.emitParticle(rear, this._velocity, MISSILE_SMOKE_COLOR, 2.15, 4.8, 0.78);
-        this._velocity.set((Math.random() - 0.5) * 3, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 3);
-        this.emitParticle(rear, this._velocity, MISSILE_FIRE_COLOR, 0.3, 1.3, 1, 1);
-        this.missileTimers.set(missile.mesh, 0.025);
-      } else {
-        this.missileTimers.set(missile.mesh, remaining);
-      }
+      if (missile.homing && missile.mesh?.parent) active.add(missile.mesh);
     }
-    for (const mesh of this.missileTimers.keys()) if (!active.has(mesh)) this.missileTimers.delete(mesh);
+
+    for (const [mesh, trail] of this.missileTrailStates) {
+      for (let i = 0; i < trail.count; i++) {
+        const point = (trail.head - trail.count + i + this.missileTrailCapacity) % this.missileTrailCapacity;
+        trail.ages[point] += dt;
+        const offset = point * 3;
+        trail.positions[offset] += wind.x * dt;
+        trail.positions[offset + 1] += wind.y * dt;
+        trail.positions[offset + 2] += wind.z * dt;
+      }
+      while (trail.count > 0) {
+        const oldest = (trail.head - trail.count + this.missileTrailCapacity) % this.missileTrailCapacity;
+        if (trail.ages[oldest] < this.missileTrailLifetime) break;
+        trail.count--;
+      }
+      if (!active.has(mesh) && trail.count === 0) this.missileTrailStates.delete(mesh);
+    }
+
+    for (const missile of missiles) {
+      const mesh = missile.mesh;
+      if (!missile.homing || !mesh?.parent) continue;
+      let trail = this.missileTrailStates.get(mesh);
+      if (!trail) {
+        trail = {
+          positions: new Float32Array(this.missileTrailCapacity * 3),
+          ages: new Float32Array(this.missileTrailCapacity),
+          head: 0,
+          count: 0,
+          timer: 0,
+        };
+        this.missileTrailStates.set(mesh, trail);
+      }
+      trail.timer -= dt;
+      if (trail.timer > 0) continue;
+
+      const point = trail.head;
+      const rear = mesh.localToWorld(this._world.set(0, 0, -1.85));
+      const offset = point * 3;
+      trail.positions[offset] = rear.x;
+      trail.positions[offset + 1] = rear.y;
+      trail.positions[offset + 2] = rear.z;
+      trail.ages[point] = 0;
+      trail.head = (point + 1) % this.missileTrailCapacity;
+      trail.count = Math.min(trail.count + 1, this.missileTrailCapacity);
+      trail.timer = 0.025;
+    }
+
+    this.missileTrailMaterial.uniforms.time.value += dt;
+    this.buildMissileTrailGeometry(camera);
+  }
+
+  buildMissileTrailGeometry(camera) {
+    const crossSection = this.missileTrailCrossSection;
+    const widths = [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1];
+    const opacity = [0, 0.13, 0.38, 0.67, 0.82, 0.67, 0.38, 0.13, 0];
+    let vertexCount = 0, indexCount = 0, trailCount = 0;
+
+    for (const trail of this.missileTrailStates.values()) {
+      if (trail.count < 2 || trailCount >= this.maxMissileTrails) continue;
+      if (vertexCount + trail.count * crossSection > this.maxMissileTrailVertices) break;
+      const oldest = (trail.head - trail.count + this.missileTrailCapacity) % this.missileTrailCapacity;
+      const firstVertex = vertexCount;
+
+      for (let i = 0; i < trail.count; i++) {
+        const point = (oldest + i) % this.missileTrailCapacity;
+        const offset = point * 3;
+        const center = this._missileCenter.set(trail.positions[offset], trail.positions[offset + 1], trail.positions[offset + 2]);
+        const previous = (oldest + Math.max(0, i - 1)) % this.missileTrailCapacity;
+        const next = (oldest + Math.min(trail.count - 1, i + 1)) % this.missileTrailCapacity;
+        this._missileTangent.subVectors(
+          this._missileNext.fromArray(trail.positions, next * 3),
+          this._missilePrev.fromArray(trail.positions, previous * 3),
+        ).normalize();
+        this._missileView.subVectors(camera.position, center).normalize();
+        this._missileSide.crossVectors(this._missileTangent, this._missileView).normalize();
+        if (this._missileSide.lengthSq() < 0.01) {
+          this._missileSide.set(0, 1, 0).cross(this._missileTangent).normalize();
+          if (this._missileSide.lengthSq() < 0.01) this._missileSide.set(1, 0, 0);
+        }
+
+        const age = trail.ages[point];
+        const ageRatio = THREE.MathUtils.clamp(age / this.missileTrailLifetime, 0, 1);
+        const fade = 1 - THREE.MathUtils.smoothstep(age, 3.0, this.missileTrailLifetime);
+        const expandingWidth = (1.15 + age * 2.55) * (0.94 + Math.sin(age * 3.2 + center.x * 0.0017) * 0.06);
+        this._missileColor.lerpColors(MISSILE_SMOKE_FRESH, MISSILE_SMOKE_AGED, ageRatio);
+
+        for (let edge = 0; edge < crossSection; edge++) {
+          const vertex = vertexCount++;
+          const positionOffset = vertex * 3;
+          const colorOffset = positionOffset;
+          const uvOffset = vertex * 2;
+          const spread = widths[edge] * expandingWidth * 0.5;
+          this.missileTrailPositions[positionOffset] = center.x + this._missileSide.x * spread;
+          this.missileTrailPositions[positionOffset + 1] = center.y + this._missileSide.y * spread;
+          this.missileTrailPositions[positionOffset + 2] = center.z + this._missileSide.z * spread;
+          this.missileTrailColors[colorOffset] = this._missileColor.r;
+          this.missileTrailColors[colorOffset + 1] = this._missileColor.g;
+          this.missileTrailColors[colorOffset + 2] = this._missileColor.b;
+          this.missileTrailAlphas[vertex] = fade * opacity[edge] * 0.84;
+          this.missileTrailUvs[uvOffset] = ageRatio;
+          this.missileTrailUvs[uvOffset + 1] = edge / (crossSection - 1);
+        }
+      }
+
+      for (let i = 0; i < trail.count - 1; i++) {
+        for (let edge = 0; edge < crossSection - 1; edge++) {
+          const a = firstVertex + i * crossSection + edge;
+          const b = a + 1;
+          const c = a + crossSection;
+          const d = c + 1;
+          this.missileTrailIndices[indexCount++] = a;
+          this.missileTrailIndices[indexCount++] = c;
+          this.missileTrailIndices[indexCount++] = b;
+          this.missileTrailIndices[indexCount++] = b;
+          this.missileTrailIndices[indexCount++] = c;
+          this.missileTrailIndices[indexCount++] = d;
+        }
+      }
+      trailCount++;
+    }
+
+    const geometry = this.missileTrailMesh.geometry;
+    geometry.attributes.position.needsUpdate = true;
+    geometry.attributes.color.needsUpdate = true;
+    geometry.attributes.alpha.needsUpdate = true;
+    geometry.attributes.trailUv.needsUpdate = true;
+    geometry.index.needsUpdate = true;
+    geometry.setDrawRange(0, indexCount);
   }
 
   emitParticle(position, velocity, color, lifetime, size, alpha, glow = 0) {

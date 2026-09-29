@@ -7,9 +7,10 @@ const redGroundShotMaterial = new THREE.MeshBasicMaterial({ color: '#ff785d' });
 
 /** Owns ground-unit placement, movement, engagement and fire control. */
 export class GroundBattle {
-  constructor({ scene, player, terrain, mission, audio, fx, addProjectile }) {
+  constructor({ scene, player, playerVelocity, terrain, mission, audio, fx, addProjectile }) {
     this.scene = scene;
     this.player = player;
+    this.playerVelocity = playerVelocity;
     this.terrain = terrain;
     this.mission = mission;
     this.audio = audio;
@@ -28,35 +29,43 @@ export class GroundBattle {
     let seed=54321; const rnd=()=>{seed=(seed*16807)%2147483647;return(seed-1)/2147483646;};
     const finnishTypes=['leopard2','cv9030','pasi'];
     const russianTypes=['t72','bmp2','btr80'];
+    const theaterHalf = (this.terrain?.worldSize ?? 16000) * .5;
+    const frontSpan = Math.min(this.mission.groundFrontSpan || 9800, theaterHalf * 2 - 1800);
     for(let i=0;i<this.mission.groundPairs;i++){
-      const z=240+i*92, offset=(i%2)*28;
+      const lane = this.mission.groundPairs > 1 ? i / (this.mission.groundPairs - 1) - .5 : 0;
+      const z = lane * frontSpan + (rnd() - .5) * 240;
+      const offset = ((i % 3) - 1) * 1250;
       const blueType=finnishTypes[i%finnishTypes.length],redType=russianTypes[i%russianTypes.length];
       const blue= createGroundVehicle(blueType,'finnish'), red=createGroundVehicle(redType,'russian');
       const blueSpec=getGroundVehicleSpec(blueType),redSpec=getGroundVehicleSpec(redType);
-      const bluePos=nearestDryPoint(this.terrain,-420+offset,z),redPos=nearestDryPoint(this.terrain,420-offset,z+25);
+      const bluePos=nearestDryPoint(this.terrain,-560+offset,z),redPos=nearestDryPoint(this.terrain,560+offset,z+35);
       if(!bluePos||!redPos)continue;
       blue.position.set(bluePos.x,bluePos.y,bluePos.z); blue.rotation.y=Math.PI/2;
       red.position.set(redPos.x,redPos.y,redPos.z); red.rotation.y=-Math.PI/2;
       this.scene.add(blue,red);
       const blueUnit={mesh:blue,hp:blueSpec.hp,maxHp:blueSpec.hp,team:'blue',cool:1+i*.33,phase:i*.8,armed:true,speed:blueSpec.kind==='tracked'?10.5+rnd()*2:14+rnd()*2.5,flank:i%2===0?1:-1,velocity:new THREE.Vector3()};
-      const redUnit={mesh:red,hp:redSpec.hp,maxHp:redSpec.hp,team:'red',cool:2+i*.25,phase:i*.8+1,armed:true,speed:redSpec.kind==='tracked'?10+rnd()*2:13.5+rnd()*2.5,flank:i%2===0?-1:1,velocity:new THREE.Vector3()};
+      const redUnit={mesh:red,hp:redSpec.hp,maxHp:redSpec.hp,team:'red',cool:2+i*.25,phase:i*.8+1,armed:true,speed:redSpec.kind==='tracked'?10+rnd()*2:13.5+rnd()*2.5,flank:i%2===0?-1:1,velocity:new THREE.Vector3(),aaCooldown:2+rnd()*5,aaBurstClock:0,aaBurstRemaining:0};
       this.friends.push(blueUnit);this.redUnits.push(redUnit);
       blueUnit.collider={type:'vehicle',mesh:blue,x:bluePos.x,y:bluePos.y,z:bluePos.z,radius:blueSpec.radius,height:blueSpec.totalHeight,velocity:blueUnit.velocity,collisionKey:'combat.collisionFriendlyVehicle',vehicle:blueSpec.name};
       redUnit.collider={type:'vehicle',mesh:red,x:redPos.x,y:redPos.y,z:redPos.z,radius:redSpec.radius,height:redSpec.totalHeight,velocity:redUnit.velocity,collisionKey:'combat.collisionHostileVehicle',vehicle:redSpec.name};
       this.colliders.push(blueUnit.collider,redUnit.collider);
     }
+    const convoySpan = Math.min(this.mission.convoyArea || 8200, theaterHalf * 2 - 1800);
     for(let i=0;i<this.mission.groundTrucks;i++){
-      const truck=createGroundVehicle('ural4320','russian'),x=340+rnd()*520,z=500+rnd()*1500,spec=getGroundVehicleSpec('ural4320');
-      if(this.terrain.isWater(x,z))continue;
-      truck.position.set(x,this.terrain.sampleHeight(x,z),z); truck.rotation.y=(rnd()-.5)*1.2; this.scene.add(truck);
-      const convoy={mesh:truck,hp:spec.hp,maxHp:spec.hp,team:'red',cool:0,phase:rnd()*Math.PI*2,armed:false,speed:12+rnd()*3,flank:1,velocity:new THREE.Vector3(),routeOrigin:new THREE.Vector3(x,truck.position.y,z),routeHeading:new THREE.Vector3((rnd()-.5)*.5,0,1).normalize(),routeTravel:0,routeSign:1};
+      const truck=createGroundVehicle('ural4320','russian');
+      const x=(rnd()-.5)*convoySpan,z=(rnd()-.5)*convoySpan,spec=getGroundVehicleSpec('ural4320');
+      const dryPoint=nearestDryPoint(this.terrain,x,z);
+      if(!dryPoint)continue;
+      truck.position.set(dryPoint.x,dryPoint.y,dryPoint.z); truck.rotation.y=(rnd()-.5)*1.2; this.scene.add(truck);
+      const convoy={mesh:truck,hp:spec.hp,maxHp:spec.hp,team:'red',cool:0,phase:rnd()*Math.PI*2,armed:false,speed:12+rnd()*3,flank:1,velocity:new THREE.Vector3(),routeOrigin:truck.position.clone(),routeHeading:new THREE.Vector3((rnd()-.5)*.5,0,1).normalize(),routeTravel:0,routeSign:1};
       this.redUnits.push(convoy);
-      convoy.collider={type:'vehicle',mesh:truck,x,z,y:truck.position.y,radius:spec.radius,height:spec.totalHeight,velocity:convoy.velocity,collisionKey:'combat.collisionHostileVehicle',vehicle:spec.name};
+      convoy.collider={type:'vehicle',mesh:truck,x:truck.position.x,z:truck.position.z,y:truck.position.y,radius:spec.radius,height:spec.totalHeight,velocity:convoy.velocity,collisionKey:'combat.collisionHostileVehicle',vehicle:spec.name};
       this.colliders.push(convoy.collider);
     }
   }
   update(dt){
     for(const list of [this.friends,this.redUnits])for(const unit of list){if(unit.dead)continue;
+      if(unit.team==='red')this.updateAntiAir(unit,dt);
       unit.phase+=dt*(unit.armed===false?.38:.25);
       let target=null,nearest=1550;
       if(unit.armed!==false){
@@ -114,6 +123,44 @@ export class GroundBattle {
       const healthFactor=THREE.MathUtils.clamp(.58+.42*unit.hp/unit.maxHp,.58,1);
       this.driveGroundUnit(unit,travel,speed*healthFactor,dt);
     }
+  }
+  updateAntiAir(unit,dt){
+    const platform=unit.mesh.userData.platform;
+    if(!['t72','bmp2','btr80'].includes(platform))return;
+    unit.aaCooldown=Math.max(0,unit.aaCooldown-dt);
+    const dx=this.player.position.x-unit.mesh.position.x,dz=this.player.position.z-unit.mesh.position.z;
+    const range=Math.hypot(dx,dz);
+    const agl=this.player.position.y-this.terrain.sampleHeight(this.player.position.x,this.player.position.z);
+    const inEnvelope=range>260&&range<1850&&agl>20&&agl<980;
+    if(!inEnvelope){unit.aaBurstRemaining=0;return;}
+    if(unit.aaBurstRemaining<=0&&unit.aaCooldown<=0){
+      unit.aaBurstRemaining=3;
+      unit.aaBurstClock=0;
+      unit.aaCooldown=8+Math.random()*5;
+    }
+    unit.aaBurstClock-=dt;
+    while(unit.aaBurstRemaining>0&&unit.aaBurstClock<=0){
+      this.fireAntiAir(unit,range);
+      unit.aaBurstRemaining--;
+      unit.aaBurstClock+=.16;
+    }
+  }
+  fireAntiAir(unit,range){
+    const spec=unit.mesh.userData.vehicleSpec;
+    const start=unit.mesh.localToWorld(new THREE.Vector3(0,(spec?.totalHeight??3)+.4,.35));
+    const flightTime=range/720;
+    const aim=this.player.position.clone().addScaledVector(this.playerVelocity??new THREE.Vector3(),flightTime);
+    const spread=55+range*.04;
+    aim.x+=(Math.random()-.5)*spread*2;
+    aim.y+=(Math.random()-.5)*spread;
+    aim.z+=(Math.random()-.5)*spread*2;
+    const direction=aim.sub(start).normalize();
+    const line=new THREE.Mesh(groundShotGeo,redGroundShotMaterial);
+    line.position.copy(start);
+    this.scene.add(line);
+    this.fx?.addTracer(start, start.clone().addScaledVector(direction,Math.min(range,1400)), '#ff8069');
+    this.audio?.playDistantGun(range,'ground');
+    this.addProjectile({projectile:true,flak:true,mesh:line,velocity:direction.multiplyScalar(720),life:flightTime+.35});
   }
   driveGroundUnit(unit,desiredDirection,speed,dt){
     const separation=new THREE.Vector3();
@@ -188,12 +235,16 @@ export class GroundBattle {
 }
 
 function nearestDryPoint(terrain, x, z) {
+  const half = (terrain?.worldSize ?? 16000) * .5 - 120;
+  x = THREE.MathUtils.clamp(x,-half,half);
+  z = THREE.MathUtils.clamp(z,-half,half);
   if (!terrain.isWater(x, z)) return { x, z, y: terrain.sampleHeight(x, z) };
   for (let step = 1; step <= 100; step++) {
     for (let bearing = 0; bearing < 16; bearing++) {
       const angle = bearing * Math.PI / 8;
       const candidateX = x + Math.cos(angle) * step * 25;
       const candidateZ = z + Math.sin(angle) * step * 25;
+      if(Math.abs(candidateX)>half||Math.abs(candidateZ)>half)continue;
       if (!terrain.isWater(candidateX, candidateZ)) {
         return { x: candidateX, z: candidateZ, y: terrain.sampleHeight(candidateX, candidateZ) };
       }

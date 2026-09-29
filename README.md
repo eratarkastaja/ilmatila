@@ -1,6 +1,6 @@
 # ILMATILA
 
-**ILMATILA 0.1.0-alpha.3** is an independent browser-based air-combat game by **ERÄGAMES**, built with Three.js. It is an early playable prototype: aircraft handling, radar, weapons, opponents, and ground battles are game simulations and are not intended for real-world training or operational use.
+**ILMATILA 0.1.0-alpha.4** is an independent browser-based air-combat game by **ERÄGAMES**, built with Three.js. It is an early playable prototype: aircraft handling, radar, weapons, opponents, and ground battles are game simulations and are not intended for real-world training or operational use.
 
 The interface defaults to English and also supports Finnish. See the [changelog](CHANGELOG.md) for this alpha's updates.
 
@@ -19,7 +19,7 @@ Open the local URL printed by Vite. Create a production build with `npm run buil
 
 After GitHub Pages is enabled with **Settings → Pages → Build and deployment → Source → GitHub Actions**, the site is built and deployed automatically when changes are pushed to `master`. The workflow can also be started manually from the repository's Actions tab. The project URL is <https://eratarkastaja.github.io/ilmatila/>.
 
-Generated MML terrain packages stay out of Git history. The Pages workflow downloads the four versioned area archives from the [terrain data release](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.0.0), verifies their SHA-256 checksums, and includes them in the deployed site. The in-game terrain viewer needs no API key; the key is only required to fetch updated source data.
+Generated MML terrain packages stay out of Git history. The Pages workflow downloads the four versioned area archives from the [terrain data release](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.1.0), verifies their SHA-256 checksums, and includes them in the deployed site. The in-game terrain viewer needs no API key; the key is only required to fetch updated source data.
 
 ## Flight controls
 
@@ -46,7 +46,7 @@ The optional soundtrack contains two original tracks by Erätarkastaja. They are
 
 ## Terrain data
 
-The repository contains the terrain-area index and downloader, while generated map packages are published as [versioned terrain archives](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.0.0). The Pages deployment downloads all four areas (Päijänne, Virolahti, Ilomantsi, and Kuusamo) and includes them in the site. Local source-data updates require an MML API key; see [the terrain-tool guide](tools/terrain/README.md). The game itself needs no API key.
+The repository contains the terrain-area index and downloader, while generated map packages are published as [versioned terrain archives](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.1.0). The Pages deployment downloads all four areas (Päijänne, Virolahti, Ilomantsi, and Kuusamo) and includes them in the site. Local source-data updates require an MML API key; see [the terrain-tool guide](tools/terrain/README.md). The game itself needs no API key.
 
 ## Aircraft and project structure
 

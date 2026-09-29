@@ -19,12 +19,13 @@ Ground vehicles currently use project-authored procedural geometry. External can
 
 ## Mapping data
 
-The public Pages deployment includes the four generated area packages from the [terrain data release](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.0.0). They use National Land Survey of Finland open data: Elevation Model 2 m and Colour Orthophotos, fetched from its WCS service. Each archive includes `terrain.json` and `ATTRIBUTION.md` with provider, dataset, retrieval date, source, license, and modification details. The game derives a lower-resolution elevation grid, crops and resamples orthophotos into tiles, and derives water masks from the imagery. The source data is licensed under [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/). See the [terrain-tool guide](tools/terrain/README.md) for details.
+Terrain packages use National Land Survey of Finland open data: Elevation Model 2 m and Colour Orthophotos, fetched from its WCS service. Each package includes `terrain.json` and `ATTRIBUTION.md` with provider, dataset, retrieval date, source, license, and modification details. The game derives a lower-resolution elevation grid, crops and resamples standard orthophotos into tiles, streams a moving 6 × 6 km higher-detail image window in 2 km steps, and derives water masks from the imagery. The same detail level follows the aircraft throughout each theater. The source data is licensed under [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/). The Pages build uses the [terrain data release v1.1.0](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.1.0). See the [terrain-tool guide](tools/terrain/README.md) for details.
 
 ## Libraries and fonts
 
 - **Three.js** is used by the browser app under the MIT License. The copyright and license text are in [`public/licenses/THREE-MIT.txt`](public/licenses/THREE-MIT.txt).
 - **Vite**, **geotiff.js**, **assimpjs**, and **glTF Transform** are used for development, optional terrain downloads, and offline asset conversion. They are MIT licensed and remain development/tooling dependencies; neither their runtime code nor the converters are bundled into the browser app. Their lockfile records the resolved versions.
+- **Sharp** is used only by the optional terrain downloader to encode high-detail orthophotos as JPEG. Sharp is Apache-2.0 licensed; its prebuilt libvips binaries are LGPL-3.0-or-later. Neither is bundled into the browser app.
 - **Barlow Condensed** by The Barlow Project Authors and **Rajdhani** by Indian Type Foundry are loaded from Google Fonts and licensed under the SIL Open Font License 1.1. The font source projects are [Barlow](https://github.com/jpt/barlow) and [Rajdhani](https://github.com/itfoundry/rajdhani); the upstream license is available at [SIL Open Font License](https://openfontlicense.org/).
 
 ## Sound effects

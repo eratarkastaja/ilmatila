@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0-alpha.4 — 2026-09-29
+
+### English
+
+- Added a moving 6 × 6 km high-detail terrain window that follows the aircraft across every theater, with cached tile geometry and imagery to reduce transition stutter.
+- Reworked theater-wide terrain packages and Pages delivery; the 2 m/pixel orthophoto tiles now cover the full map area instead of favoring the mission start point.
+- Improved air-combat opening distance and pacing, ground-unit movement and engagements, and low-altitude anti-aircraft fire.
+- Made missile smoke trails fuller and more continuous, and refined cannon projectile hit handling and Finnish roundel placement.
+- Updated terrain data attribution, release documentation, and terrain processing dependencies.
+
+Alpha 4 remains an early prototype. Flight, radar, weapons, AI, and battlefield behavior are simplified game systems, not real-world training or operational tools.
+
 ## 0.1.0-alpha.3 — 2026-09-29
 
 ### English

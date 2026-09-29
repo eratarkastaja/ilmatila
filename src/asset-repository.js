@@ -24,8 +24,9 @@ function disposeAircraftAsset(asset) {
 
 /** Shares in-flight aircraft and theater loads, including per-caller progress. */
 export class AssetRepository {
-  constructor({ onAircraftLoaded } = {}) {
+  constructor({ onAircraftLoaded, terrainAnisotropy = 4 } = {}) {
     this.onAircraftLoaded = onAircraftLoaded;
+    this.terrainAnisotropy = terrainAnisotropy;
     this.aircraftAsset = null;
     this.aircraftPromise = null;
     this.aircraftTask = null;
@@ -140,6 +141,7 @@ export class AssetRepository {
       task.promise = createTerrain({
         areaId,
         fallback: false,
+        textureAnisotropy: this.terrainAnisotropy,
         signal: task.controller.signal,
         onProgress: (progress, detail) => {
           task.progress = progress;

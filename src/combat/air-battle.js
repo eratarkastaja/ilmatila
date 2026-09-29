@@ -115,18 +115,11 @@ export class AirBattle {
 
       const ground = this.terrain?.sampleHeight(jet.position.x, jet.position.z) ?? -Infinity;
       jet.position.y = Math.max(this.player.position.y + altitudeOffsets[i % altitudeOffsets.length], ground + 360);
-      const attackPoint = this.player.position.clone()
-        // Start the hostile on a real head-on pass. A waypoint in front of the
-        // player made it turn away before its guns had a firing window.
-        .addScaledVector(playerForward, -1000)
-        .addScaledVector(playerRight, lane * 230);
-      const initialVector = attackPoint.sub(jet.position);
-      const initialHeading = Math.atan2(initialVector.x, initialVector.z);
-      const initialPitch = THREE.MathUtils.clamp(
-        Math.atan2(initialVector.y, Math.hypot(initialVector.x, initialVector.z)),
-        -.12,
-        .12,
-      );
+      const stagingOffset = jet.position.clone().sub(this.player.position);
+      // Keep the first contact in a loose, non-threatening transit formation.
+      // The intercept pass begins after the mission-specific setup interval.
+      const initialHeading = heading;
+      const initialPitch = 0;
       jet.rotation.order = 'YXZ';
       jet.rotation.y = initialHeading;
       jet.rotation.x = -initialPitch;
@@ -143,8 +136,11 @@ export class AirBattle {
         velocity: flightDirection(initialHeading, initialPitch).multiplyScalar(285),
         lane: Math.sign(lateral || (i % 2 ? 1 : -1)),
         altitudeOffset: altitudeOffsets[i % altitudeOffsets.length],
-        phase: 'inbound',
+        phase: 'staging',
         phaseClock: 0,
+        stagingLane: lane,
+        stagingForward: stagingOffset.dot(playerForward),
+        stagingLateral: stagingOffset.dot(playerRight),
         gunCooldown: 2.4 + i * .55,
         burstClock: 0,
         burstShots: 0,
@@ -255,7 +251,18 @@ export class AirBattle {
 
       let waypoint;
 
-      if (enemy.phase === 'inbound') {
+      if (enemy.phase === 'staging' && enemy.phaseClock >= (this.mission.openingDelay ?? 14)) {
+        enemy.phase = 'inbound';
+        enemy.phaseClock = 0;
+      }
+
+      if (enemy.phase === 'staging') {
+        const laneDrift = Math.sin(enemy.phaseClock * .22 + enemy.stagingLane) * 70;
+        waypoint = playerPosition.clone()
+          .addScaledVector(this.playerVelocity, .7)
+          .addScaledVector(playerForward, enemy.stagingForward)
+          .addScaledVector(playerRight, enemy.stagingLateral + laneDrift);
+      } else if (enemy.phase === 'inbound') {
         waypoint = playerPosition.clone()
           .addScaledVector(this.playerVelocity, .6)
           .addScaledVector(playerForward, -1000)
@@ -306,7 +313,9 @@ export class AirBattle {
         enemy.mesh.userData.afterburner.scale.setScalar(enemy.boosting ? pulse : 1);
       }
 
-      const desiredSpeed = enemy.phase === 'extend' ? 315 : enemy.phase === 'rejoin' ? 300 : 280;
+      const desiredSpeed = enemy.phase === 'staging'
+        ? THREE.MathUtils.clamp(this.playerVelocity.length(), 220, 300)
+        : enemy.phase === 'extend' ? 315 : enemy.phase === 'rejoin' ? 300 : 280;
       steerAircraft(enemy, waypoint, dt, {
         turnRate: enemy.boosting ? .4 : .34,
         pitchRate: .2,
@@ -440,7 +449,7 @@ export class AirBattle {
     let selected = null;
     let bestScore = Infinity;
     for (const enemy of this.enemies) {
-      if (enemy.dead || enemy.mesh.position.distanceTo(this.player.position) > 9400) continue;
+      if (enemy.dead || enemy.phase === 'staging' || enemy.mesh.position.distanceTo(this.player.position) > 9400) continue;
       const range = enemy.mesh.position.distanceTo(ally.mesh.position);
       if (range > 10200) continue;
       const otherAttackers = this.allies.filter(other => other !== ally && other.target === enemy).length;

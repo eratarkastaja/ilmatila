@@ -58,7 +58,7 @@ export function buildF35Asset(plane, aircraftAsset, friendly) {
 
   // Place circular Finnish roundels on the upper wing, behind the leading edge.
   for (const side of [-1, 1]) {
-    const x=side*3.15, z=-2.05;
+    const x=side*3.32, z=-2.04;
     const surfaceY=sampleSurfaceY(plane,airframe,x,z,0.12);
     addFinnishRoundel(plane,x,z,0.42,surfaceY);
   }

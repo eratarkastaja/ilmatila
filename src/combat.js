@@ -126,7 +126,7 @@ export class CombatWorld {
     });
     this.enemies = this.airBattle.enemies;
     this.allies = this.airBattle.allies;
-    this.groundBattle = new GroundBattle({ scene, player, terrain, mission: missionConfig, audio, fx, addProjectile: shot => this.hostiles.push(shot) });
+    this.groundBattle = new GroundBattle({ scene, player, playerVelocity: this.playerVelocity, terrain, mission: missionConfig, audio, fx, addProjectile: shot => this.hostiles.push(shot) });
     this.friends = this.groundBattle.friends;
     this.redUnits = this.groundBattle.redUnits;
     this.colliders = this.groundBattle.colliders;
@@ -322,7 +322,7 @@ export class CombatWorld {
       });
     }
     this.playerShots.push({
-      mesh:shot,velocity,life:GUN_PROJECTILE_LIFETIME,damage:.2,
+      mesh:shot,velocity,life:GUN_PROJECTILE_LIFETIME,damage:.28,
       ballistic:true,gravity:GUN_PROJECTILE_GRAVITY,tracer,
     });
   }
@@ -573,14 +573,15 @@ export class CombatWorld {
       let hit=null,hitInfo=null;
       if(s.life>0)for(const e of this.enemies){
         if(e.dead)continue;
-        // AirBattle advances aircraft before projectiles. Sweep the shot against
-        // the target's movement during this frame so fast crossings do not tunnel.
-        const relativeStart=previous.clone().addScaledVector(e.velocity??stationaryVelocity,-dt);
+        // Express the previous shot position in the target's current frame.
+        // Adding target motion is required here because traceFighterHit applies
+        // the current aircraft transform to both ends of the swept segment.
+        const relativeStart=previous.clone().addScaledVector(e.velocity??stationaryVelocity,dt);
         const impact=traceFighterHit(relativeStart,s.mesh.position,e.mesh);
         if(impact&&(!hitInfo||impact.t<hitInfo.t)){hit=e;hitInfo=impact;}
       }
       if(s.life>0&&!s.ally)for(const unit of this.redUnits){if(unit.dead)continue;
-        const relativeStart=previous.clone().addScaledVector(unit.velocity??stationaryVelocity,-dt);
+        const relativeStart=previous.clone().addScaledVector(unit.velocity??stationaryVelocity,dt);
         const impact=traceVehicleHit(relativeStart,s.mesh.position,unit.mesh);
         if(impact&&(!hitInfo||impact.t<hitInfo.t)){hit=unit;hitInfo=impact;}
       }
@@ -629,6 +630,18 @@ export class CombatWorld {
         s.mesh.position.addScaledVector(s.velocity,dt);
         if(s.decoyTarget&&sweptRelativeDistanceSquared(previous,s.mesh.position,s.decoyTarget.previousPosition,s.decoyTarget.position)<12**2){this.addSpark(s.mesh.position);s.life=0;}
         else if(!s.decoyTarget&&sweptRelativeDistanceSquared(previous,s.mesh.position,this.lastCollisionPosition,this.player.position)<13**2){this.destroyPlayer('combat.hostileMissile');this.addExplosion(s.mesh.position,.48);s.life=0;}
+      }else if(s.flak){
+        s.mesh.position.addScaledVector(s.velocity,dt);
+        const distanceSq=sweptRelativeDistanceSquared(previous,s.mesh.position,this.lastCollisionPosition,this.player.position);
+        if(distanceSq<9**2){
+          this.destroyPlayer('combat.hostileFire');
+          this.addExplosion(s.mesh.position,.34);
+          s.life=0;
+        }else if(!s.burst&&distanceSq<42**2){
+          this.addExplosion(s.mesh.position,.24);
+          s.burst=true;
+          s.life=0;
+        }
       }else{
         s.mesh.position.addScaledVector(s.velocity,dt);
         if(s.ground&&s.target&&!s.target.dead&&sweptRelativeDistanceSquared(previous,s.mesh.position,s.target.mesh.position.clone().addScaledVector(s.target.velocity??stationaryVelocity,-dt),s.target.mesh.position)<12**2){s.target.hp--;if(s.target.hp<=0)this.destroyUnit(s.target);this.addExplosion(s.mesh.position,.72);s.life=0;}

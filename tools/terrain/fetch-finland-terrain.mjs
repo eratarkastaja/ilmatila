@@ -1,6 +1,7 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { deflateSync } from 'node:zlib';
 import { fromArrayBuffer } from 'geotiff';
+import sharp from 'sharp';
 
 const API_KEY = process.env.NLS_API_KEY;
 if (!API_KEY) {
@@ -20,6 +21,10 @@ const ORTHO_TILE_SIZE = 2000;
 const ORTHO_GRID = 8;
 const ORTHO_SCALE = 0.08; // ~320 px/tile (6.25 m pixels); NLS allows at most 4,000 px/tile.
 const WATER_TILE_PIXELS = 320;
+const DETAIL_ORTHO_SCALE = 0.25; // ~1,000 px/tile (about 2 m/pixel) across the full theater.
+const DETAIL_ORTHO_GRID = ORTHO_GRID;
+const DETAIL_ORTHO_TILE_PIXELS = 1000;
+const DETAIL_ONLY = process.argv.includes('--detail-only') || process.argv.includes('--near-only');
 const OUT_ROOT = new URL('../../public/terrain/', import.meta.url);
 const WCS = 'https://avoin-karttakuva.maanmittauslaitos.fi/ortokuvat-ja-korkeusmallit/wcs/v2';
 const crcTable=Array.from({length:256},(_,n)=>{let c=n;for(let k=0;k<8;k++)c=(c&1)?0xedb88320^(c>>>1):c>>>1;return c>>>0;});
@@ -31,75 +36,153 @@ for (const region of REGIONS) {
     await fetchRegion(region);
     available.push({ id: region.id, label: region.label });
   } catch (error) {
-    failures.push({ id: region.id, message: error.message });
-    console.error(`${region.label}: failed (${error.message})`);
+    failures.push({ id: region.id, message: redact(error.message) });
+    console.error(`${region.label}: failed (${redact(error.message)})`);
   }
 }
-await writeFile(new URL('index.json', OUT_ROOT), JSON.stringify({ areas: available }, null, 2));
+if (!DETAIL_ONLY) await writeFile(new URL('index.json', OUT_ROOT), JSON.stringify({ areas: available }, null, 2));
 console.log(`Terrain packages ready: ${available.length}/${REGIONS.length}.`);
 if (failures.length) console.log(`Unavailable areas: ${failures.map(f => f.id).join(', ')}.`);
+if (failures.length) process.exitCode = 1;
 
 async function fetchRegion(region) {
   const out = new URL(`areas/${region.id}/`, OUT_ROOT);
   await mkdir(out, { recursive: true });
-  console.log(`\n${region.label}: 16 x 16 km height data around E ${region.e}, N ${region.n} (EPSG:3067)`);
-  const demParams = new URLSearchParams({
-    service: 'WCS', version: '2.0.1', request: 'GetCoverage', coverageID: 'korkeusmalli_2m',
-    format: 'text/plain', SCALEFACTOR: '0.05', 'api-key': API_KEY,
-  });
-  demParams.append('SUBSET', `E(${region.e - DEM_SIZE/2},${region.e + DEM_SIZE/2})`);
-  demParams.append('SUBSET', `N(${region.n - DEM_SIZE/2},${region.n + DEM_SIZE/2})`);
-  const demText = await checkedText(`${WCS}?${demParams}`);
-  const { width, height, values } = parseAsciiGrid(demText);
-  const valid = values.filter(Number.isFinite);
-  if (!valid.length) throw new Error('elevation grid contains no data');
-  const referenceHeight = valid[Math.floor(valid.length / 2)];
-  for (let i = 0; i < values.length; i++) if (!Number.isFinite(values[i])) values[i] = referenceHeight;
-  const raw = Buffer.allocUnsafe(values.length * 4);
-  for (let i = 0; i < values.length; i++) raw.writeFloatLE(values[i], i * 4);
-  await writeFile(new URL('height.f32', out), raw);
-  console.log(`DEM ready: ${width} x ${height} samples.`);
+  const metadataPath = new URL('terrain.json', out);
+  let metadata;
+  if (DETAIL_ONLY) {
+    metadata = JSON.parse(await readFile(metadataPath, 'utf8'));
+    for (const name of ['height.f32', 'ortho-0-0.png', 'water-0-0.bin']) {
+      try { await readFile(new URL(name, out)); }
+      catch { throw new Error(`detail-only mode needs an existing terrain package (${name} is missing)`); }
+    }
+    console.log(`\n${region.label}: refreshing theater-wide 2 m imagery.`);
+  } else {
+    console.log(`\n${region.label}: 16 x 16 km height data around E ${region.e}, N ${region.n} (EPSG:3067)`);
+    const demParams = new URLSearchParams({
+      service: 'WCS', version: '2.0.1', request: 'GetCoverage', coverageID: 'korkeusmalli_2m',
+      format: 'text/plain', SCALEFACTOR: '0.05', 'api-key': API_KEY,
+    });
+    demParams.append('SUBSET', `E(${region.e - DEM_SIZE/2},${region.e + DEM_SIZE/2})`);
+    demParams.append('SUBSET', `N(${region.n - DEM_SIZE/2},${region.n + DEM_SIZE/2})`);
+    const demText = await checkedText(`${WCS}?${demParams}`);
+    const { width, height, values } = parseAsciiGrid(demText);
+    const valid = values.filter(Number.isFinite);
+    if (!valid.length) throw new Error('elevation grid contains no data');
+    const referenceHeight = valid[Math.floor(valid.length / 2)];
+    for (let i = 0; i < values.length; i++) if (!Number.isFinite(values[i])) values[i] = referenceHeight;
+    const raw = Buffer.allocUnsafe(values.length * 4);
+    for (let i = 0; i < values.length; i++) raw.writeFloatLE(values[i], i * 4);
+    await writeFile(new URL('height.f32', out), raw);
+    console.log(`DEM ready: ${width} x ${height} samples.`);
 
-  const tiles=[];
-  for(let row=0;row<ORTHO_GRID;row++)for(let col=0;col<ORTHO_GRID;col++)tiles.push({row,col});
-  // Three parallel WCS requests keep the download moving without flooding the service.
-  let orthoCount=0;
-  for(let start=0;start<tiles.length;start+=3){
-    const result=await Promise.all(tiles.slice(start,start+3).map(async({row,col})=>{
-      try{await fetchOrthoTile(region,out,row,col);return true;}
-      catch(error){console.warn(`${region.label}: ortho ${row}-${col} skipped (${error.message})`);return false;}
-    }));
-    orthoCount+=result.filter(Boolean).length;
+    const tiles=[];
+    for(let row=0;row<ORTHO_GRID;row++)for(let col=0;col<ORTHO_GRID;col++)tiles.push({row,col});
+    let orthoCount=0;
+    for(let start=0;start<tiles.length;start+=3){
+      const result=await Promise.all(tiles.slice(start,start+3).map(async({row,col})=>{
+        try{await fetchOrthoTile(region,out,row,col);return true;}
+        catch(error){console.warn(`${region.label}: ortho ${row}-${col} skipped (${redact(error.message)})`);return false;}
+      }));
+      orthoCount+=result.filter(Boolean).length;
+    }
+    if(orthoCount!==tiles.length)throw new Error(`only ${orthoCount}/${tiles.length} orthophoto tiles were returned`);
+    const downloadedAt = new Date().toISOString().slice(0, 10);
+    metadata = {
+      id: region.id, region: region.label, width, height, referenceHeight,
+      centerE: region.e, centerN: region.n,
+      areaMeters: DEM_SIZE, orthoAreaMeters: ORTHO_GRID * ORTHO_TILE_SIZE,
+      orthoGrid: ORTHO_GRID, orthoTilePixels: WATER_TILE_PIXELS,
+      downloadedAt, retrievalDates: [downloadedAt],
+      attribution: {
+        provider: 'National Land Survey of Finland',
+        datasets: ['Elevation Model 2 m', 'Colour Orthophotos (ortokuva_vari)'],
+        license: 'CC BY 4.0',
+        licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
+        sourceUrl: 'https://www.maanmittauslaitos.fi/ortokuvien-ja-korkeusmallien-kyselypalvelu/tekninen-kuvaus',
+        modifications: 'Elevation samples were downsampled; orthophotos were cropped, resampled, tiled, and recompressed; water masks were derived from orthophoto colors.',
+        retrievalDate: downloadedAt,
+      },
+    };
+    console.log(`${region.label}: ${orthoCount}/${tiles.length} base orthophoto tiles and water masks ready.`);
   }
-  if(orthoCount!==tiles.length)throw new Error(`only ${orthoCount}/${tiles.length} orthophoto tiles were returned`);
+
+  const detailPixels = await fetchMovingDetailOrthophotos(region, out);
+  await removeLegacyCenterTiles(out, metadata.nearOrthoGrid);
   const downloadedAt = new Date().toISOString().slice(0, 10);
-  const metadata = {
-    id: region.id, region: region.label, width, height, referenceHeight,
-    centerE: region.e, centerN: region.n,
-    areaMeters: DEM_SIZE, orthoAreaMeters: ORTHO_GRID * ORTHO_TILE_SIZE,
-    orthoGrid: ORTHO_GRID, orthoTilePixels: WATER_TILE_PIXELS,
-    downloadedAt,
-    attribution: {
-      provider: 'National Land Survey of Finland',
-      datasets: ['Elevation Model 2 m', 'Colour Orthophotos (ortokuva_vari)'],
-      license: 'CC BY 4.0',
-      licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
-      sourceUrl: 'https://www.maanmittauslaitos.fi/ortokuvien-ja-korkeusmallien-kyselypalvelu/tekninen-kuvaus',
-      modifications: 'Elevation samples were downsampled; orthophotos were cropped, resampled, tiled, and recompressed; water masks were derived from orthophoto colors.',
-      retrievalDate: downloadedAt,
-    },
-  };
-  await writeFile(new URL('terrain.json', out), JSON.stringify(metadata, null, 2));
-  console.log(`${region.label}: ${orthoCount}/${tiles.length} orthophoto tiles and water masks ready.`);
+  const retrievalDates = [...new Set([...(metadata.retrievalDates ?? [metadata.downloadedAt]), downloadedAt])].sort();
+  delete metadata.nearOrthoAreaMeters;
+  delete metadata.nearOrthoGrid;
+  delete metadata.nearOrthoTilePixels;
+  delete metadata.nearOrthoRetrievedAt;
+  metadata.detailOrthoAreaMeters = DETAIL_ORTHO_GRID * ORTHO_TILE_SIZE;
+  metadata.detailOrthoGrid = DETAIL_ORTHO_GRID;
+  metadata.detailOrthoTileSizeMeters = ORTHO_TILE_SIZE;
+  metadata.detailOrthoTilePixels = detailPixels;
+  metadata.detailOrthoRetrievedAt = downloadedAt;
+  metadata.downloadedAt = downloadedAt;
+  metadata.retrievalDates = retrievalDates;
+  metadata.attribution.modifications = 'Elevation samples were downsampled; standard-resolution orthophotos were cropped, resampled, tiled, and recompressed; theater-wide imagery was fetched at about 2 m/pixel as a moving detail layer and JPEG-encoded at quality 84 with 4:2:0 chroma subsampling; water masks were derived from orthophoto colors.';
+  metadata.attribution.retrievalDate = downloadedAt;
+  await writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+  console.log(`${region.label}: moving theater detail ready (${detailPixels} px/tile).`);
 }
 
-async function fetchOrthoTile(region,out,row,col){
-  const west=region.e-ORTHO_GRID*ORTHO_TILE_SIZE/2+col*ORTHO_TILE_SIZE;
-  const south=region.n+ORTHO_GRID*ORTHO_TILE_SIZE/2-(row+1)*ORTHO_TILE_SIZE;
-  const east=west+ORTHO_TILE_SIZE,north=south+ORTHO_TILE_SIZE;
+async function removeLegacyCenterTiles(out, oldGrid = 2) {
+  const grid = Number.isInteger(oldGrid) ? Math.min(Math.max(oldGrid, 2), 4) : 2;
+  const files = [];
+  for (let row = 0; row < grid; row++) {
+    for (let col = 0; col < grid; col++) {
+      files.push(`near-ortho-${row}-${col}.jpg`, `near-ortho-${row}-${col}.png`);
+    }
+  }
+  await Promise.all(files.map(name => rm(new URL(name, out), { force: true })));
+}
+
+async function fetchMovingDetailOrthophotos(region, out) {
+  const tiles = [];
+  for (let row = 0; row < DETAIL_ORTHO_GRID; row++) {
+    for (let col = 0; col < DETAIL_ORTHO_GRID; col++) tiles.push({ row, col });
+  }
+  let completed = 0;
+  const sizes = new Set();
+  try {
+    for (let start = 0; start < tiles.length; start += 2) {
+      const batch = await Promise.all(tiles.slice(start, start + 2).map(async ({ row, col }) => {
+        const size = await fetchOrthoTile(region, out, row, col, { detail: true, temporary: true });
+        sizes.add(`${size.width}x${size.height}`);
+        completed++;
+        if (completed === tiles.length || completed % 8 === 0) {
+          console.log(`${region.label}: moving detail tiles ${completed}/${tiles.length}`);
+        }
+        return { row, col, size };
+      }));
+      if (batch.some(({ size }) => size.width !== size.height || size.width !== DETAIL_ORTHO_TILE_PIXELS)) {
+        throw new Error(`moving-detail WCS tile must be ${DETAIL_ORTHO_TILE_PIXELS} x ${DETAIL_ORTHO_TILE_PIXELS} pixels`);
+      }
+    }
+    if (sizes.size !== 1) throw new Error('moving-detail orthophoto tiles have inconsistent dimensions');
+    for (const { row, col } of tiles) {
+      await rename(new URL(`detail-ortho-${row}-${col}.pending.jpg`, out), new URL(`detail-ortho-${row}-${col}.jpg`, out));
+    }
+  } catch (error) {
+    await Promise.all(tiles.map(({ row, col }) => rm(new URL(`detail-ortho-${row}-${col}.pending.jpg`, out), { force: true })));
+    throw error;
+  }
+  for (const { row, col } of tiles) await rm(new URL(`detail-ortho-${row}-${col}.png`, out), { force: true });
+  return DETAIL_ORTHO_TILE_PIXELS;
+}
+
+async function fetchOrthoTile(region,out,row,col,{detail=false,temporary=false}={}){
+  const grid=ORTHO_GRID;
+  const tileSize=ORTHO_TILE_SIZE;
+  const scale=detail?DETAIL_ORTHO_SCALE:ORTHO_SCALE;
+  const west=region.e-grid*tileSize/2+col*tileSize;
+  const south=region.n+grid*tileSize/2-(row+1)*tileSize;
+  const east=west+tileSize,north=south+tileSize;
   const params=new URLSearchParams({
     service:'WCS',version:'2.0.1',request:'GetCoverage',coverageID:'ortokuva_vari',
-    format:'image/tiff',SCALEFACTOR:String(ORTHO_SCALE),'api-key':API_KEY,
+    format:'image/tiff',SCALEFACTOR:String(scale),'api-key':API_KEY,
   });
   params.append('SUBSET',`E(${west},${east})`);params.append('SUBSET',`N(${south},${north})`);
   const response=await fetch(`${WCS}?${params}`);
@@ -107,8 +190,18 @@ async function fetchOrthoTile(region,out,row,col){
   const tiff=await fromArrayBuffer(await response.arrayBuffer()),image=await tiff.getImage();
   const pixels=await image.readRasters({interleave:true}),width=image.getWidth(),height=image.getHeight();
   const rgba=toRgba(pixels,width,height,image.getSamplesPerPixel());
-  await writeFile(new URL(`ortho-${row}-${col}.png`,out),encodePng(width,height,rgba));
-  await writeWaterMask(out,row,col,rgba,width,height);
+  const prefix=detail?'detail-ortho':'ortho';
+  if (detail) {
+    const jpeg = await sharp(rgba, { raw: { width, height, channels: 4 } })
+      .jpeg({ quality: 84, chromaSubsampling: '4:2:0', progressive: true })
+      .toBuffer();
+    const suffix = temporary ? '.pending.jpg' : '.jpg';
+    await writeFile(new URL(`${prefix}-${row}-${col}${suffix}`,out),jpeg);
+  } else {
+    await writeFile(new URL(`${prefix}-${row}-${col}.png`,out),encodePng(width,height,rgba));
+  }
+  if(!detail)await writeWaterMask(out,row,col,rgba,width,height);
+  return { width, height };
 }
 
 async function checkedText(url){
@@ -160,3 +253,4 @@ function chunk(type,data){
   return Buffer.concat([size,name,data,crc]);
 }
 function crc32(buffer){let c=0xffffffff;for(const b of buffer)c=crcTable[(c^b)&255]^(c>>>8);return(c^0xffffffff)>>>0;}
+function redact(value){return String(value).replaceAll(API_KEY,'[redacted]');}
