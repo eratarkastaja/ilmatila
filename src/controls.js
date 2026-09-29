@@ -17,6 +17,7 @@ export class FlightControls {
     this.speed = 235;
     this.heading = 0;
     this.pitch = 0;
+    this.pitchCommand = 0;
     this.roll = 0;
     this.elapsed = 0;
     this.keys = new Set();
@@ -64,6 +65,7 @@ export class FlightControls {
     const noseDown = Math.max(key('KeyW'), key('ArrowUp'));
     const noseUp = Math.max(key('KeyS'), key('ArrowDown'));
     const pitchInput = noseDown - noseUp;
+    this.pitchCommand = THREE.MathUtils.damp(this.pitchCommand, pitchInput, pitchInput ? 8 : 12, dt);
     const left = Math.max(key('KeyA'), key('ArrowLeft'));
     const right = Math.max(key('KeyD'), key('ArrowRight'));
     const rollSpin = key('KeyE') - key('KeyQ');
@@ -76,7 +78,7 @@ export class FlightControls {
     // Pitch and Q/E roll are rotations around the aircraft's own axes. Keeping
     // them as incremental quaternion rotations avoids Euler-angle flips when
     // a loop and a barrel roll cross the inverted attitude together.
-    const pitchDelta = pitchInput * 0.67 * dt;
+    const pitchDelta = this.pitchCommand * 0.52 * dt;
     const rollDelta = rollSpin
       ? rollSpin * 2.5 * dt + bankInput * 1.8 * dt
       : pitchInput

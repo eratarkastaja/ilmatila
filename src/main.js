@@ -473,6 +473,8 @@ const altitudeEl = document.querySelector('#altitude');
 const headingEl = document.querySelector('#heading');
 const gunReticle = document.querySelector('.crosshair');
 const gunBoresightPoint = new THREE.Vector3();
+const gunReticleShift = new THREE.Vector2();
+let hasGunReticleShift = false;
 let previousAltitude = player.position.y;
 let needsMenuRender = true;
 const assets = new AssetRepository({
@@ -530,8 +532,18 @@ function animate() {
         .project(camera);
       const shiftX = THREE.MathUtils.clamp(boresight.x * innerWidth * 0.5, -innerWidth * 0.46, innerWidth * 0.46);
       const shiftY = THREE.MathUtils.clamp(-boresight.y * innerHeight * 0.5, -innerHeight * 0.44, innerHeight * 0.44);
-      gunReticle.style.setProperty('--aim-shift-x', `${shiftX}px`);
-      gunReticle.style.setProperty('--aim-shift-y', `${shiftY}px`);
+      if (!hasGunReticleShift) {
+        gunReticleShift.set(shiftX, shiftY);
+        hasGunReticleShift = true;
+      } else {
+        // Smooth screen-space motion while keeping the reticle close to the
+        // real boresight. Exponential damping feels consistent across FPS.
+        const response = 1 - Math.exp(-12 * dt);
+        gunReticleShift.x += (shiftX - gunReticleShift.x) * response;
+        gunReticleShift.y += (shiftY - gunReticleShift.y) * response;
+      }
+      gunReticle.style.setProperty('--aim-shift-x', `${gunReticleShift.x}px`);
+      gunReticle.style.setProperty('--aim-shift-y', `${gunReticleShift.y}px`);
     }
     // Let the cloud field drift across the camera slowly with the wind instead of locking it in place.
     clouds.position.x = player.position.x * 0.98 + weather.wind.x * clock.elapsedTime;

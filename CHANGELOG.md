@@ -7,6 +7,7 @@
 - Added distinct air and ground missile inventories, with AIM-120C AMRAAM and AGM-65D Maverick designations shown for the active radar mode.
 - Limited missile powered flight and guidance, with a coast phase after motor burnout.
 - Reworked the cannon lead cue around the actual aircraft boresight and gun muzzle; it now supports air and ground targets and accounts for target motion, aircraft velocity, and projectile drop.
+- Smoothed pitch input and screen-space gunsight motion for more gradual nose-up and nose-down control.
 - Tuned cannon damage and hit tolerance, including a forgiving near-hit envelope against ground vehicles.
 - Corrected heading-up radar contact orientation so left and right match the aircraft's perspective, and added warnings near the theater boundary.
 - Refined atmospheric haze, afterburner wakes, and missile smoke appearance.
