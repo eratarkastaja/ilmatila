@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env*
+!.env.example
+
+# Generated Maanmittauslaitos terrain packages (downloaded locally, not source files).
+/public/terrain/areas/
+
+# Local editor and operating-system files.
+.DS_Store
+.idea/
+.vscode/
+__pycache__/
+*.py[cod]
+*.log
+npm-debug.log*

@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#07111b" />
+    <title>ILMATILA | Mission Selection</title>
+  </head>
+  <body>
+    <div id="game"></div>
+    <div class="vignette"></div>
+    <main id="start-menu" class="start-menu" aria-labelledby="menu-title">
+      <div class="menu-topbar">
+        <a class="menu-brand" href="#start" data-i18n-aria-label="menu.brandAria">
+          <span class="roundel-mark"><i></i></span>
+          <span><strong>ILMATILA</strong><small data-i18n="menu.brandSubtitle">FINNISH AIR FORCE</small></span>
+        </a>
+        <div class="topbar-status"><span class="status-dot"></span> <span data-i18n="menu.service">FLIGHT OPERATIONS</span> <b>●</b> <span data-i18n="menu.ready">READY</span></div>
+        <div class="language-picker"><label for="language-select" data-i18n="language.label">LANGUAGE</label><select id="language-select" data-i18n-aria-label="language.aria"><option value="en">English</option><option value="fi">Suomi</option></select></div>
+        <div class="topbar-clock"><span data-i18n="menu.simulation">SIMULATION</span><strong id="language-code">EN / 01</strong></div>
+      </div>
+
+      <div class="menu-layout">
+        <section class="launch-panel">
+          <div class="section-code"><span data-i18n="menu.airForce">AIR FORCE</span><i></i> <span data-i18n="menu.selectMission">MISSION SELECTION</span> <b>01—04</b></div>
+          <h1 id="menu-title">ILMA<span>TILA</span></h1>
+          <p class="menu-subtitle" data-i18n="menu.subtitle">AIR OPERATIONS · FINLAND</p>
+          <p class="menu-intro" data-i18n="menu.intro">Select a mission and operating area, then launch your sortie.</p>
+
+          <div class="mission-heading"><span>01</span><div><small data-i18n="menu.missionSelection">MISSION SELECTION</small><strong data-i18n="menu.chooseProfile">Select a mission profile</strong></div><i data-i18n="menu.missionCount">4 MISSIONS</i></div>
+          <div class="mission-grid" role="group" data-i18n-aria-label="menu.selectMissionAria">
+            <button class="mission-card selected" type="button" data-mission="intercept" aria-pressed="true">
+              <span class="mission-card-top"><b>01 / QRA</b><i data-i18n="mission.intercept.posture">ALERT</i></span>
+              <strong data-i18n="mission.intercept.title">INTERCEPT FLIGHT</strong>
+              <small data-i18n="mission.intercept.summary">Intercept the hostile formation approaching Finnish airspace.</small>
+              <span class="mission-card-bottom"><i class="contact-mark hostile"></i> <span data-i18n="mission.intercept.count">04 HOSTILE FIGHTERS</span> <b>↗</b></span>
+            </button>
+            <button class="mission-card" type="button" data-mission="patrol" aria-pressed="false">
+              <span class="mission-card-top"><b>02 / CAP</b><i data-i18n="mission.patrol.posture">ON STATION</i></span>
+              <strong data-i18n="mission.patrol.title">COMBAT AIR PATROL</strong>
+              <small data-i18n="mission.patrol.summary">Patrol the assigned sector and intercept hostile fighters operating in the area.</small>
+              <span class="mission-card-bottom"><i class="contact-mark hostile"></i> <span data-i18n="mission.patrol.count">02 HOSTILE FIGHTERS</span> <b>↗</b></span>
+            </button>
+            <button class="mission-card" type="button" data-mission="support" aria-pressed="false">
+              <span class="mission-card-top"><b>03 / CAS</b><i data-i18n="mission.support.posture">CAS</i></span>
+              <strong data-i18n="mission.support.title">CLOSE AIR SUPPORT</strong>
+              <small data-i18n="mission.support.summary">Support friendly ground forces in contact by engaging hostile ground units.</small>
+              <span class="mission-card-bottom"><i class="contact-mark ground"></i> <span data-i18n="mission.support.count">GROUND FORCES ENGAGED</span> <b>↗</b></span>
+            </button>
+            <button class="mission-card" type="button" data-mission="training" aria-pressed="false">
+              <span class="mission-card-top"><b>04 / TRG</b><i data-i18n="mission.training.posture">TRAINING</i></span>
+              <strong data-i18n="mission.training.title">TRAINING SORTIE</strong>
+              <small data-i18n="mission.training.summary">Practice aircraft handling, aerobatics, and formation flying with your wingmen.</small>
+              <span class="mission-card-bottom"><i class="contact-mark friendly"></i> <span data-i18n="mission.training.count">NO HOSTILE CONTACTS</span> <b>↗</b></span>
+            </button>
+          </div>
+
+          <div class="theater-select-row">
+            <label for="menu-theater"><span class="theater-index">02</span><span><small data-i18n="menu.areaLabel">OPERATING AREA</small><strong data-i18n="menu.areaName">Select operating area</strong></span></label>
+            <div class="select-wrap"><select id="menu-theater" data-i18n-aria-label="menu.theaterAria"><option value="paijanne">PÄIJÄNNE</option><option value="vironlahti">VIROLAHTI</option><option value="ilomantsi">ILOMANTSI</option><option value="kuusamo">KUUSAMO</option></select><i>⌄</i></div>
+          </div>
+
+          <div class="briefing-line">
+            <span class="briefing-symbol">⌖</span>
+            <div><small id="briefing-code">QRA / QUICK REACTION ALERT</small><p id="briefing-copy">Four hostile fighters are approaching from the north. Intercept them with your flight. Friendly ground forces are engaging hostile units in the sector.</p></div>
+          </div>
+
+          <div class="launch-actions">
+            <button id="launch-mission" class="launch-button" type="button" aria-busy="false">
+              <span class="launch-button-icon">▶</span>
+              <span class="launch-button-copy"><small id="launch-progress-status" data-i18n="menu.launchReadyStatus">READY FOR MISSION</small><strong id="launch-progress-title" data-i18n="menu.launchButton">START FLIGHT</strong></span>
+              <b>→</b>
+              <span id="launch-progress" class="launch-progress" role="progressbar" data-i18n-aria-label="launch.progressAria" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="Ready for tasking"><i id="launch-progress-fill"></i></span>
+            </button>
+            <button id="open-credits" class="credits-button" type="button"><span>ⓘ</span><span data-i18n="menu.creditsButton">ASSETS &amp; LICENSES</span></button>
+          </div>
+          <section class="menu-controls" data-i18n-aria-label="menu.controlsAria">
+            <div class="menu-controls-head"><small data-i18n="menu.controlsTitle">FLIGHT CONTROLS</small><span data-i18n="menu.controlsArrows">ARROW KEYS WORK LIKE WASD</span></div>
+            <div class="menu-control-grid">
+              <span class="menu-control"><kbd>W</kbd><b data-i18n="controls.noseDown">NOSE DOWN</b></span>
+              <span class="menu-control"><kbd>S</kbd><b data-i18n="controls.noseUp">NOSE UP</b></span>
+              <span class="menu-control"><span class="menu-keys"><kbd>A</kbd><kbd>D</kbd></span><b data-i18n="controls.turn">TURN</b></span>
+              <span class="menu-control"><span class="menu-keys"><kbd>Q</kbd><kbd>E</kbd></span><b data-i18n="controls.roll">BARREL ROLL</b></span>
+              <span class="menu-control"><kbd>SHIFT</kbd><b data-i18n="controls.boost">AFTERBURNER</b></span>
+              <span class="menu-control"><kbd>SPACE</kbd><b data-i18n="controls.fire">FIRE CANNON</b></span>
+              <span class="menu-control"><kbd>CTRL</kbd><b data-i18n="controls.missile">LAUNCH GUIDED MISSILE</b></span>
+              <span class="menu-control"><kbd>R</kbd><b data-i18n="controls.radar">SELECT RADAR MODE</b></span>
+              <span class="menu-control"><kbd>C</kbd><b data-i18n="controls.countermeasures">FLARES / CHAFF</b></span>
+            </div>
+          </section>
+          <div class="menu-footnote"><span id="menu-status"><i></i> OPERATIONS READY · SELECT MISSION</span></div>
+        </section>
+
+        <aside class="theater-panel" data-i18n-aria-label="menu.theaterAriaLabel">
+          <div class="theater-panel-head"><span><i></i> <span data-i18n="menu.liveFeed">AIR SITUATION · EXERCISE</span></span><b data-i18n="menu.region">FINLAND / BALTIC REGION</b></div>
+          <div class="theater-grid-art" aria-hidden="true"><div class="radar-scope"><i class="grid-cross"></i><i class="grid-sweep"></i><i class="grid-bearing bearing-n">000</i><i class="grid-bearing bearing-e">090</i><i class="grid-bearing bearing-s">180</i><i class="grid-bearing bearing-w">270</i><b class="grid-contact contact-hostile" data-bearing="42" data-range=".62" data-i18n="radar.hostileCode">H</b><b class="grid-contact contact-friendly" data-bearing="220" data-range=".56" data-i18n="radar.friendlyCode">F</b><b class="grid-contact contact-unknown" data-bearing="127" data-range=".43">?</b><b class="grid-contact contact-hostile" data-bearing="305" data-range=".78" data-i18n="radar.hostileCode">H</b><b class="grid-contact contact-friendly" data-bearing="75" data-range=".34" data-i18n="radar.friendlyCode">F</b><b class="grid-contact contact-hostile" data-bearing="172" data-range=".27" data-i18n="radar.hostileCode">H</b><b class="grid-contact contact-friendly" data-bearing="285" data-range=".48" data-i18n="radar.friendlyCode">F</b><b class="grid-contact contact-unknown" data-bearing="12" data-range=".87">?</b><b class="grid-contact contact-hostile" data-bearing="248" data-range=".80" data-i18n="radar.hostileCode">H</b><b class="grid-contact contact-friendly" data-bearing="106" data-range=".69" data-i18n="radar.friendlyCode">F</b><b class="grid-contact contact-hostile" data-bearing="84" data-range=".54" data-i18n="radar.hostileCode">H</b><b class="grid-contact contact-friendly" data-bearing="195" data-range=".39" data-i18n="radar.friendlyCode">F</b><span class="radar-readout">ECHO 00/12 · PPI</span></div><span class="grid-coordinate coord-one" data-i18n="menu.nationalAirspace">OPERATING AREA · FINLAND</span><span class="grid-coordinate coord-two" data-i18n="menu.sector">SECTOR 04</span><span class="grid-label" data-i18n="menu.tacticalPicture">TACTICAL SITUATION DISPLAY</span></div>
+          <div class="theater-stats"><div><small data-i18n="menu.statMission">MISSION</small><strong id="theater-mission-name">INTERCEPT FLIGHT</strong></div><div><small data-i18n="menu.statArea">AREA</small><strong id="theater-area-name">PÄIJÄNNE</strong></div><div><small data-i18n="menu.statFlight">FRIENDLY FLIGHT</small><strong>F-35A <i>× 03</i></strong></div><div><small data-i18n="menu.statWeather">WEATHER</small><strong data-i18n="menu.weather">PARTLY CLOUDY</strong></div></div>
+          <div class="theater-caption"><span data-i18n="menu.airspaceStatus">EXERCISE STATUS</span><i></i><b data-i18n="menu.surveillanceActive">SIMULATED CONTACTS</b></div>
+        </aside>
+      </div>
+
+      <footer class="menu-footer"><span>ILMATILA <i>·</i> <span data-i18n="menu.footerTitle">FLIGHT SIMULATOR</span></span><span><span data-i18n="menu.footerRegion">FINNISH AIRSPACE</span> <i>—</i> <span data-i18n="menu.footerStyle">AIR COMBAT SIMULATION</span></span><span>V0.1.0-ALPHA.1</span></footer>
+    </main>
+
+    <dialog id="credits-dialog" class="credits-dialog" aria-labelledby="credits-title">
+      <div class="credits-shell">
+        <header class="credits-header"><div><small data-i18n="credits.kicker">ILMATILA / ASSETS</small><h2 id="credits-title" data-i18n="credits.title">Assets &amp; licenses</h2></div><button id="close-credits" type="button" data-i18n-aria-label="credits.close">×</button></header>
+        <div class="credits-content">
+          <section class="credit-entry"><span class="credit-index">01</span><div><small data-i18n="credits.aircraftLabel">AIRCRAFT 3D MODEL</small><h3>FlightGear F-35B</h3><p data-i18n="credits.aircraftDescription">The aircraft model is based on the FGMEMBERS/F-35B project. Original contributors: Petar Jedvaj, Detlef Faber, F-GTUX, Stuart Cassie and Gary Brown. The game uses an F-35B model to represent the F-35A; it is not an F-35A-specific model.</p><div class="credit-links"><a href="/assets/f35/ASSET-CREDITS.md" target="_blank" rel="noreferrer" data-i18n="credits.fullAttribution">Attribution and asset details ↗</a><a href="/licenses/GPL-3.0.txt" target="_blank" rel="noreferrer" data-i18n="credits.sourceLicense">GNU GPL 3.0-only license ↗</a><a href="https://github.com/FGMEMBERS/F-35B" target="_blank" rel="noreferrer" data-i18n="credits.sourceProject">Source project ↗</a></div></div><b class="license-tag">GPL-3.0-only</b></section>
+          <section class="credit-entry"><span class="credit-index">02</span><div><small data-i18n="credits.terrainLabel">TERRAIN AND ORTHOPHOTOS</small><h3 data-i18n="credits.terrainTitle">National Land Survey of Finland</h3><p data-i18n="credits.terrainDescription">© National Land Survey of Finland. The optional terrain packages use its open data: Elevation Model 2 m and Colour Orthophotos. Each package records its retrieval date in terrain.json; orthophoto capture years can vary by area. The data is downsampled, cropped, tiled, and recompressed, and water masks are derived from the imagery. CC BY 4.0.</p><div class="credit-links"><a href="https://www.maanmittauslaitos.fi/ortokuvien-ja-korkeusmallien-kyselypalvelu/tekninen-kuvaus" target="_blank" rel="noreferrer" data-i18n="credits.source">Data source ↗</a><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" data-i18n="credits.ccby">CC BY 4.0 license ↗</a></div></div><b class="license-tag">CC BY 4.0</b></section>
+          <section class="credit-entry"><span class="credit-index">03</span><div><small data-i18n="credits.rendererLabel">3D RENDERING</small><h3>Three.js</h3><p data-i18n="credits.rendererDescription">The game uses Three.js for 3D rendering, released under the MIT license.</p><div class="credit-links"><a href="/licenses/THREE-MIT.txt" target="_blank" rel="noreferrer" data-i18n="credits.readMit">Read the MIT license ↗</a><a href="https://github.com/mrdoob/three.js" target="_blank" rel="noreferrer" data-i18n="credits.threeProject">Three.js project ↗</a></div></div><b class="license-tag">MIT</b></section>
+          <section class="credit-entry"><span class="credit-index">04</span><div><small data-i18n="credits.fontLabel">INTERFACE TYPEFACES</small><h3>Barlow Condensed · Rajdhani</h3><p data-i18n="credits.fontDescription">The interface loads Barlow Condensed by The Barlow Project Authors and Rajdhani by Indian Type Foundry from Google Fonts. Both typefaces are licensed under SIL Open Font License 1.1.</p><div class="credit-links"><a href="https://github.com/google/fonts/tree/main/ofl/barlowcondensed" target="_blank" rel="noreferrer" data-i18n="credits.barlowSource">Barlow source ↗</a><a href="https://github.com/google/fonts/tree/main/ofl/rajdhani" target="_blank" rel="noreferrer" data-i18n="credits.rajdhaniSource">Rajdhani source ↗</a><a href="https://openfontlicense.org/" target="_blank" rel="noreferrer" data-i18n="credits.fontLicense">SIL Open Font License 1.1 ↗</a></div></div><b class="license-tag">OFL 1.1</b></section>
+          <div class="credits-note"><span>ⓘ</span><p data-i18n="credits.distributionNote">ILMATILA source code is licensed under GNU GPL version 3 only. Third-party assets and data retain their own licenses, listed here and in the full notices file.</p><a href="/licenses/GPL-3.0.txt" target="_blank" rel="noreferrer" data-i18n="credits.projectLicense">Project source license ↗</a><a href="/licenses/THIRD-PARTY-NOTICES.md" target="_blank" rel="noreferrer" data-i18n="credits.notices">Full third-party notices ↗</a></div>
+        </div>
+        <footer class="credits-footer"><span data-i18n="credits.footer">ILMATILA / ASSET AND LICENSE INFORMATION</span><button id="credits-back" type="button"><span data-i18n="credits.back">BACK TO MENU</span> <b>↗</b></button></footer>
+      </div>
+    </dialog>
+
+    <dialog id="pause-dialog" class="pause-dialog" aria-labelledby="pause-title" aria-describedby="pause-description">
+      <div class="pause-card">
+        <div class="pause-mark" aria-hidden="true"><i></i><b>Ⅱ</b></div>
+        <div class="pause-copy">
+          <small data-i18n="pause.kicker">MISSION STATUS</small>
+          <h2 id="pause-title" data-i18n="pause.title">FLIGHT PAUSED</h2>
+          <p id="pause-description" data-i18n="pause.description">The simulation is paused. Resume the sortie or return to mission selection.</p>
+          <span class="pause-hint"><kbd>ESC</kbd> <span data-i18n="pause.hint">RESUME FLIGHT</span></span>
+        </div>
+        <div class="pause-actions">
+          <button id="resume-flight" class="pause-resume" type="button"><span data-i18n="pause.resume">RESUME FLIGHT</span><b>↗</b></button>
+          <button id="quit-to-menu" class="pause-quit" type="button"><span data-i18n="pause.quit">RETURN TO MISSION SELECTION</span><b>⌂</b></button>
+        </div>
+      </div>
+    </dialog>
+
+    <main id="flight-hud" class="hud" data-i18n-aria-label="hud.aria" hidden>
+      <header class="topline"><span class="flag"><i></i><i></i></span><span data-i18n="hud.airForce">FINNISH AIR FORCE</span> <b>/</b> F-35A <span class="status"><i></i> <span data-i18n="hud.ready">MISSION ACTIVE</span></span></header>
+      <section class="readout speed"><small data-i18n="hud.speed">AIRSPEED</small><strong id="speed">420</strong><span>KT</span></section>
+      <section class="readout altitude"><small data-i18n="hud.altitude">ALTITUDE AGL</small><strong id="altitude">1 200</strong><span>FT</span></section>
+      <section class="readout heading"><small data-i18n="hud.heading">HEADING</small><strong id="heading">000</strong><span>°</span></section>
+      <section class="readout climb"><small data-i18n="hud.verticalSpeed">VERTICAL SPEED</small><strong id="vertical-speed">+0000</strong><span>FT/MIN</span></section>
+      <div class="heading-tape" data-i18n-aria-label="hud.headingTape"><div class="heading-ticks" id="heading-ticks"></div><i class="heading-caret"></i><small>HDG</small></div>
+      <div class="crosshair" data-i18n-aria-label="hud.targetSight"><i></i><b></b></div>
+      <div class="target-designator" id="target-designator" hidden><i></i><i></i><i></i><i></i><b id="target-code"></b><small id="target-state"></small></div>
+      <div class="threat-warning" id="threat-warning" hidden role="status"><i></i><b data-i18n="hud.missileInbound">HOSTILE MISSILE · C</b></div>
+      <section class="radar" data-i18n-aria-label="hud.radar"><div class="radar-screen" data-i18n-aria-label="hud.radarScreen"><i class="range-ring ring-inner"></i><i class="range-ring ring-middle"></i><i class="range-ring ring-outer"></i><i class="azimuth-line"></i><i class="ownship"></i><span class="radar-mode-indicator" id="radar-mode-indicator">AIR</span></div></section>
+      <section class="weapons"><div class="weapon-row"><i class="weapon-icon gun-icon"></i><div><small data-i18n="hud.gun">GAU-22/A · 25 mm</small><strong id="weapon">READY</strong></div></div><div class="weapon-row"><i class="weapon-icon missile-icon"></i><div><small data-i18n="hud.missile">GUIDED MISSILE</small><strong id="ammo">AIR SEARCH</strong></div><b class="ammo-count" id="missile-count">06</b><kbd>CTRL</kbd></div><div class="weapon-row countermeasure-row"><i class="weapon-icon countermeasure-icon"></i><div><small data-i18n="hud.countermeasures">FLARES / CHAFF</small><strong id="countermeasure-count">12</strong></div><kbd>C</kbd></div><div class="score-row"><span data-i18n="hud.score">MISSION SCORE</span><b id="score">00000</b></div></section>
+      <div class="reticle-label"><span data-i18n="hud.area">AREA</span> <b id="area-name">PÄIJÄNNE</b> <span>›</span></div>
+    </main>
+    <section id="death-screen" class="death-screen" hidden aria-live="assertive" aria-labelledby="death-title">
+      <div class="death-card">
+        <div class="death-kicker"><i></i> <span data-i18n="death.kicker">MISSION INTERRUPTED</span></div>
+        <h1 id="death-title" data-i18n="death.title">AIRCRAFT DESTROYED</h1>
+        <p id="death-reason">TERRAIN COLLISION</p>
+        <button id="restart" type="button"><span data-i18n="death.restart">RESTART MISSION</span> <span>↻</span></button>
+      </div>
+    </section>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

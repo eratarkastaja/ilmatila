@@ -1,0 +1,20 @@
+{
+  "areas": [
+    {
+      "id": "paijanne",
+      "label": "Päijänne"
+    },
+    {
+      "id": "vironlahti",
+      "label": "Virolahti"
+    },
+    {
+      "id": "ilomantsi",
+      "label": "Ilomantsi"
+    },
+    {
+      "id": "kuusamo",
+      "label": "Kuusamo"
+    }
+  ]
+}
