@@ -55,18 +55,13 @@ function disposeTransientMaterials(object){
 }
 export class CombatWorld {
   constructor(scene, player, terrain, fx, aircraftAsset = null, mission = {}, audio = null) {
-    this.scene=scene; this.player=player; this.enemies=[]; this.allies=[]; this.hostiles=[]; this.playerShots=[]; this.effects=[]; this.destroyed=false;
+    this.scene=scene; this.player=player; this.effects=[]; this.destroyed=false;
     this.fx=fx; this.audio=audio;
     const missionConfig={hostiles:4,wingmen:2,groundBattle:true,groundPairs:6,groundTrucks:12,...mission};
     this.input = new CombatInput();
     this.score=0;
     this.terrain=terrain; this.playerHeading=0; this.previousPlayerPosition=player.position.clone();
-    this.lastCollisionPosition=player.position.clone(); this.playerVelocity=new THREE.Vector3();
-    this.countermeasureSystem = new CountermeasureSystem({
-      scene, player, playerVelocity: this.playerVelocity, fx, audio,
-      playerShots: this.playerShots, hostileShots: this.hostiles, addTransientGlow,
-      onInventoryChange: () => this.updateHud(),
-    });
+    this.playerVelocity=new THREE.Vector3();
     this.airBattle = new AirBattle({
       scene, player, aircraftAsset, mission: missionConfig, terrain, audio, fx,
       playerVelocity: this.playerVelocity,
@@ -75,30 +70,32 @@ export class CombatWorld {
       addHostileProjectile: shot => this.projectileSystem.addHostileProjectile(shot),
       addPlayerProjectile: shot => this.projectileSystem.addPlayerProjectile(shot),
     });
-    this.enemies = this.airBattle.enemies;
-    this.allies = this.airBattle.allies;
     this.groundBattle = new GroundBattle({ scene, player, playerVelocity: this.playerVelocity, terrain, mission: missionConfig, audio, fx, addProjectile: shot => this.projectileSystem.addHostileProjectile(shot) });
-    this.friends = this.groundBattle.friends;
-    this.redUnits = this.groundBattle.redUnits;
-    this.colliders = this.groundBattle.colliders;
     const objectiveTotals={
       air:this.enemies.length,
       ground:this.redUnits.filter(unit=>unit.armed!==false).length,
     };
     this.collisionSystem = new CollisionSystem({
-      player, terrain, colliders: this.colliders, enemies: this.enemies, allies: this.allies,
-      redUnits: this.redUnits, lastCollisionPosition: this.lastCollisionPosition,
+      player, terrain, colliders: this.groundBattle.colliders, enemies: this.enemies, allies: this.allies,
+      redUnits: this.redUnits, lastCollisionPosition: player.position.clone(),
       onPlayerDestroyed: (reason, params) => this.destroyPlayer(reason, params),
     });
     this.projectileSystem = new ProjectileSystem({
-      scene, player, playerShots: this.playerShots, hostiles: this.hostiles,
-      decoys: this.countermeasureSystem.decoys, collision: this.collisionSystem, audio,
+      scene, player,
+      collision: this.collisionSystem, audio,
       onPlayerDestroyed: (reason, params) => this.destroyPlayer(reason, params),
       onJetDestroyed: (enemy, credited) => this.killJet(enemy, credited),
       onUnitDestroyed: unit => this.destroyUnit(unit),
       addSpark: position => this.addSpark(position),
       addExplosion: (position, intensity) => this.addExplosion(position, intensity),
     });
+    this.countermeasureSystem = new CountermeasureSystem({
+      scene, player, playerVelocity: this.playerVelocity, fx, audio,
+      playerShots: this.projectileSystem.playerShots, hostileShots: this.projectileSystem.hostiles,
+      addTransientGlow,
+      onInventoryChange: () => this.updateHud(),
+    });
+    this.projectileSystem.setDecoys(this.countermeasureSystem.decoys);
     this.radar = new CombatRadar(player, audio);
     this.weaponSystem = new WeaponSystem({
       player, scene, fx, audio, radar: this.radar, playerVelocity: this.playerVelocity,
@@ -146,6 +143,12 @@ export class CombatWorld {
     };
     document.addEventListener('ilmatila:languagechange', this.onLanguageChange);
   }
+  get enemies(){return this.airBattle?.enemies??[];}
+  get allies(){return this.airBattle?.allies??[];}
+  get friends(){return this.groundBattle?.friends??[];}
+  get redUnits(){return this.groundBattle?.redUnits??[];}
+  get playerShots(){return this.projectileSystem?.playerShots??[];}
+  get hostiles(){return this.projectileSystem?.hostiles??[];}
   getPlayerHeading(){
     const direction=forward.clone().applyQuaternion(this.player.quaternion);
     if(direction.x*direction.x+direction.z*direction.z>1e-4)this.playerHeading=Math.atan2(direction.x,direction.z);
@@ -178,7 +181,7 @@ export class CombatWorld {
     this.weaponSystem.update(dt,{gunFiring,missileRequested});
     this.airBattle.update(dt, {
       lockedTarget: this.radar.targetDomain === 'air' && this.radar.lockCueConfirmed ? this.radar.target : null,
-      incomingMissiles: this.playerShots.filter(shot => shot.homing && shot.targetDomain === 'air'),
+      incomingMissiles: this.projectileSystem.playerShots.filter(shot => shot.homing && shot.targetDomain === 'air'),
     });
     this.groundBattle.update(dt);
     this.countermeasureSystem.update(dt);
@@ -199,8 +202,7 @@ export class CombatWorld {
     this.weaponSystem.stopGun();
     this.audio?.playCollision();
     this.audio?.stopEngine();
-    for(const shot of this.playerShots)if(shot.homing)this.audio?.stopMissileFlight(shot.mesh.id);
-    for(const shot of this.hostiles)if(shot.missile)this.audio?.stopMissileFlight(shot.mesh.id);
+    this.projectileSystem.stopMissileAudio();
     this.deathReasonKey=reasonKey;this.deathReasonParams=params;
     this.deathReason&&(this.deathReason.textContent=t(reasonKey,params));
     if(this.deathScreen)this.deathScreen.hidden=false;
@@ -217,18 +219,13 @@ export class CombatWorld {
     document.removeEventListener('ilmatila:languagechange', this.onLanguageChange);
     this.restartButton?.removeEventListener('click', this.onRestart);
     this.missionSystem.dispose();
-    for(const shot of [...this.playerShots,...this.hostiles]){
-      if(shot.missile)this.audio?.stopMissileFlight(shot.mesh.id);
-      if(shot.mesh)this.scene.remove(shot.mesh);
-    }
+    this.projectileSystem.dispose();
     this.airBattle.dispose();
     this.groundBattle.dispose();
     for(const effect of this.effects){this.scene.remove(effect.mesh);disposeTransientMaterials(effect.mesh);}
     this.countermeasureSystem.dispose();
     this.radar.dispose();
     this.effects.length=0;
-    this.playerShots.length=0;
-    this.hostiles.length=0;
     const designator=document.querySelector('#target-designator');
     if(designator){designator.hidden=true;designator.classList.remove('ground-target','locked');}
     if(this.threatWarning)this.threatWarning.hidden=true;

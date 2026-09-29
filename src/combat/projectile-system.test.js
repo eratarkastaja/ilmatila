@@ -88,6 +88,22 @@ describe('ProjectileSystem', () => {
     expect(scene.children).not.toContain(projectile.mesh);
   });
 
+  it('disposes both projectile queues and stops their missile audio loops', () => {
+    const { system, scene, playerShots, hostiles, audio } = makeSystem();
+    const playerMissile = { homing: true, mesh: new THREE.Object3D() };
+    const hostileMissile = { missile: true, mesh: new THREE.Object3D() };
+    scene.add(playerMissile.mesh, hostileMissile.mesh);
+    playerShots.push(playerMissile);
+    hostiles.push(hostileMissile);
+
+    system.dispose();
+
+    expect(playerShots).toHaveLength(0);
+    expect(hostiles).toHaveLength(0);
+    expect(scene.children).toHaveLength(0);
+    expect(audio.stopMissileFlight).toHaveBeenCalledTimes(2);
+  });
+
   it('marks an approaching hostile missile as a threat and reports swept player impact', () => {
     const { system, player, scene, hostiles, hooks } = makeSystem();
     const missile = {

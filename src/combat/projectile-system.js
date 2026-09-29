@@ -53,6 +53,28 @@ export class ProjectileSystem {
     this.hostiles.push(projectile);
   }
 
+  setDecoys(decoys) {
+    this.decoys = decoys;
+  }
+
+  stopMissileAudio() {
+    for (const shot of this.playerShots) {
+      if (shot.homing) this.audio?.stopMissileFlight(shot.mesh.id);
+    }
+    for (const shot of this.hostiles) {
+      if (shot.missile) this.audio?.stopMissileFlight(shot.mesh.id);
+    }
+  }
+
+  dispose() {
+    this.stopMissileAudio();
+    for (const shot of [...this.playerShots, ...this.hostiles]) {
+      if (shot.mesh) this.scene.remove(shot.mesh);
+    }
+    this.playerShots.length = 0;
+    this.hostiles.length = 0;
+  }
+
   update(dt) {
     const { player, scene, audio, playerShots, hostiles, decoys } = this;
     for (let i = playerShots.length - 1; i >= 0; i--) {
