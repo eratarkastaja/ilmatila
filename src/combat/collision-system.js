@@ -1,0 +1,127 @@
+import * as THREE from 'three';
+import { pointSegmentDistanceSquared, traceFighterHit, traceVehicleHit } from './hit-testing.js';
+
+const origin = new THREE.Vector3();
+const stationaryVelocity = new THREE.Vector3();
+
+function closestSegmentFractionXZ(start, end) {
+  const dx = end.x - start.x;
+  const dz = end.z - start.z;
+  const lengthSquared = dx * dx + dz * dz;
+  if (lengthSquared < 1e-9) return 0;
+  return THREE.MathUtils.clamp(-(start.x * dx + start.z * dz) / lengthSquared, 0, 1);
+}
+
+/** Centralizes swept collision queries for aircraft and all projectile types. */
+export class CollisionSystem {
+  constructor({ player, terrain, colliders, enemies, allies, redUnits, lastCollisionPosition, onPlayerDestroyed }) {
+    this.player = player;
+    this.terrain = terrain;
+    this.colliders = colliders;
+    this.enemies = enemies;
+    this.allies = allies;
+    this.redUnits = redUnits;
+    this.lastCollisionPosition = lastCollisionPosition;
+    this.onPlayerDestroyed = onPlayerDestroyed;
+  }
+
+  checkPlayerCollision(dt = 0) {
+    const position = this.player.position;
+    const start = this.lastCollisionPosition.clone();
+    const travel = position.clone().sub(start);
+    const samples = Math.max(1, Math.ceil(travel.length() / 8));
+    this.lastCollisionPosition.copy(position);
+    for (let step = 0; step <= samples; step++) {
+      const fraction = step / samples;
+      const x = THREE.MathUtils.lerp(start.x, position.x, fraction);
+      const y = THREE.MathUtils.lerp(start.y, position.y, fraction);
+      const z = THREE.MathUtils.lerp(start.z, position.z, fraction);
+      if (y - 3.5 <= this.terrain.sampleHeight(x, z)) {
+        this.onPlayerDestroyed('combat.collisionTerrain');
+        return true;
+      }
+    }
+
+    const halfSize = this.terrain.worldSize / 2;
+    if (Math.abs(position.x) > halfSize - 10 || Math.abs(position.z) > halfSize - 10) {
+      this.onPlayerDestroyed('combat.collisionBoundary');
+      return true;
+    }
+
+    for (const collider of this.colliders) {
+      if (collider.mesh && !collider.mesh.parent) continue;
+      const centerY = collider.y + collider.height * .5;
+      const displacement = collider.velocity ?? stationaryVelocity;
+      const relativeStart = start.clone().addScaledVector(displacement, -dt).sub(new THREE.Vector3(collider.x, centerY, collider.z));
+      const relativeEnd = position.clone().sub(new THREE.Vector3(collider.x, centerY, collider.z));
+      const fraction = closestSegmentFractionXZ(relativeStart, relativeEnd);
+      const closestY = THREE.MathUtils.lerp(relativeStart.y, relativeEnd.y, fraction);
+      const closestX = THREE.MathUtils.lerp(relativeStart.x, relativeEnd.x, fraction);
+      const closestZ = THREE.MathUtils.lerp(relativeStart.z, relativeEnd.z, fraction);
+      if (closestX * closestX + closestZ * closestZ <= (collider.radius + 7.5) ** 2
+        && Math.abs(closestY) <= collider.height * .5 + 3.5) {
+        this.onPlayerDestroyed(collider.collisionKey, { vehicle: collider.vehicle });
+        return true;
+      }
+    }
+
+    for (const aircraft of this.enemies) {
+      if (this.sweptAircraftCollision(start, position, aircraft, dt)) {
+        this.onPlayerDestroyed('combat.collisionHostile');
+        return true;
+      }
+    }
+    for (const aircraft of this.allies) {
+      if (this.sweptAircraftCollision(start, position, aircraft, dt)) {
+        this.onPlayerDestroyed('combat.collisionFriendly');
+        return true;
+      }
+    }
+    return false;
+  }
+
+  sweptAircraftCollision(start, end, aircraft, dt) {
+    if (aircraft.dead) return false;
+    const displacement = aircraft.velocity ?? stationaryVelocity;
+    const relativeStart = start.clone().addScaledVector(displacement, -dt).sub(aircraft.mesh.position);
+    const relativeEnd = end.clone().sub(aircraft.mesh.position);
+    return pointSegmentDistanceSquared(origin, relativeStart, relativeEnd) < 14 ** 2;
+  }
+
+  sweptDistanceSquared(movingStart, movingEnd, targetStart, targetEnd) {
+    return pointSegmentDistanceSquared(
+      origin,
+      movingStart.clone().sub(targetStart),
+      movingEnd.clone().sub(targetEnd),
+    );
+  }
+
+  findProjectileImpact(start, end, dt, { ally = false, ballistic = false } = {}) {
+    let target = null;
+    let hitInfo = null;
+    for (const enemy of this.enemies) {
+      if (enemy.dead) continue;
+      // Trace against the target's current pose, compensating for its motion during this step.
+      const relativeStart = start.clone().addScaledVector(enemy.velocity ?? stationaryVelocity, dt);
+      const impact = traceFighterHit(relativeStart, end, enemy.mesh);
+      if (impact && (!hitInfo || impact.t < hitInfo.t)) {
+        target = enemy;
+        hitInfo = impact;
+      }
+    }
+    if (!ally) for (const unit of this.redUnits) {
+      if (unit.dead) continue;
+      const relativeStart = start.clone().addScaledVector(unit.velocity ?? stationaryVelocity, dt);
+      const impact = traceVehicleHit(relativeStart, end, unit.mesh, ballistic ? 1.5 : undefined);
+      if (impact && (!hitInfo || impact.t < hitInfo.t)) {
+        target = unit;
+        hitInfo = impact;
+      }
+    }
+    return target ? { target, hitInfo } : null;
+  }
+
+  groundHeight(x, z) {
+    return this.terrain.sampleHeight(x, z);
+  }
+}

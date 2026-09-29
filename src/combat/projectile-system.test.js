@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
+import { CollisionSystem } from './collision-system.js';
 import { ProjectileSystem } from './projectile-system.js';
 
 function makeSystem(overrides = {}) {
@@ -14,36 +15,45 @@ function makeSystem(overrides = {}) {
     addSpark: vi.fn(),
     addExplosion: vi.fn(),
   };
+  const enemies = [];
+  const redUnits = [];
   const audio = {
     stopMissileFlight: vi.fn(),
     updateMissileFlight: vi.fn(),
     playIncomingMissile: vi.fn(),
   };
+  const collision = new CollisionSystem({
+    player,
+    terrain: { sampleHeight: () => -1000 },
+    colliders: [],
+    enemies,
+    allies: [],
+    redUnits,
+    lastCollisionPosition: player.position.clone(),
+    onPlayerDestroyed: hooks.onPlayerDestroyed,
+  });
   const system = new ProjectileSystem({
     scene,
     player,
-    terrain: { sampleHeight: () => -1000 },
     playerShots,
     hostiles,
-    enemies: [],
-    redUnits: [],
     decoys: [],
+    collision,
     audio,
-    lastCollisionPosition: player.position.clone(),
     ...hooks,
     ...overrides,
   });
-  return { system, scene, player, playerShots, hostiles, hooks, audio };
+  return { system, scene, player, playerShots, hostiles, enemies, hooks, audio };
 }
 
 describe('ProjectileSystem', () => {
   it('moves player projectiles, resolves aircraft hits and removes spent rounds', () => {
-    const { system, scene, playerShots, hooks } = makeSystem();
+    const { system, scene, playerShots, enemies, hooks } = makeSystem();
     const aircraftMesh = new THREE.Object3D();
     aircraftMesh.userData.hitZones = [{ x: 0, y: 0, z: 0, rx: 1, ry: 1, rz: 1, damage: 1 }];
     scene.add(aircraftMesh);
     const enemy = { mesh: aircraftMesh, velocity: new THREE.Vector3(), dead: false, hp: 1 };
-    system.enemies.push(enemy);
+    enemies.push(enemy);
     const round = {
       mesh: new THREE.Object3D(),
       velocity: new THREE.Vector3(10, 0, 0),

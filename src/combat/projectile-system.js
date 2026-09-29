@@ -1,12 +1,10 @@
 import * as THREE from 'three';
 import { estimateInterceptTime } from './ballistics.js';
-import { pointSegmentDistanceSquared, traceFighterHit, traceVehicleHit } from './hit-testing.js';
 import { updateMissileMotor } from './projectiles.js';
 
 const forward = new THREE.Vector3(0, 0, 1);
 const stationaryVelocity = new THREE.Vector3();
 const localBulletAxis = new THREE.Vector3(0, 1, 0);
-const origin = new THREE.Vector3();
 const MISSILE_TURN_RATE = 2.45;
 
 function turnDirection(current, desired, maxAngle) {
@@ -25,32 +23,20 @@ function turnDirection(current, desired, maxAngle) {
   return direction.applyAxisAngle(axis.normalize(), maxAngle).normalize();
 }
 
-function sweptRelativeDistanceSquared(movingStart, movingEnd, targetStart, targetEnd) {
-  return pointSegmentDistanceSquared(
-    origin,
-    movingStart.clone().sub(targetStart),
-    movingEnd.clone().sub(targetEnd),
-  );
-}
-
 /** Owns projectile collections and per-frame movement, guidance and expiry. */
 export class ProjectileSystem {
   constructor({
-    scene, player, terrain, playerShots = [], hostiles = [], enemies = [], redUnits = [],
-    decoys = [], fx, audio, lastCollisionPosition, onPlayerDestroyed, onJetDestroyed,
+    scene, player, playerShots = [], hostiles = [], decoys = [], collision, audio,
+    onPlayerDestroyed, onJetDestroyed,
     onUnitDestroyed, addSpark, addExplosion,
   }) {
     this.scene = scene;
     this.player = player;
-    this.terrain = terrain;
     this.playerShots = playerShots;
     this.hostiles = hostiles;
-    this.enemies = enemies;
-    this.redUnits = redUnits;
     this.decoys = decoys;
-    this.fx = fx;
+    this.collision = collision;
     this.audio = audio;
-    this.lastCollisionPosition = lastCollisionPosition;
     this.onPlayerDestroyed = onPlayerDestroyed;
     this.onJetDestroyed = onJetDestroyed;
     this.onUnitDestroyed = onUnitDestroyed;
@@ -68,7 +54,7 @@ export class ProjectileSystem {
   }
 
   update(dt) {
-    const { player, scene, terrain, audio, playerShots, hostiles, enemies, redUnits, decoys } = this;
+    const { player, scene, audio, playerShots, hostiles, decoys } = this;
     for (let i = playerShots.length - 1; i >= 0; i--) {
       const shot = playerShots[i];
       shot.life -= dt;
@@ -113,43 +99,26 @@ export class ProjectileSystem {
       if (shot.ballistic) shot.velocity.y -= shot.gravity * dt;
       shot.mesh.position.addScaledVector(shot.velocity, dt);
       if (shot.tracer) shot.mesh.quaternion.setFromUnitVectors(localBulletAxis, shot.velocity.clone().normalize());
-      if (shot.decoyTarget && sweptRelativeDistanceSquared(previous, shot.mesh.position, shot.decoyTarget.previousPosition, shot.decoyTarget.position) < 12 ** 2) {
+      if (shot.decoyTarget && this.collision.sweptDistanceSquared(previous, shot.mesh.position, shot.decoyTarget.previousPosition, shot.decoyTarget.position) < 12 ** 2) {
         this.addSpark(shot.mesh.position);
         shot.life = 0;
       }
-      let hit = null;
-      let hitInfo = null;
-      if (shot.life > 0) for (const enemy of enemies) {
-        if (enemy.dead) continue;
-        // Hit tracing uses the target's current pose, so compensate for its movement over this frame.
-        const relativeStart = previous.clone().addScaledVector(enemy.velocity ?? stationaryVelocity, dt);
-        const impact = traceFighterHit(relativeStart, shot.mesh.position, enemy.mesh);
-        if (impact && (!hitInfo || impact.t < hitInfo.t)) {
-          hit = enemy;
-          hitInfo = impact;
-        }
-      }
-      if (shot.life > 0 && !shot.ally) for (const unit of redUnits) {
-        if (unit.dead) continue;
-        const relativeStart = previous.clone().addScaledVector(unit.velocity ?? stationaryVelocity, dt);
-        const impact = traceVehicleHit(relativeStart, shot.mesh.position, unit.mesh, shot.ballistic ? 1.5 : undefined);
-        if (impact && (!hitInfo || impact.t < hitInfo.t)) {
-          hit = unit;
-          hitInfo = impact;
-        }
-      }
-      if (hit) {
-        hit.hp -= shot.damage * (hitInfo.damage ?? 1);
-        if (hit.hp <= 0) {
-          if (hit.mesh.userData.faction === 'red') this.onUnitDestroyed(hit);
-          else this.onJetDestroyed(hit, !shot.ally);
+      const impact = shot.life > 0
+        ? this.collision.findProjectileImpact(previous, shot.mesh.position, dt, { ally: shot.ally, ballistic: shot.ballistic })
+        : null;
+      if (impact) {
+        const { target, hitInfo } = impact;
+        target.hp -= shot.damage * (hitInfo.damage ?? 1);
+        if (target.hp <= 0) {
+          if (target.mesh.userData.faction === 'red') this.onUnitDestroyed(target);
+          else this.onJetDestroyed(target, !shot.ally);
         } else {
           this.addSpark(previous.clone().lerp(shot.mesh.position, hitInfo.t));
         }
         shot.life = 0;
       }
       if (shot.life > 0 && shot.ballistic) {
-        const groundHeight = terrain.sampleHeight(shot.mesh.position.x, shot.mesh.position.z);
+        const groundHeight = this.collision.groundHeight(shot.mesh.position.x, shot.mesh.position.z);
         if (shot.mesh.position.y <= groundHeight) {
           shot.mesh.position.y = groundHeight;
           if (shot.tracer) this.addSpark(shot.mesh.position);
@@ -201,17 +170,17 @@ export class ProjectileSystem {
         }
         audio?.updateMissileFlight(shot.mesh.id, distanceToPlayer, dt);
         shot.mesh.position.addScaledVector(shot.velocity, dt);
-        if (shot.decoyTarget && sweptRelativeDistanceSquared(previous, shot.mesh.position, shot.decoyTarget.previousPosition, shot.decoyTarget.position) < 12 ** 2) {
+        if (shot.decoyTarget && this.collision.sweptDistanceSquared(previous, shot.mesh.position, shot.decoyTarget.previousPosition, shot.decoyTarget.position) < 12 ** 2) {
           this.addSpark(shot.mesh.position);
           shot.life = 0;
-        } else if (!shot.decoyTarget && sweptRelativeDistanceSquared(previous, shot.mesh.position, this.lastCollisionPosition, player.position) < 13 ** 2) {
+        } else if (!shot.decoyTarget && this.collision.sweptDistanceSquared(previous, shot.mesh.position, this.collision.lastCollisionPosition, player.position) < 13 ** 2) {
           this.onPlayerDestroyed('combat.hostileMissile');
           this.addExplosion(shot.mesh.position, .48);
           shot.life = 0;
         }
       } else if (shot.flak) {
         shot.mesh.position.addScaledVector(shot.velocity, dt);
-        const distanceSquared = sweptRelativeDistanceSquared(previous, shot.mesh.position, this.lastCollisionPosition, player.position);
+        const distanceSquared = this.collision.sweptDistanceSquared(previous, shot.mesh.position, this.collision.lastCollisionPosition, player.position);
         if (distanceSquared < 9 ** 2) {
           this.onPlayerDestroyed('combat.hostileFire');
           this.addExplosion(shot.mesh.position, .34);
@@ -223,7 +192,7 @@ export class ProjectileSystem {
         }
       } else {
         shot.mesh.position.addScaledVector(shot.velocity, dt);
-        if (shot.ground && shot.target && !shot.target.dead && sweptRelativeDistanceSquared(
+        if (shot.ground && shot.target && !shot.target.dead && this.collision.sweptDistanceSquared(
           previous,
           shot.mesh.position,
           shot.target.mesh.position.clone().addScaledVector(shot.target.velocity ?? stationaryVelocity, -dt),
@@ -234,7 +203,7 @@ export class ProjectileSystem {
           this.addExplosion(shot.mesh.position, .72);
           shot.life = 0;
         }
-        if (!shot.ground && sweptRelativeDistanceSquared(previous, shot.mesh.position, this.lastCollisionPosition, player.position) < 9 ** 2) {
+        if (!shot.ground && this.collision.sweptDistanceSquared(previous, shot.mesh.position, this.collision.lastCollisionPosition, player.position) < 9 ** 2) {
           this.onPlayerDestroyed('combat.hostileFire');
           shot.life = 0;
         }

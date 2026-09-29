@@ -3,10 +3,10 @@ import { AirBattle } from './combat/air-battle.js';
 import { GroundBattle } from './combat/ground-battle.js';
 import { CombatInput } from './combat/input.js';
 import { CombatRadar } from './combat/radar.js';
-import { pointSegmentDistanceSquared } from './combat/hit-testing.js';
 import { advanceMissionObjective, evaluateMissionObjective, MISSION_OUTCOME } from './combat/mission-objective.js';
 import { MISSILE_PROFILES } from './combat/projectiles.js';
 import { ProjectileSystem } from './combat/projectile-system.js';
+import { CollisionSystem } from './combat/collision-system.js';
 import { WeaponSystem } from './combat/weapon-system.js';
 import { formatNumber, t } from './i18n.js';
 
@@ -35,7 +35,6 @@ const chaffParticleColor=new THREE.Color('#c9d3ce');
 const forward=new THREE.Vector3(0,0,1);
 const stationaryVelocity=new THREE.Vector3();
 const localForward=new THREE.Vector3(0,0,1),localRight=new THREE.Vector3(1,0,0),localUp=new THREE.Vector3(0,1,0);
-const collisionOrigin=new THREE.Vector3();
 
 function createGlowTexture(){
   const canvas=document.createElement('canvas');canvas.width=128;canvas.height=128;
@@ -49,13 +48,6 @@ function createGlowTexture(){
   context.fillStyle=gradient;context.fillRect(0,0,128,128);
   const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
   return texture;
-}
-
-function closestSegmentFractionXZ(start,end){
-  const dx=end.x-start.x,dz=end.z-start.z;
-  const lengthSq=dx*dx+dz*dz;
-  if(lengthSq<1e-9)return 0;
-  return THREE.MathUtils.clamp(-(start.x*dx+start.z*dz)/lengthSq,0,1);
 }
 
 function addTransientGlow(parent,color,size,opacity=1,blending=THREE.AdditiveBlending){
@@ -101,10 +93,14 @@ export class CombatWorld {
       air:this.enemies.length,
       ground:this.redUnits.filter(unit=>unit.armed!==false).length,
     };
+    this.collisionSystem = new CollisionSystem({
+      player, terrain, colliders: this.colliders, enemies: this.enemies, allies: this.allies,
+      redUnits: this.redUnits, lastCollisionPosition: this.lastCollisionPosition,
+      onPlayerDestroyed: (reason, params) => this.destroyPlayer(reason, params),
+    });
     this.projectileSystem = new ProjectileSystem({
-      scene, player, terrain, playerShots: this.playerShots, hostiles: this.hostiles,
-      enemies: this.enemies, redUnits: this.redUnits, decoys: this.decoys, fx, audio,
-      lastCollisionPosition: this.lastCollisionPosition,
+      scene, player, playerShots: this.playerShots, hostiles: this.hostiles,
+      decoys: this.decoys, collision: this.collisionSystem, audio,
       onPlayerDestroyed: (reason, params) => this.destroyPlayer(reason, params),
       onJetDestroyed: (enemy, credited) => this.killJet(enemy, credited),
       onUnitDestroyed: unit => this.destroyUnit(unit),
@@ -185,48 +181,7 @@ export class CombatWorld {
   }
   checkPlayerCollision(dt=this.frameDelta??0){
     if(this.destroyed)return true;
-    const p=this.player.position;
-    const start=this.lastCollisionPosition.clone();
-    const travel=p.clone().sub(start);
-    const samples=Math.max(1,Math.ceil(travel.length()/8));
-    this.lastCollisionPosition.copy(p);
-    for(let step=0;step<=samples;step++){
-      const fraction=step/samples;
-      const x=THREE.MathUtils.lerp(start.x,p.x,fraction);
-      const y=THREE.MathUtils.lerp(start.y,p.y,fraction);
-      const z=THREE.MathUtils.lerp(start.z,p.z,fraction);
-      if(y-3.5<=this.terrain.sampleHeight(x,z)){
-        this.destroyPlayer('combat.collisionTerrain');
-        return true;
-      }
-    }
-    const halfSize=this.terrain.worldSize/2;
-    if(Math.abs(p.x)>halfSize-10||Math.abs(p.z)>halfSize-10){this.destroyPlayer('combat.collisionBoundary');return true;}
-    for(const collider of this.colliders){
-      if(collider.mesh&&!collider.mesh.parent)continue;
-      const centerY=collider.y+collider.height*.5;
-      const displacement=collider.velocity??stationaryVelocity;
-      const relativeStart=start.clone().addScaledVector(displacement,-dt).sub(new THREE.Vector3(collider.x,centerY,collider.z));
-      const relativeEnd=p.clone().sub(new THREE.Vector3(collider.x,centerY,collider.z));
-      const fraction=closestSegmentFractionXZ(relativeStart,relativeEnd);
-      const closestY=THREE.MathUtils.lerp(relativeStart.y,relativeEnd.y,fraction);
-      const closestX=THREE.MathUtils.lerp(relativeStart.x,relativeEnd.x,fraction);
-      const closestZ=THREE.MathUtils.lerp(relativeStart.z,relativeEnd.z,fraction);
-      if(closestX*closestX+closestZ*closestZ<=(collider.radius+7.5)**2&&Math.abs(closestY)<=collider.height*.5+3.5){
-        this.destroyPlayer(collider.collisionKey,{vehicle:collider.vehicle});
-        return true;
-      }
-    }
-    for(const unit of this.enemies){if(this.sweptAircraftCollision(start,p,unit,dt)){this.destroyPlayer('combat.collisionHostile');return true;}}
-    for(const unit of this.allies){if(this.sweptAircraftCollision(start,p,unit,dt)){this.destroyPlayer('combat.collisionFriendly');return true;}}
-    return false;
-  }
-  sweptAircraftCollision(start,end,unit,dt){
-    if(unit.dead)return false;
-    const displacement=unit.velocity??stationaryVelocity;
-    const relativeStart=start.clone().addScaledVector(displacement,-dt).sub(unit.mesh.position);
-    const relativeEnd=end.clone().sub(unit.mesh.position);
-    return pointSegmentDistanceSquared(collisionOrigin,relativeStart,relativeEnd)<14**2;
+    return this.collisionSystem.checkPlayerCollision(dt);
   }
   destroyPlayer(reasonKey,params={}){
     if(this.destroyed)return;
