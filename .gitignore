@@ -6,6 +6,9 @@ dist/
 # Generated Maanmittauslaitos terrain packages (downloaded locally, not source files).
 /public/terrain/areas/
 
+# Generated terrain release archives and checksums.
+/release-assets/
+
 # Local editor and operating-system files.
 .DS_Store
 .idea/

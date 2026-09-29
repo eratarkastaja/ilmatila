@@ -6,9 +6,9 @@ The ILMATILA project source is licensed under GNU GPL version 3 only. Components
 
 The bundled GLB is derived from the FlightGear F-35B model by FGMEMBERS. The original AC3D model and texture, the full GPL-3.0 license, and contributor credits are in [`public/assets/f35/source/`](public/assets/f35/source/). The conversion is described in [`public/assets/f35/ASSET-CREDITS.md`](public/assets/f35/ASSET-CREDITS.md) and implemented by `scripts/convert-flightgear-f35.py`.
 
-## Mapping data (optional download)
+## Mapping data
 
-The optional terrain packages use National Land Survey of Finland open data: Elevation Model 2 m and Colour Orthophotos, fetched from its WCS service. The downloader records the retrieval date in each area's `terrain.json`; orthophoto acquisition years can vary by location. The game derives a lower-resolution elevation grid, crops and resamples orthophotos into tiles, and derives water masks from the imagery. The source data is licensed under [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/). The in-game attribution panel and `tools/terrain/README.md` provide the source, modification details, and download-date convention.
+The public Pages deployment includes the four generated area packages from the [terrain data release](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.0.0). They use National Land Survey of Finland open data: Elevation Model 2 m and Colour Orthophotos, fetched from its WCS service. Each archive includes `terrain.json` and `ATTRIBUTION.md` with provider, dataset, retrieval date, source, license, and modification details. The game derives a lower-resolution elevation grid, crops and resamples orthophotos into tiles, and derives water masks from the imagery. The source data is licensed under [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/). See the [terrain-tool guide](tools/terrain/README.md) for details.
 
 ## Libraries and fonts
 

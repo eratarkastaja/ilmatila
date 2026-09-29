@@ -19,7 +19,7 @@ Open the local URL printed by Vite. Create a production build with `npm run buil
 
 After GitHub Pages is enabled with **Settings → Pages → Build and deployment → Source → GitHub Actions**, the site is built and deployed automatically when changes are pushed to `master`. The workflow can also be started manually from the repository's Actions tab. The project URL is <https://eratarkastaja.github.io/ilmatila/>.
 
-Generated MML terrain packages are intentionally excluded from Git. A clean GitHub Actions build therefore uses the preview terrain until terrain packages are hosted and added to the deployment separately. The game and its aircraft still load without an API key.
+Generated MML terrain packages stay out of Git history. The Pages workflow downloads the four versioned area archives from the [terrain data release](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.0.0), verifies their SHA-256 checksums, and includes them in the deployed site. The in-game terrain viewer needs no API key; the key is only required to fetch updated source data.
 
 ## Flight controls
 
@@ -39,7 +39,7 @@ Generated MML terrain packages are intentionally excluded from Git. A clean GitH
 
 ## Terrain data
 
-The repository contains the small terrain-area index, not the generated map packages. Without local packages the game uses its preview terrain. To fetch the four optional Finland areas (Päijänne, Virolahti, Ilomantsi, and Kuusamo), follow [the terrain-tool guide](tools/terrain/README.md). The downloads require an MML API key, stay out of Git by default, and are not needed to run the app.
+The repository contains the terrain-area index and downloader, while generated map packages are published as [versioned terrain archives](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.0.0). The Pages deployment downloads all four areas (Päijänne, Virolahti, Ilomantsi, and Kuusamo) and includes them in the site. Local source-data updates require an MML API key; see [the terrain-tool guide](tools/terrain/README.md). The game itself needs no API key.
 
 ## Aircraft and project structure
 

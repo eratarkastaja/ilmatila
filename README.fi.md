@@ -19,7 +19,7 @@ Avaa Viten tulostama paikallinen osoite. Tuotantoversion voi muodostaa komennoll
 
 Kun GitHub Pages on ensin otettu käyttöön valinnalla **Settings → Pages → Build and deployment → Source → GitHub Actions**, sivusto rakentuu ja julkaistaan automaattisesti `master`-haaran muutoksista. Julkaisun voi käynnistää myös käsin repositorion Actions-välilehdeltä. Pelin osoite on <https://eratarkastaja.github.io/ilmatila/>.
 
-Luodut MML:n maastopaketit on jätetty tarkoituksella Gitin ulkopuolelle. Siksi puhdas GitHub Actions -julkaisu käyttää esikatselumaastoa, kunnes maastopaketit julkaistaan erikseen ja liitetään käyttöönottoon. Peli ja lentokone toimivat ilman API-avainta.
+MML:n maastopaketit pidetään Git-historian ulkopuolella. Pages-työnkulku lataa neljä versioitua aluetta [maastoaineiston julkaisusta](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.0.0), tarkistaa SHA-256-tarkisteet ja sisällyttää aineistot sivustoon. Peli ei tarvitse API-avainta; avainta käytetään vain uusien lähdeaineistojen lataamiseen.
 
 ## Ohjaimet
 
@@ -39,7 +39,7 @@ Luodut MML:n maastopaketit on jätetty tarkoituksella Gitin ulkopuolelle. Siksi 
 
 ## Maastoaineisto
 
-Repositoriossa on pieni toiminta-alueiden luettelo, ei ladattuja maastopaketteja. Ilman paikallista aineistoa peli käyttää esikatselumaastoa. Voit ladata neljä Suomen toiminta-aluetta (Päijänne, Virolahti, Ilomantsi ja Kuusamo) [maastotyökalun ohjeella](tools/terrain/README.md). Lataus vaatii MML:n API-avaimen. Aineistot jäävät paikallisiksi eikä niitä lisätä Gitiin; peli toimii ilman niitä.
+Repositoriossa on toiminta-alueiden luettelo ja aineiston lataustyökalu. Valmiit maastopaketit julkaistaan [versioituina arkistoina](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.0.0). Pages-julkaisu lataa kaikki neljä aluetta (Päijänne, Virolahti, Ilomantsi ja Kuusamo) ja sisällyttää ne sivustoon. Lähdeaineiston päivittäminen vaatii MML:n API-avaimen; katso [maastotyökalun ohje](tools/terrain/README.md). Peli ei tarvitse avainta.
 
 ## Lentokone ja koodin rakenne
 
