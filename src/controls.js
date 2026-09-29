@@ -27,7 +27,7 @@ export class FlightControls {
     addEventListener('keydown', e => {
       if (!this.enabled) return;
       this.keys.add(e.code);
-      if (['Space','ControlLeft','ControlRight','KeyC','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+      if (['Space','KeyM','KeyC','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
     });
     addEventListener('keyup', e => this.keys.delete(e.code));
     addEventListener('blur', () => this.keys.clear());

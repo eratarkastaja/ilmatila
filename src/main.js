@@ -30,7 +30,9 @@ const audio = new GameAudio();
 initializeLanguagePicker();
 const missionCards = [...document.querySelectorAll('[data-mission]')];
 const urlParams = new URLSearchParams(location.search);
+const areaAliases = new Map([['vironlahti', 'virolahti']]);
 let selectedMissionId = MISSIONS[urlParams.get('mission')] ? urlParams.get('mission') : 'intercept';
+let menuRadar = null;
 const theaterAreas = TERRAIN_AREAS;
 if (!menuTheater.options.length) {
   for (const area of theaterAreas) {
@@ -40,7 +42,13 @@ if (!menuTheater.options.length) {
     menuTheater.append(option);
   }
 }
-const preferredArea = urlParams.get('area');
+const rawPreferredArea = urlParams.get('area');
+const preferredArea = areaAliases.get(rawPreferredArea) ?? rawPreferredArea;
+if (rawPreferredArea && preferredArea !== rawPreferredArea) {
+  const canonicalUrl = new URL(location.href);
+  canonicalUrl.searchParams.set('area', preferredArea);
+  history.replaceState(null, '', `${canonicalUrl.pathname}${canonicalUrl.search}${canonicalUrl.hash}`);
+}
 const initialAreaId = theaterAreas.some(area => area.id === preferredArea)
   ? preferredArea
   : theaterAreas.find(area => area.id === 'paijanne')?.id ?? theaterAreas[0].id;
@@ -147,6 +155,7 @@ function ensureTerrainLoaded(areaId, onProgress, signal) {
 function selectMission(id) {
   if (!MISSIONS[id]) return;
   selectedMissionId = id;
+  menuRadar?.setMission(id);
   for (const card of missionCards) {
     const selected = card.dataset.mission === id;
     card.classList.toggle('selected', selected);
@@ -358,7 +367,7 @@ launchButton.addEventListener('click', async () => {
         updateProgress();
       }, aircraftLoadController.signal),
       25000,
-      'F-35 model load timed out',
+      'Aircraft model load timed out',
       () => aircraftLoadController.abort(),
     );
     const [terrainResult, asset] = await Promise.all([terrainPromise, aircraftPromise]);
@@ -426,15 +435,18 @@ const gunReticle = document.querySelector('.crosshair');
 let previousAltitude = player.position.y;
 let needsMenuRender = true;
 const assets = new AssetRepository({
-  onAircraftLoaded: asset => {
-    const aircraftVisual = createFighter({ aircraftAsset: asset });
+  onAircraftLoaded: aircraftAssets => {
+    const aircraftVisual = createFighter({ aircraftAsset: aircraftAssets.player });
     for (const child of [...aircraftVisual.children]) player.add(child);
     Object.assign(player.userData, aircraftVisual.userData);
-    aircraftAsset = asset;
+    aircraftAsset = aircraftAssets;
     needsMenuRender = true;
   },
 });
-const menuRadar = new MenuRadar({ reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches });
+menuRadar = new MenuRadar({
+  reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+  missionId: selectedMissionId,
+});
 
 function animate() {
   requestAnimationFrame(animate);
@@ -465,15 +477,16 @@ function animate() {
     speedEl.textContent = Math.round(controls.speed * 1.943).toString();
     altitudeEl.textContent = Math.round(altitude * 3.28).toLocaleString(getLanguage() === 'fi' ? 'fi-FI' : 'en-US');
     headingEl.textContent = String(Math.round(THREE.MathUtils.euclideanModulo(THREE.MathUtils.radToDeg(controls.heading), 360))).padStart(3, '0');
-    tacticalHud.update(controls, player, camera, combat, verticalSpeed);
+    tacticalHud.update(controls, player, camera, combat, verticalSpeed, dt);
     if (gunReticle) {
       const bankCue = THREE.MathUtils.clamp(Math.sin(controls.roll) * innerHeight * 0.02, -24, 24);
       const pitchCue = THREE.MathUtils.clamp(controls.pitch * innerHeight * 0.012, -18, 18);
       gunReticle.style.setProperty('--aim-shift-x', `${bankCue}px`);
       gunReticle.style.setProperty('--aim-shift-y', `${pitchCue}px`);
     }
-    clouds.position.x = player.position.x;
-    clouds.position.z = player.position.z;
+    // Let the cloud field drift across the camera slowly with the wind instead of locking it in place.
+    clouds.position.x = player.position.x * 0.98 + weather.wind.x * clock.elapsedTime;
+    clouds.position.z = player.position.z * 0.98 + weather.wind.z * clock.elapsedTime;
   }
   if (gameStarted || needsMenuRender) {
     sunEffects.update(camera);
@@ -492,5 +505,5 @@ addEventListener('contextmenu', e => e.preventDefault());
 animate();
 void loadTerrainForMenu(initialAreaId);
 void assets.ensureAircraftLoaded().catch((error) => {
-  console.error('F-35 asset failed to load; no placeholder aircraft will be shown.', error);
+  console.error('Combat aircraft assets failed to load; no placeholder aircraft will be shown.', error);
 });

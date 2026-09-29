@@ -9,7 +9,7 @@ let terrainIndexPromise;
 
 export const TERRAIN_AREAS = [
   { id: 'paijanne', label: 'Päijänne' },
-  { id: 'vironlahti', label: 'Virolahti' },
+  { id: 'virolahti', dataId: 'vironlahti', label: 'Virolahti' },
   { id: 'ilomantsi', label: 'Ilomantsi' },
   { id: 'kuusamo', label: 'Kuusamo' },
 ];
@@ -30,7 +30,9 @@ export async function createTerrain({ areaId, fallback = true, onProgress } = {}
     report(0.01, { key: 'terrain.fetchingArea' });
     const areas = await loadTerrainAreas();
     const requested = areaId || new URLSearchParams(location.search).get('area');
-    const selected=areas.find(area=>area.id===requested)||areas.find(area=>area.id==='paijanne')||areas[0];
+    const areaConfig = TERRAIN_AREAS.find(area => area.id === requested || area.dataId === requested);
+    const dataId = areaConfig?.dataId ?? areaConfig?.id ?? requested;
+    const selected = areas.find(area => area.id === dataId) || areas.find(area => area.id === 'paijanne') || areas[0];
     if(!selected)throw new Error('no terrain areas are available');
     const base=`${TERRAIN_PATH}/areas/${selected.id}`;
     const metaResponse = await fetch(`${base}/terrain.json`);
@@ -67,7 +69,7 @@ export async function createTerrain({ areaId, fallback = true, onProgress } = {}
     mesh.position.y = -250;
     mesh.receiveShadow = true;
     const terrain = {
-      id:selected.id, label:selected.label, mesh, real: true, metadata, worldSize:areaMeters,
+      id:areaConfig?.id ?? selected.id, label:areaConfig?.label ?? selected.label, mesh, real: true, metadata, worldSize:areaMeters,
       sampleHeight: (x, z) => sampleHeight(values, metadata.width, metadata.height, metadata.referenceHeight, areaMeters, x, z),
       isWater: (x, z) => sampleWater(water, orthoGrid, tilePixels, orthoAreaMeters, x, z),
     };

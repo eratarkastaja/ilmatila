@@ -1,8 +1,13 @@
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const AUDIO_FILES = {
+  cannonLoop: 'cannon-loop.ogg',
+  missileLaunch: 'missile-launch.ogg',
+  explosion: 'explosion.ogg',
+  jetSurge: 'jet-takeoff.ogg',
+};
 
-// All sounds are synthesized locally, so the game has no external audio downloads
-// or additional asset licensing requirements. AudioContext is created on the first
-// user gesture to satisfy browser autoplay policies.
+// AudioContext and bundled sound assets are initialized on the first user gesture
+// to satisfy browser autoplay policies. Procedural effects remain as fallbacks.
 export class GameAudio {
   constructor() {
     this.context = null;
@@ -11,6 +16,8 @@ export class GameAudio {
     this.effects = null;
     this.ui = null;
     this.noiseBuffer = null;
+    this.sampleBuffers = Object.create(null);
+    this.sampleLoadPromise = null;
     this.engine = null;
     this.gunLoop = null;
     this.missileLoops = new Map();
@@ -98,6 +105,39 @@ export class GameAudio {
     this.noiseBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 2), ctx.sampleRate);
     const noise = this.noiseBuffer.getChannelData(0);
     for (let i = 0; i < noise.length; i++) noise[i] = Math.random() * 2 - 1;
+    this.loadAudioAssets(ctx);
+  }
+
+  loadAudioAssets(ctx) {
+    if (this.sampleLoadPromise) return this.sampleLoadPromise;
+    const base = `${import.meta.env.BASE_URL}assets/audio/`;
+    this.sampleLoadPromise = Promise.all(Object.entries(AUDIO_FILES).map(async ([name, file]) => {
+      try {
+        const response = await fetch(`${base}${file}`);
+        if (!response.ok) return;
+        const buffer = await ctx.decodeAudioData(await response.arrayBuffer());
+        if (ctx === this.context) this.sampleBuffers[name] = buffer;
+      } catch {
+        // Preserve the synthesized fallback when an optional sample cannot load.
+      }
+    }));
+    return this.sampleLoadPromise;
+  }
+
+  playSample(name, { volume = 1, playbackRate = 1, bus = this.effects, loop = false } = {}) {
+    const ctx = this.context ?? this.unlock();
+    const buffer = this.sampleBuffers[name];
+    if (!ctx || !buffer || !bus) return null;
+    const source = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    source.buffer = buffer;
+    source.loop = loop;
+    source.playbackRate.value = playbackRate;
+    gain.gain.value = volume;
+    source.connect(gain);
+    gain.connect(bus);
+    source.start();
+    return { source, gain };
   }
 
   getContext() {
@@ -186,7 +226,7 @@ export class GameAudio {
     const engineBus = ctx.createGain();
     const afterburnerBus = ctx.createGain();
     engineBus.gain.setValueAtTime(0.0001, ctx.currentTime);
-    engineBus.gain.linearRampToValueAtTime(0.38, ctx.currentTime + 1.1);
+    engineBus.gain.linearRampToValueAtTime(0.4, ctx.currentTime + 1.1);
     afterburnerBus.gain.value = 0.0001;
     engineBus.connect(this.master);
     afterburnerBus.connect(this.master);
@@ -224,15 +264,20 @@ export class GameAudio {
       return { source, filter, gain };
     };
 
-    const core = makeOscillator('sawtooth', 68, 'lowpass', 210, 0.095, engineBus);
-    const harmonic = makeOscillator('triangle', 122, 'lowpass', 390, 0.065, engineBus);
-    const turbine = makeOscillator('sine', 330, 'bandpass', 720, 0.028, engineBus);
-    const airflow = makeNoiseLayer('lowpass', 560, 0.028, engineBus);
-    const afterLow = makeOscillator('sawtooth', 57, 'lowpass', 185, 0.13, afterburnerBus);
-    const afterMid = makeOscillator('triangle', 104, 'lowpass', 330, 0.085, afterburnerBus);
-    const afterRoar = makeNoiseLayer('lowpass', 840, 0.065, afterburnerBus);
-    const afterHiss = makeNoiseLayer('bandpass', 1500, 0.032, afterburnerBus, 0.45);
-    this.engine = { engineBus, afterburnerBus, core, harmonic, turbine, airflow, afterLow, afterMid, afterRoar, afterHiss, elapsed: 0, stopping: false };
+    // Push the idle sound into a low, irregular turbine rumble and keep the
+    // narrow high whine subdued; that reads as engine mass instead of a vacuum.
+    const core = makeOscillator('sawtooth', 54, 'lowpass', 165, 0.11, engineBus);
+    const harmonic = makeOscillator('triangle', 96, 'lowpass', 285, 0.052, engineBus);
+    const rumble = makeOscillator('sawtooth', 39, 'lowpass', 135, 0.095, engineBus);
+    const combustion = makeNoiseLayer('lowpass', 185, 0.052, engineBus, 0.5);
+    const turbine = makeOscillator('sine', 215, 'bandpass', 430, 0.012, engineBus);
+    const airflow = makeNoiseLayer('lowpass', 390, 0.018, engineBus);
+    const afterLow = makeOscillator('sawtooth', 48, 'lowpass', 150, 0.15, afterburnerBus);
+    const afterMid = makeOscillator('triangle', 91, 'lowpass', 265, 0.095, afterburnerBus);
+    const afterThrob = makeOscillator('sawtooth', 36, 'lowpass', 125, 0.13, afterburnerBus);
+    const afterRoar = makeNoiseLayer('lowpass', 740, 0.075, afterburnerBus);
+    const afterHiss = makeNoiseLayer('bandpass', 1200, 0.018, afterburnerBus, 0.45);
+    this.engine = { engineBus, afterburnerBus, core, harmonic, rumble, combustion, turbine, airflow, afterLow, afterMid, afterThrob, afterRoar, afterHiss, elapsed: 0, stopping: false, boosting: false };
   }
 
   updateEngine(speed, boosting, dt) {
@@ -244,16 +289,23 @@ export class GameAudio {
     engine.elapsed = 0;
     const now = ctx.currentTime;
     const speedRatio = clamp((speed - 180) / 250, 0, 1);
-    engine.core.oscillator.frequency.setTargetAtTime(58 + speedRatio * 27, now, 0.18);
-    engine.harmonic.oscillator.frequency.setTargetAtTime(112 + speedRatio * 48, now, 0.2);
-    engine.turbine.oscillator.frequency.setTargetAtTime(285 + speedRatio * 195, now, 0.22);
-    engine.airflow.filter.frequency.setTargetAtTime(420 + speedRatio * 360, now, 0.25);
-    engine.engineBus.gain.setTargetAtTime(0.33 + speedRatio * 0.12, now, 0.28);
-    engine.afterburnerBus.gain.setTargetAtTime(boosting ? 0.36 : 0.0001, now, boosting ? 0.2 : 0.38);
-    engine.afterLow.oscillator.frequency.setTargetAtTime(boosting ? 72 + speedRatio * 18 : 57, now, 0.18);
-    engine.afterMid.oscillator.frequency.setTargetAtTime(boosting ? 128 + speedRatio * 24 : 104, now, 0.2);
-    engine.afterRoar.filter.frequency.setTargetAtTime(boosting ? 1050 : 840, now, 0.24);
-    engine.afterHiss.filter.frequency.setTargetAtTime(boosting ? 1950 : 1500, now, 0.25);
+    if (boosting && !engine.boosting) {
+      this.playSample('jetSurge', { volume: 0.15, playbackRate: 1.04 });
+    }
+    engine.boosting = boosting;
+    engine.core.oscillator.frequency.setTargetAtTime(49 + speedRatio * 26, now, 0.18);
+    engine.harmonic.oscillator.frequency.setTargetAtTime(88 + speedRatio * 40, now, 0.2);
+    engine.rumble.oscillator.frequency.setTargetAtTime(36 + speedRatio * 17, now, 0.2);
+    engine.combustion.filter.frequency.setTargetAtTime(150 + speedRatio * 100, now, 0.24);
+    engine.turbine.oscillator.frequency.setTargetAtTime(185 + speedRatio * 130, now, 0.22);
+    engine.airflow.filter.frequency.setTargetAtTime(310 + speedRatio * 280, now, 0.25);
+    engine.engineBus.gain.setTargetAtTime(0.38 + speedRatio * 0.14, now, 0.28);
+    engine.afterburnerBus.gain.setTargetAtTime(boosting ? 0.43 : 0.0001, now, boosting ? 0.2 : 0.38);
+    engine.afterLow.oscillator.frequency.setTargetAtTime(boosting ? 68 + speedRatio * 23 : 48, now, 0.18);
+    engine.afterMid.oscillator.frequency.setTargetAtTime(boosting ? 119 + speedRatio * 32 : 91, now, 0.2);
+    engine.afterThrob.oscillator.frequency.setTargetAtTime(boosting ? 43 + speedRatio * 17 : 36, now, 0.18);
+    engine.afterRoar.filter.frequency.setTargetAtTime(boosting ? 930 : 740, now, 0.24);
+    engine.afterHiss.filter.frequency.setTargetAtTime(boosting ? 1600 : 1200, now, 0.25);
   }
 
   stopEngine(immediate = false) {
@@ -262,7 +314,7 @@ export class GameAudio {
     if (!engine || !ctx || (engine.stopping && !immediate)) return;
     engine.stopping = true;
     const now = ctx.currentTime;
-    const nodes = [engine.core.oscillator, engine.harmonic.oscillator, engine.turbine.oscillator, engine.airflow.source, engine.afterLow.oscillator, engine.afterMid.oscillator, engine.afterRoar.source, engine.afterHiss.source];
+    const nodes = [engine.core.oscillator, engine.harmonic.oscillator, engine.rumble.oscillator, engine.combustion.source, engine.turbine.oscillator, engine.airflow.source, engine.afterLow.oscillator, engine.afterMid.oscillator, engine.afterThrob.oscillator, engine.afterRoar.source, engine.afterHiss.source];
     if (immediate) {
       for (const node of nodes) {
         try { node.stop(); } catch { /* already stopped */ }
@@ -287,47 +339,68 @@ export class GameAudio {
     if (active && !this.gunLoop) {
       const bus = ctx.createGain();
       bus.gain.setValueAtTime(0.0001, ctx.currentTime);
-      bus.gain.linearRampToValueAtTime(0.25, ctx.currentTime + 0.035);
+      bus.gain.linearRampToValueAtTime(0.36, ctx.currentTime + 0.025);
       bus.connect(this.effects);
+      const cannonSample = this.sampleBuffers.cannonLoop;
+      if (cannonSample) {
+        const source = ctx.createBufferSource();
+        source.buffer = cannonSample;
+        source.loop = true;
+        source.loopStart = 0;
+        source.loopEnd = cannonSample.duration;
+        source.connect(bus);
+        source.start();
+        this.gunLoop = { bus, sources: [source], sampled: true };
+        return;
+      }
       // Short, low-mid noise pulses make a regular cannon rattle instead of a hiss.
       const noise = ctx.createBufferSource();
       noise.buffer = this.noiseBuffer;
       noise.loop = true;
       const band = ctx.createBiquadFilter();
       band.type = 'bandpass';
-      band.frequency.value = 470;
-      band.Q.value = 0.72;
+      band.frequency.value = 690;
+      band.Q.value = 0.86;
       const pulse = ctx.createGain();
-      pulse.gain.value = 0.1;
+      pulse.gain.value = 0.17;
       noise.connect(band);
       band.connect(pulse);
       pulse.connect(bus);
 
       // A gated low thump gives each pulse some body without adding a ringing tone.
       const body = ctx.createOscillator();
-      body.type = 'triangle';
-      body.frequency.value = 82;
+      body.type = 'sawtooth';
+      body.frequency.value = 74;
       const bodyFilter = ctx.createBiquadFilter();
       bodyFilter.type = 'lowpass';
-      bodyFilter.frequency.value = 190;
+      bodyFilter.frequency.value = 175;
       const bodyGain = ctx.createGain();
-      bodyGain.gain.value = 0.085;
+      bodyGain.gain.value = 0.14;
       body.connect(bodyFilter);
       bodyFilter.connect(bodyGain);
       bodyGain.connect(pulse);
 
-      // A square LFO is used only as an envelope: roughly 36 crisp pulses per second.
+      const sub = ctx.createOscillator();
+      sub.type = 'sine';
+      sub.frequency.value = 46;
+      const subGain = ctx.createGain();
+      subGain.gain.value = 0.085;
+      sub.connect(subGain);
+      subGain.connect(pulse);
+
+      // The gate makes a dense mechanical rattle rather than a continuous hiss.
       const gate = ctx.createOscillator();
       gate.type = 'square';
-      gate.frequency.value = 40;
+      gate.frequency.value = 38;
       const gateDepth = ctx.createGain();
-      gateDepth.gain.value = 0.095;
+      gateDepth.gain.value = 0.15;
       gate.connect(gateDepth);
       gateDepth.connect(pulse.gain);
       noise.start();
       body.start();
+      sub.start();
       gate.start();
-      this.gunLoop = { bus, sources: [noise, body, gate] };
+      this.gunLoop = { bus, sources: [noise, body, sub, gate] };
     } else if (!active && this.gunLoop) {
       const loop = this.gunLoop;
       this.gunLoop = null;
@@ -340,11 +413,16 @@ export class GameAudio {
   playGunBurst() {
     const ctx = this.getContext();
     if (!ctx) return;
+    if (this.gunLoop?.sampled) return;
     const now = ctx.currentTime;
-    if (now - this.lastGunBurst < 0.13) return;
+    if (now - this.lastGunBurst < 0.075) return;
     this.lastGunBurst = now;
-    this.playNoise(0.04, 0.095, { low: 1150, high: 330, type: 'lowpass', q: 0.65 });
-    this.playTone(105, 48, 0.075, 0.16, 'triangle', 'effects');
+    // A close crack, a short pressure thump and a falling low end give each
+    // twin-barrel shot a distinct attack over the continuous firing rattle.
+    this.playNoise(0.045, 0.21, { low: 2400, high: 520, type: 'lowpass', q: 0.72 });
+    this.playNoise(0.085, 0.2, { low: 460, high: 78, type: 'lowpass', q: 0.48 });
+    this.playTone(118, 42, 0.105, 0.25, 'sawtooth', 'effects');
+    this.playTone(58, 30, 0.14, 0.16, 'sine', 'effects', 0.012);
   }
 
   playDistantGun(distance = 500, source = 'air') {
@@ -363,6 +441,7 @@ export class GameAudio {
   }
 
   playMissileLaunch() {
+    this.playSample('missileLaunch', { volume: 0.24, playbackRate: 0.96 + Math.random() * 0.08 });
     this.playTone(82, 49, 0.34, 0.22, 'sawtooth', 'effects');
     this.playNoise(0.6, 0.2, { low: 1300, high: 220, type: 'lowpass' });
     this.playNoise(0.24, 0.09, { low: 2600, high: 700, type: 'highpass' });
@@ -424,6 +503,7 @@ export class GameAudio {
   playExplosion(distance = 0, heavy = false) {
     const attenuation = (heavy ? 1.2 : 1) * Math.exp(-Math.max(0, distance) / 1250);
     if (attenuation < 0.035) return;
+    this.playSample('explosion', { volume: 0.32 * attenuation, playbackRate: 0.94 + Math.random() * 0.12 });
     // A compact pressure crack followed by a broad low rumble; no bright metallic ring.
     this.playNoise(0.12, 0.27 * attenuation, { low: 1250, high: 190, type: 'lowpass', q: 0.45 });
     this.playNoise(0.78, 0.24 * attenuation, { low: 620, high: 58, type: 'lowpass', q: 0.5, delay: 0.025 });
@@ -432,6 +512,7 @@ export class GameAudio {
   }
 
   playCollision() {
+    this.playSample('explosion', { volume: 0.44, playbackRate: 0.9 + Math.random() * 0.12 });
     this.playNoise(0.09, 0.26, { low: 1050, high: 180, type: 'lowpass', q: 0.5 });
     this.playNoise(0.36, 0.18, { low: 470, high: 65, type: 'lowpass', q: 0.55, delay: 0.02 });
     this.playTone(102, 32, 0.58, 0.28, 'sine', 'effects');

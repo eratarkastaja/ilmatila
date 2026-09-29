@@ -94,6 +94,56 @@ export function buildF35Asset(plane, aircraftAsset, friendly) {
   plane.userData.afterburner = afterburner;
 }
 
+/** Adds a FlightGear Flanker/Fulcrum model in the game's +Z-forward flight axes. */
+export function buildImportedEnemyAircraft(plane, aircraftAsset, variant) {
+  if (!aircraftAsset) throw new Error(`The ${variant} aircraft model has not been loaded.`);
+
+  const airframe = aircraftAsset.clone(true);
+  // The FlightGear AC3D source models use -X as their forward axis. The game
+  // uses +Z, with Y up, so rotate the visual once and center it around origin.
+  airframe.rotation.y = Math.PI / 2;
+  airframe.updateMatrixWorld(true);
+  const center = new THREE.Box3().setFromObject(airframe).getCenter(new THREE.Vector3());
+  airframe.position.sub(center);
+  airframe.traverse(object => {
+    if (!object.isMesh) return;
+    object.castShadow = false;
+    object.receiveShadow = false;
+    object.frustumCulled = true;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    for (const material of materials) {
+      if (!material) continue;
+      if (material.roughness !== undefined) material.roughness = Math.max(material.roughness, 0.38);
+      if (material.metalness !== undefined) material.metalness = Math.min(material.metalness, 0.48);
+      if (material.envMapIntensity !== undefined) material.envMapIntensity = 0.9;
+    }
+  });
+  plane.add(airframe);
+
+  const isFlanker = variant === 'su27';
+  const exhaustZ = isFlanker ? -7.85 : -6.35;
+  const engineSpacing = isFlanker ? 0.92 : 0.82;
+  const afterburner = new THREE.Group();
+  afterburner.visible = false;
+  for (const side of [-1, 1]) {
+    const flame = createAfterburnerFlame({ radius: 0.31, length: 2.35 });
+    flame.position.set(side * engineSpacing, -0.18, exhaustZ - 0.12);
+    afterburner.add(flame);
+  }
+  plane.add(afterburner);
+  plane.userData.afterburner = afterburner;
+
+  if (isFlanker) {
+    plane.userData.platformName = 'Su-27';
+    plane.userData.trailOffsets = [[-0.92, -0.08, -7.85], [0.92, -0.08, -7.85]];
+    plane.userData.vaporOffsets = [[-6.2, 0.18, 0.45], [6.2, 0.18, 0.45], [-1.8, 0.2, 2.65], [1.8, 0.2, 2.65]];
+  } else {
+    plane.userData.platformName = 'MiG-29';
+    plane.userData.trailOffsets = [[-0.82, -0.08, -6.35], [0.82, -0.08, -6.35]];
+    plane.userData.vaporOffsets = [[-4.15, 0.18, -0.7], [4.15, 0.18, -0.7], [-1.25, 0.2, 2.1], [1.25, 0.2, 2.1]];
+  }
+}
+
 export function buildFlanker(plane, m) {
   // Su-35 family: long nose, broad swept wings, twin nacelles and widely spaced tails.
   addFuselage(plane, m.paint, [

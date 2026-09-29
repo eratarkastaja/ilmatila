@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { loadF35Aircraft } from './plane.js';
+import { loadCombatAircraft } from './plane.js';
 import { createTerrain } from './terrain.js';
 
 /** Shares in-flight aircraft and theater loads, including per-caller progress. */
@@ -21,7 +21,7 @@ export class AssetRepository {
 
     if (!this.aircraftPromise) {
       this.aircraftProgress = 0;
-      this.aircraftPromise = loadF35Aircraft(event => {
+      this.aircraftPromise = loadCombatAircraft(event => {
         if (event.total > 0) this.aircraftProgress = THREE.MathUtils.clamp(event.loaded / event.total, 0, 1);
         for (const listener of this.aircraftProgressListeners) listener(this.aircraftProgress);
       }).then(asset => {

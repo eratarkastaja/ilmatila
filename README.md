@@ -1,15 +1,15 @@
 # ILMATILA
 
-**ILMATILA 0.1.0-alpha.1** is an unofficial browser-based air-combat game built with Three.js. It is an early playable prototype: aircraft handling, radar, weapons, opponents, and ground battles are game simulations and are not intended for real-world training or operational use.
+**ILMATILA 0.1.0-alpha.2** is an independent browser-based air-combat game by **ERÄGAMES**, built with Three.js. It is an early playable prototype: aircraft handling, radar, weapons, opponents, and ground battles are game simulations and are not intended for real-world training or operational use.
 
-The interface defaults to English and also supports Finnish. See [the Finnish README](README.fi.md) for Finnish setup instructions.
+The interface defaults to English and also supports Finnish. See [the Finnish README](README.fi.md) for Finnish setup instructions. See the [changelog](CHANGELOG.md) for this alpha's updates.
 
 ## Run locally
 
 Requirements: Node.js 20.19+ or 22.12+, npm, and a modern browser with WebGL support.
 
 ```sh
-npm install
+npm ci
 npm run dev
 ```
 
@@ -32,10 +32,15 @@ Generated MML terrain packages stay out of Git history. The Pages workflow downl
 | Q / E | Roll around the aircraft's longitudinal axis |
 | Shift | Afterburner |
 | Space | Fire cannon |
-| Ctrl | Fire a guided missile; aim at a hostile contact while the HUD searches for a lock |
+| T | Cycle detected hostile radar tracks |
+| M | Fire a guided missile when the selected hostile contact is within range and locked |
 | R | Switch radar between air and ground modes |
 | C | Deploy flares and chaff |
 | Esc | Pause the sortie |
+
+## Audio
+
+Combat audio includes bundled CC0 samples for cannon fire, missile launch, and explosions, plus a CC BY 3.0 jet-engine accent. Their sources and attribution are listed in the in-game **Assets & licenses** panel and [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). Procedural audio remains available if a sample fails to load.
 
 ## Terrain data
 
@@ -43,17 +48,18 @@ The repository contains the terrain-area index and downloader, while generated m
 
 ## Aircraft and project structure
 
-The player aircraft uses a converted FlightGear F-35B model as a visual stand-in for an F-35A. It is not an F-35A-specific model or livery. The original model source, texture, license, credits, and conversion script are included.
+The player aircraft uses a converted FlightGear F-35B model as a visual stand-in for an F-35A. It is not an F-35A-specific model or livery. The original model source, texture, license, credits, and conversion script are included. Hostile flights use converted FlightGear Su-27 and MiG-29 exterior models; the Su-27 is a Flanker-family visual, not a Su-35-specific model. Their source files, licenses, credits, and browser-optimized conversions are included. Ground vehicles remain project-authored procedural models; vetted external candidates and license notes are in [docs/asset-sourcing.md](docs/asset-sourcing.md).
 
 - `src/main.js` coordinates the menu, sortie, pause, and game lifecycle.
-- `src/combat/` contains the flight controls, radar, weapons, and combat behavior.
+- `src/combat/` contains flight controls, radar, ballistics, hit testing, projectiles, and air and ground combat behavior.
 - `src/terrain.js`, `src/clouds.js`, `src/sun.js`, and `src/fx.js` build the environment and visual effects.
 - `src/hud.js`, `src/menu-radar.js`, and `src/i18n.js` implement the HUD, menu radar, and translations.
 - `tools/terrain/` contains the optional MML data downloader and its guide.
-- `scripts/convert-flightgear-f35.py` rebuilds the aircraft GLB from the included source files.
+- `scripts/convert-flightgear-f35.py` rebuilds the player aircraft GLB from its included source files.
+- `npm run assets:aircraft` rebuilds the Su-27 and MiG-29 GLBs from their included source files.
 
 ## Licensing and attribution
 
-The project source is licensed under [GNU GPL version 3 only](LICENSE). Third-party files and optional data have their own terms; see [third-party notices](THIRD-PARTY-NOTICES.md), the in-game **Assets & licenses** panel, and the aircraft's [asset credits](public/assets/f35/ASSET-CREDITS.md). MML map data is not committed to the repository.
+The project source is licensed under [GNU GPL version 3 only](LICENSE). Copyright © 2026 ERÄGAMES. The ERÄGAMES name and logo are studio brand assets and are not covered by the source-code license. Third-party files and optional data have their own terms; see [third-party notices](THIRD-PARTY-NOTICES.md), the in-game **Assets & licenses** panel, and the aircraft [asset credits](public/assets/aircraft/ASSET-CREDITS.md). MML map data is not committed to the repository.
 
-ILMATILA is an independent community project and is not affiliated with or endorsed by the Finnish Air Force, Lockheed Martin, FlightGear, or the National Land Survey of Finland.
+ILMATILA is an independent game by ERÄGAMES and is not affiliated with or endorsed by the Finnish Air Force, Lockheed Martin, FlightGear, or the National Land Survey of Finland.

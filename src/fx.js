@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-const MISSILE_SMOKE_COLOR = new THREE.Color('#b6b9b5');
+const MISSILE_SMOKE_COLOR = new THREE.Color('#929b9a');
 const MISSILE_FIRE_COLOR = new THREE.Color('#ff8b37');
 const WING_VAPOR_COLOR = [0.88, 0.94, 0.97];
 
@@ -13,6 +13,7 @@ export class FlightFX {
     this.colors = new Float32Array(this.maxParticles * 3);
     this.sizes = new Float32Array(this.maxParticles);
     this.alphas = new Float32Array(this.maxParticles);
+    this.glows = new Float32Array(this.maxParticles);
     this.ages = new Float32Array(this.maxParticles);
     this.lifetimes = new Float32Array(this.maxParticles);
     this.velocities = new Float32Array(this.maxParticles * 3);
@@ -24,18 +25,22 @@ export class FlightFX {
     geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 3).setUsage(THREE.DynamicDrawUsage));
     geometry.setAttribute('size', new THREE.BufferAttribute(this.sizes, 1).setUsage(THREE.DynamicDrawUsage));
     geometry.setAttribute('alpha', new THREE.BufferAttribute(this.alphas, 1).setUsage(THREE.DynamicDrawUsage));
+    geometry.setAttribute('glow', new THREE.BufferAttribute(this.glows, 1).setUsage(THREE.DynamicDrawUsage));
     geometry.setDrawRange(0, this.maxParticles);
     const material = new THREE.ShaderMaterial({
       uniforms: { pixelRatio: { value: Math.min(globalThis.devicePixelRatio ?? 1, 2) } },
       vertexShader: `
         attribute float size;
         attribute float alpha;
+        attribute float glow;
         attribute vec3 color;
         varying float vAlpha;
+        varying float vGlow;
         varying vec3 vColor;
         uniform float pixelRatio;
         void main() {
           vAlpha = alpha;
+          vGlow = glow;
           vColor = color;
           vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
           gl_Position = projectionMatrix * viewPosition;
@@ -44,11 +49,13 @@ export class FlightFX {
       `,
       fragmentShader: `
         varying float vAlpha;
+        varying float vGlow;
         varying vec3 vColor;
         void main() {
           float radius = length(gl_PointCoord - vec2(0.5));
           float softEdge = 1.0 - smoothstep(0.12, 0.5, radius);
-          gl_FragColor = vec4(vColor, vAlpha * softEdge);
+          float hotCore = exp(-radius * radius * 42.0) * vGlow;
+          gl_FragColor = vec4(vColor * (1.0 + hotCore * 2.2), vAlpha * softEdge);
         }
       `,
       transparent: true,
@@ -186,12 +193,14 @@ export class FlightFX {
     this.tracers.length = 0;
     this.lifetimes.fill(0);
     this.alphas.fill(0);
+    this.glows.fill(0);
     this.trailAlphas.fill(0);
     this.vaporAlphas.fill(0);
     this.contrailLines.geometry.setDrawRange(0, 0);
     this.wingVaporRibbon.geometry.setDrawRange(0, 0);
     this.tracerLines.geometry.setDrawRange(0, 0);
     this.particles.geometry.attributes.alpha.needsUpdate = true;
+    this.particles.geometry.attributes.glow.needsUpdate = true;
     this.contrailLines.geometry.attributes.alpha.needsUpdate = true;
     this.wingVaporRibbon.geometry.attributes.alpha.needsUpdate = true;
   }
@@ -462,10 +471,10 @@ export class FlightFX {
       if (remaining <= 0) {
         const rear = missile.mesh.localToWorld(new THREE.Vector3(0, 0, -1.85));
         this._velocity.copy(missile.velocity).multiplyScalar(0.025);
-        this.emitParticle(rear, this._velocity, MISSILE_SMOKE_COLOR, 1.55, 1.25, 0.78);
+        this.emitParticle(rear, this._velocity, MISSILE_SMOKE_COLOR, 2.15, 4.8, 0.78);
         this._velocity.set((Math.random() - 0.5) * 3, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 3);
-        this.emitParticle(rear, this._velocity, MISSILE_FIRE_COLOR, 0.22, 0.68, 0.92);
-        this.missileTimers.set(missile.mesh, 0.035);
+        this.emitParticle(rear, this._velocity, MISSILE_FIRE_COLOR, 0.3, 1.3, 1, 1);
+        this.missileTimers.set(missile.mesh, 0.025);
       } else {
         this.missileTimers.set(missile.mesh, remaining);
       }
@@ -473,7 +482,7 @@ export class FlightFX {
     for (const mesh of this.missileTimers.keys()) if (!active.has(mesh)) this.missileTimers.delete(mesh);
   }
 
-  emitParticle(position, velocity, color, lifetime, size, alpha) {
+  emitParticle(position, velocity, color, lifetime, size, alpha, glow = 0) {
     const index = this.nextParticle;
     this.nextParticle = (index + 1) % this.maxParticles;
     const offset = index * 3;
@@ -487,6 +496,7 @@ export class FlightFX {
     this.lifetimes[index] = lifetime;
     this.initialSizes[index] = size;
     this.initialAlphas[index] = alpha;
+    this.glows[index] = glow;
     this.colors[offset] = color.r;
     this.colors[offset + 1] = color.g;
     this.colors[offset + 2] = color.b;
@@ -506,6 +516,7 @@ export class FlightFX {
       }
       this.ages[i] = age;
       const offset = i * 3;
+      if (this.glows[i] > 0.5) this.velocities[offset + 1] -= 18 * dt;
       this.positions[offset] += this.velocities[offset] * dt;
       this.positions[offset + 1] += this.velocities[offset + 1] * dt;
       this.positions[offset + 2] += this.velocities[offset + 2] * dt;
@@ -521,6 +532,7 @@ export class FlightFX {
     geometry.attributes.color.needsUpdate = true;
     geometry.attributes.size.needsUpdate = true;
     geometry.attributes.alpha.needsUpdate = true;
+    geometry.attributes.glow.needsUpdate = true;
   }
 
   updateTracers(dt) {

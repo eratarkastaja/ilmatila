@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { buildF35Asset, buildFlanker, createAfterburnerFlame, material, mergeStaticMeshes } from './plane-models.js';
+import { buildF35Asset, buildImportedEnemyAircraft, createAfterburnerFlame } from './plane-models.js';
 
 export { createAfterburnerFlame };
 
@@ -29,12 +29,48 @@ const FLANKER_HIT_ZONES = [
   { x: 0.95, y: 1.65, z: -7.2, rx: 0.78, ry: 1.75, rz: 0.48, damage: 0.9 },
 ];
 
-export async function loadF35Aircraft(onProgress) {
-  const gltf = await new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}assets/f35/f35-lightning.glb`, onProgress);
-  return gltf.scene;
+const MIG29_HIT_ZONES = [
+  { x: 0, y: 0, z: -0.35, rx: 0.88, ry: 0.67, rz: 5.45, damage: 1 },
+  { x: 0, y: 0.72, z: 3.35, rx: 0.59, ry: 0.52, rz: 1.55, damage: 1.8 },
+  { x: 0, y: -0.08, z: 6.75, rx: 0.39, ry: 0.35, rz: 1.55, damage: 0.9 },
+  { x: -3.7, y: 0, z: -0.1, rx: 2.55, ry: 0.29, rz: 2.15, damage: 0.8 },
+  { x: 3.7, y: 0, z: -0.1, rx: 2.55, ry: 0.29, rz: 2.15, damage: 0.8 },
+  { x: -1.15, y: -0.14, z: -5.4, rx: 0.7, ry: 0.48, rz: 2.25, damage: 1.35 },
+  { x: 1.15, y: -0.14, z: -5.4, rx: 0.7, ry: 0.48, rz: 2.25, damage: 1.35 },
+  { x: -1.55, y: 1.45, z: -6.1, rx: 0.57, ry: 1.55, rz: 0.44, damage: 0.9 },
+  { x: 1.55, y: 1.45, z: -6.1, rx: 0.57, ry: 1.55, rz: 0.44, damage: 0.9 },
+];
+
+export async function loadCombatAircraft(onProgress) {
+  const loader = new GLTFLoader();
+  const files = [
+    'assets/f35/f35-lightning.glb',
+    'assets/aircraft/su27/su27.glb',
+    'assets/aircraft/mig29/mig29.glb',
+  ];
+  const progress = files.map(() => 0);
+  const reportProgress = () => onProgress?.({ loaded: progress.reduce((sum, value) => sum + value, 0), total: files.length });
+  const loaded = await Promise.all(files.map((file, index) => loader.loadAsync(
+    `${import.meta.env.BASE_URL}${file}`,
+    event => {
+      if (event.total > 0) {
+        progress[index] = THREE.MathUtils.clamp(event.loaded / event.total, 0, 1);
+        reportProgress();
+      }
+    },
+  ).then(gltf => {
+    progress[index] = 1;
+    reportProgress();
+    return gltf.scene;
+  })));
+
+  return {
+    player: loaded[0],
+    hostiles: { su27: loaded[1], mig29: loaded[2] },
+  };
 }
 
-export function createFighter({ enemy = false, friendly = false, aircraftAsset = null } = {}) {
+export function createFighter({ enemy = false, friendly = false, aircraftAsset = null, aircraftVariant = 'su27' } = {}) {
   if (friendly && !aircraftAsset) throw new Error('Wingman aircraft requires the loaded F-35 asset.');
   const plane = new THREE.Group();
   plane.userData.team = enemy ? 'hostile' : friendly ? 'friendly' : 'player';
@@ -47,21 +83,10 @@ export function createFighter({ enemy = false, friendly = false, aircraftAsset =
   }
 
   if (enemy) {
-    const paint = material('#777b77', 0.64, 0.28);
-    const highlight = material('#92958b', 0.78, 0.12);
-    const panel = material('#515a5b', 0.82, 0.12);
-    const dark = material('#202a31', 0.88, 0.08);
-    const glass = new THREE.MeshPhysicalMaterial({
-      color: '#233943', metalness: 0.38, roughness: 0.12, ior: 1.46,
-      clearcoat: 1, clearcoatRoughness: 0.045, envMapIntensity: 2.1,
-      side: THREE.DoubleSide,
-    });
-    const glow = new THREE.MeshBasicMaterial({ color: '#f76b3c' });
-    buildFlanker(plane, { paint, highlight, panel, dark, glass, glow });
-    plane.userData.hitZones = FLANKER_HIT_ZONES;
-    plane.userData.trailOffsets = [[-7.35, 0.04, -1.8], [7.35, 0.04, -1.8], [-0.84, -0.24, -9.25], [0.84, -0.24, -9.25]];
-    plane.userData.vaporOffsets = [[-6.4, 0.2, -1.45], [6.4, 0.2, -1.45], [-1.7, 0.22, 1.8], [1.7, 0.22, 1.8]];
-    mergeStaticMeshes(plane);
+    const hostileAsset = aircraftAsset?.[aircraftVariant];
+    buildImportedEnemyAircraft(plane, hostileAsset, aircraftVariant);
+    plane.userData.aircraftVariant = aircraftVariant;
+    plane.userData.hitZones = aircraftVariant === 'mig29' ? MIG29_HIT_ZONES : FLANKER_HIT_ZONES;
     return plane;
   }
 
