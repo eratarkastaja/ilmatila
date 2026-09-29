@@ -7,13 +7,12 @@ import { advanceMissionObjective, evaluateMissionObjective, MISSION_OUTCOME } fr
 import { MISSILE_PROFILES } from './combat/projectiles.js';
 import { ProjectileSystem } from './combat/projectile-system.js';
 import { CollisionSystem } from './combat/collision-system.js';
+import { CountermeasureSystem } from './combat/countermeasure-system.js';
 import { WeaponSystem } from './combat/weapon-system.js';
 import { formatNumber, t } from './i18n.js';
 
 const effectSphereGeo=new THREE.SphereGeometry(1,14,10);
 const shockwaveGeo=new THREE.RingGeometry(.94,1,48);
-const flareDecoyGeo=new THREE.SphereGeometry(1,7,5),flareDecoyMaterial=new THREE.MeshBasicMaterial({color:'#ff8c37',toneMapped:false});
-const chaffDecoyGeo=new THREE.TetrahedronGeometry(.18,0),chaffDecoyMaterial=new THREE.MeshBasicMaterial({color:'#d9e2d8',transparent:true,opacity:.72,toneMapped:false});
 const glowTexture=createGlowTexture();
 const glowMaterial=new THREE.SpriteMaterial({
   map:glowTexture,color:'#ffffff',transparent:true,opacity:1,
@@ -30,11 +29,7 @@ const shockwaveMaterial=new THREE.MeshBasicMaterial({
 const emberColor=new THREE.Color('#ffb441');
 const hotEmberColor=new THREE.Color('#fff0a8');
 const smokeColor=new THREE.Color('#82776f');
-const flareParticleColor=new THREE.Color('#ffae42');
-const chaffParticleColor=new THREE.Color('#c9d3ce');
 const forward=new THREE.Vector3(0,0,1);
-const stationaryVelocity=new THREE.Vector3();
-const localForward=new THREE.Vector3(0,0,1),localRight=new THREE.Vector3(1,0,0),localUp=new THREE.Vector3(0,1,0);
 
 function createGlowTexture(){
   const canvas=document.createElement('canvas');canvas.width=128;canvas.height=128;
@@ -72,14 +67,18 @@ export class CombatWorld {
     this.missionNoticeTimer=null;
     this.input = new CombatInput();
     this.score=0;
-    this.countermeasures=12; this.countermeasureCooldown=0; this.decoys=[];
     this.terrain=terrain; this.playerHeading=0; this.previousPlayerPosition=player.position.clone();
     this.lastCollisionPosition=player.position.clone(); this.playerVelocity=new THREE.Vector3();
+    this.countermeasureSystem = new CountermeasureSystem({
+      scene, player, playerVelocity: this.playerVelocity, fx, audio,
+      playerShots: this.playerShots, hostileShots: this.hostiles, addTransientGlow,
+      onInventoryChange: () => this.updateHud(),
+    });
     this.airBattle = new AirBattle({
       scene, player, aircraftAsset, mission: missionConfig, terrain, audio, fx,
       playerVelocity: this.playerVelocity,
       getPlayerHeading: () => this.getPlayerHeading(),
-      deployHostileCountermeasures: (enemy, seeker) => this.deployHostileCountermeasures(enemy, seeker),
+      deployHostileCountermeasures: (enemy, seeker) => this.countermeasureSystem.deployHostile(enemy, seeker),
       addHostileProjectile: shot => this.projectileSystem.addHostileProjectile(shot),
       addPlayerProjectile: shot => this.projectileSystem.addPlayerProjectile(shot),
     });
@@ -100,7 +99,7 @@ export class CombatWorld {
     });
     this.projectileSystem = new ProjectileSystem({
       scene, player, playerShots: this.playerShots, hostiles: this.hostiles,
-      decoys: this.decoys, collision: this.collisionSystem, audio,
+      decoys: this.countermeasureSystem.decoys, collision: this.collisionSystem, audio,
       onPlayerDestroyed: (reason, params) => this.destroyPlayer(reason, params),
       onJetDestroyed: (enemy, credited) => this.killJet(enemy, credited),
       onUnitDestroyed: unit => this.destroyUnit(unit),
@@ -145,7 +144,7 @@ export class CombatWorld {
   }
   update(dt){
     this.frameDelta=dt;
-    this.countermeasureCooldown=Math.max(0,this.countermeasureCooldown-dt);
+    this.countermeasureSystem.tick(dt);
     if(dt>0){this.playerVelocity.copy(this.player.position).sub(this.previousPlayerPosition).multiplyScalar(1/dt);this.previousPlayerPosition.copy(this.player.position);}
     const justPressed = this.input.consumeJustPressed();
     const radarModeRequested=justPressed.has('KeyR');
@@ -153,7 +152,7 @@ export class CombatWorld {
     const missileRequested=justPressed.has('KeyM');
     const countermeasureRequested=justPressed.has('KeyC');
     if(radarModeRequested)this.radar.toggleMode();
-    if(countermeasureRequested)this.deployCountermeasures();
+    if(countermeasureRequested)this.countermeasureSystem.deployPlayer();
     const gunFiring=this.input.pressed.has('Space')&&!this.destroyed;
     this.radar.updateContacts(dt, this.getPlayerHeading(), {
       airFriendly: this.allies, airHostile: this.enemies,
@@ -173,7 +172,7 @@ export class CombatWorld {
       incomingMissiles: this.playerShots.filter(shot => shot.homing && shot.targetDomain === 'air'),
     });
     this.groundBattle.update(dt);
-    this.updateDecoys(dt);
+    this.countermeasureSystem.update(dt);
     this.projectileSystem.update(dt);
     this.updateEffects(dt);
     this.updateMissionObjective(dt);
@@ -226,86 +225,15 @@ export class CombatWorld {
     this.airBattle.dispose();
     this.groundBattle.dispose();
     for(const effect of this.effects){this.scene.remove(effect.mesh);disposeTransientMaterials(effect.mesh);}
-    for(const decoy of this.decoys){this.scene.remove(decoy.mesh);disposeTransientMaterials(decoy.mesh);}
+    this.countermeasureSystem.dispose();
     this.radar.dispose();
     this.effects.length=0;
-    this.decoys.length=0;
     this.playerShots.length=0;
     this.hostiles.length=0;
     const designator=document.querySelector('#target-designator');
     if(designator){designator.hidden=true;designator.classList.remove('ground-target','locked');}
     if(this.threatWarning)this.threatWarning.hidden=true;
     if(this.status){this.status.classList.remove('destroyed','complete');this.status.replaceChildren(document.createElement('i'),document.createTextNode(` ${t('hud.ready')}`));}
-  }
-  deployCountermeasures(){
-    if(this.countermeasureCooldown>0||this.countermeasures<=0){this.audio?.playWeaponNoLock();return;}
-    this.countermeasures--;this.countermeasureCooldown=.85;
-    const q=this.player.quaternion;
-    const rear=localForward.clone().negate().applyQuaternion(q).normalize();
-    const right=localRight.clone().applyQuaternion(q).normalize();
-    const up=localUp.clone().applyQuaternion(q).normalize();
-    const flareCloud=new THREE.Group();
-    flareCloud.position.copy(this.player.position).addScaledVector(rear,6);
-    for(let i=0;i<3;i++){
-      const flareMesh=new THREE.Mesh(flareDecoyGeo,flareDecoyMaterial);
-      flareMesh.position.set((i-1)*1.8,(Math.random()-.5)*1.8,(Math.random()-.5)*1.8);
-      flareMesh.scale.setScalar(1.1+Math.random()*.7);flareCloud.add(flareMesh);
-      const glow=addTransientGlow(flareCloud,'#ff9b35',15+Math.random()*7,.96);
-      glow.position.copy(flareMesh.position);glow.userData.baseSize=glow.scale.x;glow.userData.flareGlow=true;
-    }
-    this.scene.add(flareCloud);
-    this.decoys.push({team:'player',type:'ir',mesh:flareCloud,position:flareCloud.position,previousPosition:flareCloud.position.clone(),velocity:this.playerVelocity.clone().addScaledVector(rear,115).addScaledVector(right,(Math.random()-.5)*18).addScaledVector(up,18),life:2.7,maxLife:2.7,active:true,age:0,trailClock:0});
-
-    const chaffCloud=new THREE.Group();
-    chaffCloud.position.copy(this.player.position).addScaledVector(rear,4).addScaledVector(up,-1);
-    for(let i=0;i<18;i++){
-      const piece=new THREE.Mesh(chaffDecoyGeo,chaffDecoyMaterial);
-      piece.position.set((Math.random()-.5)*5,(Math.random()-.5)*4,(Math.random()-.5)*6);
-      piece.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);chaffCloud.add(piece);
-    }
-    this.scene.add(chaffCloud);
-    this.decoys.push({team:'player',type:'radar',mesh:chaffCloud,position:chaffCloud.position,previousPosition:chaffCloud.position.clone(),velocity:this.playerVelocity.clone().addScaledVector(rear,62).addScaledVector(right,(Math.random()-.5)*12).addScaledVector(up,-5),life:2.7,maxLife:2.7,active:true,age:0,trailClock:0});
-    this.audio?.playCountermeasure();this.updateHud();
-  }
-  deployHostileCountermeasures(enemy,seeker=null){
-    if(!enemy?.mesh||enemy.dead||enemy.countermeasures<=0||enemy.countermeasureCooldown>0)return false;
-    enemy.countermeasures--;
-    enemy.countermeasureCooldown=4.5+Math.random()*1.5;
-    enemy.evasiveTimer=2.4;
-    enemy.evasiveDirection=Math.random()<.5?-1:1;
-
-    const q=enemy.mesh.quaternion;
-    const rear=localForward.clone().negate().applyQuaternion(q).normalize();
-    const right=localRight.clone().applyQuaternion(q).normalize();
-    const up=localUp.clone().applyQuaternion(q).normalize();
-    const types=seeker? [seeker] : ['ir','radar'];
-    for(const type of types){
-      const cloud=new THREE.Group();
-      cloud.position.copy(enemy.mesh.position).addScaledVector(rear,type==='ir'?6:4);
-      cloud.position.addScaledVector(up,type==='ir'?1:-1);
-      if(type==='ir'){
-        for(let i=0;i<3;i++){
-          const flareMesh=new THREE.Mesh(flareDecoyGeo,flareDecoyMaterial);
-          flareMesh.position.set((i-1)*1.8,(Math.random()-.5)*1.8,(Math.random()-.5)*1.8);
-          flareMesh.scale.setScalar(1.1+Math.random()*.7);cloud.add(flareMesh);
-          const glow=addTransientGlow(cloud,'#ff9b35',15+Math.random()*7,.96);
-          glow.position.copy(flareMesh.position);glow.userData.baseSize=glow.scale.x;glow.userData.flareGlow=true;
-        }
-      }else{
-        for(let i=0;i<18;i++){
-          const piece=new THREE.Mesh(chaffDecoyGeo,chaffDecoyMaterial);
-          piece.position.set((Math.random()-.5)*5,(Math.random()-.5)*4,(Math.random()-.5)*6);
-          piece.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);cloud.add(piece);
-        }
-      }
-      this.scene.add(cloud);
-      const velocity=(enemy.velocity??stationaryVelocity).clone()
-        .addScaledVector(rear,type==='ir'?105:62)
-        .addScaledVector(right,(Math.random()-.5)*18)
-        .addScaledVector(up,type==='ir'?18:-5);
-      this.decoys.push({team:'enemy',source:enemy, type,mesh:cloud,position:cloud.position,previousPosition:cloud.position.clone(),velocity,life:2.7,maxLife:2.7,active:true,age:0,trailClock:0,spoofChance:type==='ir'?.62:.58});
-    }
-    return true;
   }
   updateMissionObjective(dt){
     if(this.missionOutcome!==MISSION_OUTCOME.ACTIVE)return;
@@ -379,46 +307,6 @@ export class CombatWorld {
       },8500);
     }
   }
-  updateDecoys(dt){
-    for(let i=this.decoys.length-1;i>=0;i--){
-      const decoy=this.decoys[i];
-      if(decoy.active){
-        decoy.life-=dt;decoy.age+=dt;decoy.previousPosition.copy(decoy.position);decoy.mesh.position.addScaledVector(decoy.velocity,dt);
-        decoy.velocity.multiplyScalar(Math.exp(-.24*dt));
-        decoy.mesh.rotation.y+=dt*(decoy.type==='ir'?1.5:.4);
-        const progress=1-decoy.life/decoy.maxLife;
-        if(decoy.type==='ir'){
-          decoy.mesh.scale.setScalar(1+progress*.42);
-          for(const child of decoy.mesh.children){
-            if(!child.userData.flareGlow)continue;
-            const flicker=.84+Math.sin(decoy.age*43+child.position.x)*.16;
-            child.material.opacity=(1-progress)**.72*flicker;
-            child.scale.setScalar(child.userData.baseSize*(.72+progress*.75)*flicker);
-          }
-          decoy.trailClock-=dt;
-          if(decoy.trailClock<=0){
-            const drift=decoy.velocity.clone().multiplyScalar(.055).add(new THREE.Vector3((Math.random()-.5)*7,Math.random()*8,(Math.random()-.5)*7));
-            this.fx?.emitParticle(decoy.position,drift,flareParticleColor,.42,2.4+Math.random()*1.2,.98,1);
-            decoy.trailClock=.035;
-          }
-        }else{
-          decoy.mesh.scale.setScalar(1+progress*.72);
-          decoy.trailClock-=dt;
-          if(decoy.trailClock<=0){
-            const drift=decoy.velocity.clone().multiplyScalar(.025).add(new THREE.Vector3((Math.random()-.5)*9,(Math.random()-.5)*6,(Math.random()-.5)*9));
-            this.fx?.emitParticle(decoy.position,drift,chaffParticleColor,.34,1.15+Math.random()*.55,.58,.3);
-            decoy.trailClock=.11;
-          }
-        }
-        if(decoy.life<=0){decoy.active=false;this.scene.remove(decoy.mesh);}
-      }
-      const trackedByMissile=this.hostiles.some(missile=>missile.missile&&missile.decoyTarget===decoy)
-        ||this.playerShots.some(missile=>missile.homing&&missile.decoyTarget===decoy);
-      if(!decoy.active&&!trackedByMissile){
-        disposeTransientMaterials(decoy.mesh);this.decoys.splice(i,1);
-      }
-    }
-  }
   killJet(e,credited=true){e.dead=true;this.scene.remove(e.mesh);if(credited)this.score+=500;this.addExplosion(e.mesh.position,1.12);}
   destroyUnit(u){u.dead=true;this.scene.remove(u.mesh);if(u.team==='red')this.score+=100;this.addExplosion(u.mesh.position,.82);}
   addSpark(pos){
@@ -484,7 +372,7 @@ export class CombatWorld {
   }
   updateHud(){
     if(this.weapon)this.weapon.textContent=this.input.pressed.has('Space')?t('combat.firing'):t('hud.readyShort');
-    if(this.countermeasureCount)this.countermeasureCount.textContent=String(this.countermeasures).padStart(2,'0');
+    if(this.countermeasureCount)this.countermeasureCount.textContent=String(this.countermeasureSystem.countermeasures).padStart(2,'0');
     if(this.threatWarning)this.threatWarning.hidden=!this.projectileSystem.incomingMissile;
     if(this.boundaryWarning){
       const halfSize=this.terrain.worldSize*.5;
