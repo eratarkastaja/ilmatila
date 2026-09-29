@@ -54,13 +54,16 @@ describe('CountermeasureSystem', () => {
 
   it('blocks deployment while rearming or when inventory is empty', () => {
     const { system, decoys, audio } = makeCountermeasures();
-    system.cooldown = .2;
+    expect(system.deployPlayer()).toBe(true);
     expect(system.deployPlayer()).toBe(false);
-    system.cooldown = 0;
+
+    system.tick(.85);
+    expect(system.deployPlayer()).toBe(true);
+    expect(system.countermeasures).toBe(10);
     system.countermeasures = 0;
     expect(system.deployPlayer()).toBe(false);
 
-    expect(decoys).toHaveLength(0);
+    expect(decoys).toHaveLength(4);
     expect(audio.playWeaponNoLock).toHaveBeenCalledTimes(2);
   });
 

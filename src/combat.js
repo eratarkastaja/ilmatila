@@ -3,11 +3,11 @@ import { AirBattle } from './combat/air-battle.js';
 import { GroundBattle } from './combat/ground-battle.js';
 import { CombatInput } from './combat/input.js';
 import { CombatRadar } from './combat/radar.js';
-import { advanceMissionObjective, evaluateMissionObjective, MISSION_OUTCOME } from './combat/mission-objective.js';
 import { MISSILE_PROFILES } from './combat/projectiles.js';
 import { ProjectileSystem } from './combat/projectile-system.js';
 import { CollisionSystem } from './combat/collision-system.js';
 import { CountermeasureSystem } from './combat/countermeasure-system.js';
+import { MissionSystem } from './combat/mission-system.js';
 import { WeaponSystem } from './combat/weapon-system.js';
 import { formatNumber, t } from './i18n.js';
 
@@ -58,13 +58,6 @@ export class CombatWorld {
     this.scene=scene; this.player=player; this.enemies=[]; this.allies=[]; this.hostiles=[]; this.playerShots=[]; this.effects=[]; this.destroyed=false;
     this.fx=fx; this.audio=audio;
     const missionConfig={hostiles:4,wingmen:2,groundBattle:true,groundPairs:6,groundTrucks:12,...mission};
-    this.mission=missionConfig;
-    this.missionObjective=missionConfig.objective??{type:'clearAir'};
-    this.objectiveElapsed=0;
-    this.missionOutcome=MISSION_OUTCOME.ACTIVE;
-    this.missionComplete=false;
-    this.missionFailed=false;
-    this.missionNoticeTimer=null;
     this.input = new CombatInput();
     this.score=0;
     this.terrain=terrain; this.playerHeading=0; this.previousPlayerPosition=player.position.clone();
@@ -88,7 +81,7 @@ export class CombatWorld {
     this.friends = this.groundBattle.friends;
     this.redUnits = this.groundBattle.redUnits;
     this.colliders = this.groundBattle.colliders;
-    this.objectiveTotals={
+    const objectiveTotals={
       air:this.enemies.length,
       ground:this.redUnits.filter(unit=>unit.armed!==false).length,
     };
@@ -118,20 +111,36 @@ export class CombatWorld {
     this.boundaryWarningDistance=document.querySelector('#boundary-warning-distance');
     this.status=document.querySelector('.status'); this.deathScreen=document.querySelector('#death-screen'); this.deathReason=document.querySelector('#death-reason');
     this.statusText=this.status?.querySelector('[data-i18n]');
-    this.objectiveTitle=document.querySelector('#mission-objective-title');
-    this.objectiveProgress=document.querySelector('#mission-objective-progress');
-    this.missionCompleteNotice=document.querySelector('#mission-complete');
-    this.missionCompleteDetail=document.querySelector('#mission-complete-detail');
-    this.renderMissionObjective();
+    const objectiveTitle=document.querySelector('#mission-objective-title');
+    const objectiveProgress=document.querySelector('#mission-objective-progress');
+    const missionCompleteNotice=document.querySelector('#mission-complete');
+    const missionCompleteDetail=document.querySelector('#mission-complete-detail');
+    this.missionSystem = new MissionSystem({
+      mission: missionConfig,
+      objective: missionConfig.objective??{type:'clearAir'},
+      totals: objectiveTotals,
+      getRemaining: () => ({
+        airRemaining: this.enemies.filter(enemy=>!enemy.dead).length,
+        groundRemaining: this.redUnits.filter(unit=>!unit.dead&&unit.armed!==false).length,
+      }),
+      nodes: {
+        objectiveTitle,
+        objectiveProgress,
+        notice: missionCompleteNotice,
+        detail: missionCompleteDetail,
+        status: this.status,
+        statusText: this.statusText,
+      },
+    });
     this.restartButton = document.querySelector('#restart');
     this.onRestart = () => location.reload();
     this.restartButton?.addEventListener('click', this.onRestart);
     this.onLanguageChange = () => {
       this.radar.renderMode();
       this.updateHud();
-      this.renderMissionObjective();
-      this.renderMissionComplete();
-      if(this.statusText&&!this.destroyed)this.statusText.textContent=t(this.missionComplete?'mission.statusComplete':'hud.ready');
+      this.missionSystem.renderObjective();
+      this.missionSystem.renderComplete();
+      if(this.statusText&&!this.destroyed)this.statusText.textContent=t(this.missionSystem.missionComplete?'mission.statusComplete':'hud.ready');
       if(this.deathReason&&this.destroyed)this.deathReason.textContent=t(this.deathReasonKey,this.deathReasonParams);
       if(this.status&&this.destroyed)this.status.replaceChildren(document.createElement('i'),document.createTextNode(` ${t('combat.destroyed')}`));
     };
@@ -175,7 +184,7 @@ export class CombatWorld {
     this.countermeasureSystem.update(dt);
     this.projectileSystem.update(dt);
     this.updateEffects(dt);
-    this.updateMissionObjective(dt);
+    this.missionSystem.update(dt,this.destroyed);
     this.updateHud();
   }
   checkPlayerCollision(dt=this.frameDelta??0){
@@ -185,15 +194,7 @@ export class CombatWorld {
   destroyPlayer(reasonKey,params={}){
     if(this.destroyed)return;
     this.destroyed=true;
-    this.missionOutcome=evaluateMissionObjective(this.missionObjective,{
-      elapsed:this.objectiveElapsed,
-      airRemaining:this.enemies.filter(enemy=>!enemy.dead).length,
-      groundRemaining:this.redUnits.filter(unit=>!unit.dead&&unit.armed!==false).length,
-      destroyed:true,
-      outcome:this.missionOutcome,
-    });
-    this.missionComplete=this.missionOutcome===MISSION_OUTCOME.COMPLETE;
-    this.missionFailed=this.missionOutcome===MISSION_OUTCOME.FAILED;
+    this.missionSystem.markPlayerDestroyed();
     if(this.boundaryWarning)this.boundaryWarning.hidden=true;
     this.weaponSystem.stopGun();
     this.audio?.playCollision();
@@ -215,9 +216,7 @@ export class CombatWorld {
     this.input.dispose();
     document.removeEventListener('ilmatila:languagechange', this.onLanguageChange);
     this.restartButton?.removeEventListener('click', this.onRestart);
-    if(this.missionNoticeTimer!==null)clearTimeout(this.missionNoticeTimer);
-    this.missionCompleteNotice?.classList.remove('visible');
-    if(this.missionCompleteNotice)this.missionCompleteNotice.hidden=true;
+    this.missionSystem.dispose();
     for(const shot of [...this.playerShots,...this.hostiles]){
       if(shot.missile)this.audio?.stopMissileFlight(shot.mesh.id);
       if(shot.mesh)this.scene.remove(shot.mesh);
@@ -234,78 +233,6 @@ export class CombatWorld {
     if(designator){designator.hidden=true;designator.classList.remove('ground-target','locked');}
     if(this.threatWarning)this.threatWarning.hidden=true;
     if(this.status){this.status.classList.remove('destroyed','complete');this.status.replaceChildren(document.createElement('i'),document.createTextNode(` ${t('hud.ready')}`));}
-  }
-  updateMissionObjective(dt){
-    if(this.missionOutcome!==MISSION_OUTCOME.ACTIVE)return;
-    const airRemaining=this.enemies.filter(enemy=>!enemy.dead).length;
-    const groundRemaining=this.redUnits.filter(unit=>!unit.dead&&unit.armed!==false).length;
-    const next=advanceMissionObjective(this.missionObjective,{
-      elapsed:this.objectiveElapsed,
-      outcome:this.missionOutcome,
-    },dt,{airRemaining,groundRemaining,destroyed:this.destroyed});
-    this.objectiveElapsed=next.elapsed;
-    this.missionOutcome=next.outcome;
-    this.missionFailed=next.outcome===MISSION_OUTCOME.FAILED;
-    if(next.outcome===MISSION_OUTCOME.COMPLETE){
-      this.completeMission();
-      return;
-    }
-    this.renderMissionObjective();
-  }
-  renderMissionObjective(){
-    if(this.objectiveTitle){
-      const type=this.missionObjective.type;
-      this.objectiveTitle.textContent=t(`mission.objective.${type}`);
-    }
-    if(!this.objectiveProgress)return;
-    if(this.missionComplete){
-      this.objectiveProgress.textContent=t('mission.progress.complete');
-      return;
-    }
-    const type=this.missionObjective.type;
-    if(type==='training'){
-      const duration=this.missionObjective.duration??90;
-      this.objectiveProgress.textContent=t('mission.progress.training',{
-        elapsed:Math.min(duration,Math.floor(this.objectiveElapsed)),duration,
-      });
-    }else if(type==='support'){
-      this.objectiveProgress.textContent=t('mission.progress.support',{
-        airRemaining:this.enemies.filter(enemy=>!enemy.dead).length,
-        airTotal:this.objectiveTotals.air,
-        groundRemaining:this.redUnits.filter(unit=>!unit.dead&&unit.armed!==false).length,
-        groundTotal:this.objectiveTotals.ground,
-      });
-    }else{
-      this.objectiveProgress.textContent=t('mission.progress.air',{
-        remaining:this.enemies.filter(enemy=>!enemy.dead).length,
-      });
-    }
-  }
-  renderMissionComplete(){
-    if(!this.missionComplete)return;
-    const title=this.missionCompleteNotice?.querySelector('#mission-complete-title');
-    if(title)title.textContent=t('mission.objectiveAchieved');
-    if(this.missionCompleteDetail)this.missionCompleteDetail.textContent=t(`mission.complete.${this.mission.id}`);
-  }
-  completeMission(){
-    if(this.missionComplete)return;
-    this.missionComplete=true;
-    this.missionFailed=false;
-    this.missionOutcome=MISSION_OUTCOME.COMPLETE;
-    this.renderMissionObjective();
-    this.renderMissionComplete();
-    if(this.statusText)this.statusText.textContent=t('mission.statusComplete');
-    if(this.status)this.status.classList.add('complete');
-    if(this.missionCompleteNotice){
-      this.missionCompleteNotice.hidden=false;
-      this.missionCompleteNotice.classList.remove('visible');
-      requestAnimationFrame(()=>this.missionCompleteNotice?.classList.add('visible'));
-      this.missionNoticeTimer=setTimeout(()=>{
-        this.missionCompleteNotice?.classList.remove('visible');
-        if(this.missionCompleteNotice)this.missionCompleteNotice.hidden=true;
-        this.missionNoticeTimer=null;
-      },8500);
-    }
   }
   killJet(e,credited=true){e.dead=true;this.scene.remove(e.mesh);if(credited)this.score+=500;this.addExplosion(e.mesh.position,1.12);}
   destroyUnit(u){u.dead=true;this.scene.remove(u.mesh);if(u.team==='red')this.score+=100;this.addExplosion(u.mesh.position,.82);}
