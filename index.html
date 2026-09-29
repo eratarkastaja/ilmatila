@@ -23,6 +23,7 @@
           <strong>ERÄGAMES</strong>
         </a>
         <div class="topbar-status"><span class="status-dot"></span><span data-i18n="menu.ready">READY</span></div>
+        <button id="menu-music-toggle" class="music-toggle" type="button" aria-pressed="false" data-i18n-aria-label="music.enableAria"><span class="music-toggle-icon" aria-hidden="true">♫</span><span class="music-toggle-label" data-i18n="music.disabled">MUSIC OFF</span></button>
         <div class="language-picker"><label for="language-select" data-i18n="language.label">LANGUAGE</label><select id="language-select" data-i18n-aria-label="language.aria"><option value="en">English</option><option value="fi">Suomi</option></select></div>
       </div>
 
@@ -134,6 +135,7 @@
           <span class="pause-hint"><kbd>ESC</kbd> <span data-i18n="pause.hint">RESUME FLIGHT</span></span>
         </div>
         <div class="pause-actions">
+          <button id="pause-music-toggle" class="music-toggle pause-music-toggle" type="button" aria-pressed="false" data-i18n-aria-label="music.enableAria"><span class="music-toggle-icon" aria-hidden="true">♫</span><span class="music-toggle-label" data-i18n="music.disabled">MUSIC OFF</span><b>♪</b></button>
           <button id="resume-flight" class="pause-resume" type="button"><span data-i18n="pause.resume">RESUME FLIGHT</span><b>↗</b></button>
           <button id="quit-to-menu" class="pause-quit" type="button"><span data-i18n="pause.quit">RETURN TO MISSION SELECTION</span><b>⌂</b></button>
         </div>

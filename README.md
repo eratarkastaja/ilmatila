@@ -1,6 +1,6 @@
 # ILMATILA
 
-**ILMATILA 0.1.0-alpha.2** is an independent browser-based air-combat game by **ERÄGAMES**, built with Three.js. It is an early playable prototype: aircraft handling, radar, weapons, opponents, and ground battles are game simulations and are not intended for real-world training or operational use.
+**ILMATILA 0.1.0-alpha.3** is an independent browser-based air-combat game by **ERÄGAMES**, built with Three.js. It is an early playable prototype: aircraft handling, radar, weapons, opponents, and ground battles are game simulations and are not intended for real-world training or operational use.
 
 The interface defaults to English and also supports Finnish. See the [changelog](CHANGELOG.md) for this alpha's updates.
 
@@ -41,6 +41,8 @@ Generated MML terrain packages stay out of Git history. The Pages workflow downl
 ## Audio
 
 Combat audio includes bundled CC0 samples for cannon fire, missile launch, and explosions, plus a CC BY 3.0 jet-engine accent. Their sources and attribution are listed in the in-game **Assets & licenses** panel and [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). Procedural audio remains available if a sample fails to load.
+
+The optional soundtrack contains two original tracks by Erätarkastaja. They are encoded as stereo Ogg Vorbis and total about 4.6 MB; the WAV masters remain outside the repository. Music is loaded only after the player enables it from the menu or pause dialog, and the preference persists between visits. Copyright and use details are in [`public/assets/audio/ATTRIBUTION.md`](public/assets/audio/ATTRIBUTION.md); the soundtrack is not covered by the project GPL license.
 
 ## Terrain data
 

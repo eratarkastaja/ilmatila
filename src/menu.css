@@ -355,3 +355,39 @@
   .mission-card { min-height: 118px; }
   .theater-grid-art { height: 200px; }
 }
+
+.music-toggle {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid #9fbead66;
+  color: #bdcdc3;
+  background: #0b191de8;
+  font: 700 12px 'Rajdhani', sans-serif;
+  letter-spacing: .1em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color .16s ease, color .16s ease, background .16s ease;
+}
+.music-toggle:hover { border-color: #a9e1bd; color: #edf5ee; background: #142421; }
+.music-toggle[aria-pressed="true"] { border-color: #a9e1bd9c; color: #bce8c8; background: #15271f; }
+.music-toggle:focus-visible { outline: 2px solid #a9e1bd; outline-offset: 3px; }
+.music-toggle-icon { color: #a9e1bd; font: 600 17px/1 'Rajdhani', sans-serif; }
+.music-toggle-label { font: inherit; }
+.pause-actions .pause-music-toggle { min-height: 42px; justify-content: space-between; padding: 0 13px; border-color: #9eb4a541; color: #becdc3; background: #0d191d; }
+.pause-actions .pause-music-toggle[aria-pressed="true"] { border-color: #a9e1bd9c; color: #c6e8ce; background: #14231e; }
+.pause-music-toggle b { color: #a9e1bd; font: 500 17px 'Rajdhani', sans-serif; }
+
+@media (max-width: 760px) {
+  .menu-topbar { gap: 9px; }
+  .music-toggle { min-height: 35px; gap: 5px; padding: 0 8px; font-size: 11px; }
+  .music-toggle-icon { font-size: 15px; }
+}
+
+@media (max-width: 390px) {
+  .menu-topbar { gap: 7px; }
+  .music-toggle { padding: 0 6px; font-size: 10px; letter-spacing: .06em; }
+}

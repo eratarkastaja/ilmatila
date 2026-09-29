@@ -14,3 +14,21 @@ made to these samples.
 
 The CC0 samples do not require attribution; creator and source links are kept
 here as a courtesy. The dklon sample requires attribution under CC BY 3.0.
+
+## Music
+
+Two soundtrack files were supplied to the project as WAVs and encoded for
+browser delivery as Ogg Vorbis at quality 5. The original 44.1 kHz stereo
+sample rate was retained, source metadata was removed, and the WAV masters are
+not included in the repository. The Ogg files carry title and artist tags for
+asset identification; these tags are not displayed in the game.
+
+| Bundled file | Supplied source file | Duration | Rights information |
+| --- | --- | ---: | --- |
+| `music/fm-rankaisija.ogg` | `FM-RANKAISIJA.wav` | 2:24 | Original music by Erätarkastaja |
+| `music/orbital-decay.ogg` | `Orbital Decay.wav` | 1:58 | Original music by Erätarkastaja |
+
+Both compositions and recordings are original music by Erätarkastaja, the
+project owner. Copyright remains with Erätarkastaja; permission is granted to
+include these recordings in ILMATILA. All other rights are reserved. These
+tracks are separate music assets and are not covered by ILMATILA's GPL license.

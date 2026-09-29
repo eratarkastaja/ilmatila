@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.0-alpha.3 — 2026-09-29
+
+### English
+
+- Refined the GAU-22/A cannon as a rotary weapon, with a 55-round-per-second firing cadence, heavier sound, and directional tracer rounds.
+- Improved cannon hit detection and collision checks at high speed, and tuned projectile behavior.
+- Improved combat pacing, aircraft behavior, asset loading, and terrain handling.
+- Added an optional soundtrack with two original Erätarkastaja tracks. The menu and pause dialog share a persistent music toggle; Ogg Vorbis delivery reduces the two WAV masters from about 46.2 MB to 4.6 MB combined.
+- Replaced the missile-without-lock feedback tone with a lower, filtered cockpit warning.
+- Updated release metadata and audio ownership and license documentation.
+
+Alpha 3 remains an early prototype. Flight, radar, weapons, AI, and battlefield behavior are simplified game systems, not real-world training or operational tools.
+
 ## 0.1.0-alpha.2 — 2026-09-29
 
 ### English

@@ -1,3 +1,5 @@
+import { t } from './i18n.js';
+
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const AUDIO_FILES = {
   cannonLoop: 'cannon-loop.ogg',
@@ -5,6 +7,8 @@ const AUDIO_FILES = {
   explosion: 'explosion.ogg',
   jetSurge: 'jet-takeoff.ogg',
 };
+const MUSIC_TRACKS = ['fm-rankaisija.ogg', 'orbital-decay.ogg'];
+const MUSIC_STORAGE_KEY = 'ilmatila-music-enabled';
 
 // AudioContext and bundled sound assets are initialized on the first user gesture
 // to satisfy browser autoplay policies. Procedural effects remain as fallbacks.
@@ -24,11 +28,80 @@ export class GameAudio {
     this.lastDistantShot = -Infinity;
     this.lastIncomingWarning = -Infinity;
     this.lastEngineUpdate = 0;
+    this.musicEnabled = this.readMusicPreference();
+    this.musicTrackIndex = -1;
+    this.music = new Audio();
+    this.music.preload = 'none';
+    this.music.volume = 0.24;
+    this.music.addEventListener('ended', () => this.playNextMusicTrack());
 
-    this.unlockFromGesture = () => this.unlock();
+    this.unlockFromGesture = () => {
+      this.unlock();
+      if (this.musicEnabled && !this.paused) this.playMusic();
+    };
     document.addEventListener('pointerdown', this.unlockFromGesture, { capture: true, passive: true });
     document.addEventListener('keydown', this.unlockFromGesture, { capture: true });
     this.bindInterfaceSounds();
+    this.bindMusicControls();
+    this.updateMusicControls();
+  }
+
+  readMusicPreference() {
+    try {
+      return localStorage.getItem(MUSIC_STORAGE_KEY) === 'on';
+    } catch {
+      return false;
+    }
+  }
+
+  bindMusicControls() {
+    document.addEventListener('click', event => {
+      const button = event.target.closest?.('.music-toggle');
+      if (!button || button.disabled) return;
+      this.setMusicEnabled(!this.musicEnabled);
+    });
+    document.addEventListener('ilmatila:languagechange', () => this.updateMusicControls());
+  }
+
+  updateMusicControls() {
+    const labelKey = this.musicEnabled ? 'music.enabled' : 'music.disabled';
+    const ariaKey = this.musicEnabled ? 'music.disableAria' : 'music.enableAria';
+    document.querySelectorAll('.music-toggle').forEach(button => {
+      button.setAttribute('aria-pressed', String(this.musicEnabled));
+      button.setAttribute('aria-label', t(ariaKey));
+      const label = button.querySelector('.music-toggle-label');
+      if (label) label.textContent = t(labelKey);
+    });
+  }
+
+  setMusicEnabled(enabled) {
+    this.musicEnabled = Boolean(enabled);
+    try {
+      localStorage.setItem(MUSIC_STORAGE_KEY, this.musicEnabled ? 'on' : 'off');
+    } catch {
+      // The in-memory setting still works when storage is unavailable.
+    }
+    this.updateMusicControls();
+    if (this.musicEnabled && !this.paused) this.playMusic();
+    else this.music.pause();
+  }
+
+  playMusic() {
+    if (!this.musicEnabled || this.paused) return;
+    if (this.musicTrackIndex < 0) this.musicTrackIndex = Math.floor(Math.random() * MUSIC_TRACKS.length);
+    if (!this.music.src) {
+      this.music.src = `${import.meta.env.BASE_URL}assets/audio/music/${MUSIC_TRACKS[this.musicTrackIndex]}`;
+    }
+    this.music.play().catch(() => {
+      // A later explicit user gesture retries playback if the browser blocked it.
+    });
+  }
+
+  playNextMusicTrack() {
+    if (!this.musicEnabled || this.paused) return;
+    this.musicTrackIndex = (this.musicTrackIndex + 1) % MUSIC_TRACKS.length;
+    this.music.src = `${import.meta.env.BASE_URL}assets/audio/music/${MUSIC_TRACKS[this.musicTrackIndex]}`;
+    this.music.play().catch(() => {});
   }
 
   bindInterfaceSounds() {
@@ -60,9 +133,12 @@ export class GameAudio {
 
   setPaused(paused) {
     this.paused = paused;
-    if (!this.context) return;
-    if (paused && this.context.state === 'running') this.context.suspend().catch(() => {});
-    else if (!paused && this.context.state === 'suspended') this.context.resume().catch(() => {});
+    if (paused) this.music.pause();
+    else if (this.musicEnabled) this.playMusic();
+    if (this.context) {
+      if (paused && this.context.state === 'running') this.context.suspend().catch(() => {});
+      else if (!paused && this.context.state === 'suspended') this.context.resume().catch(() => {});
+    }
   }
 
   configureGraph() {
@@ -216,7 +292,13 @@ export class GameAudio {
   }
 
   playWeaponNoLock() {
-    this.playTone(380, 245, 0.16, 0.11, 'square', 'ui');
+    // Use a restrained, low cockpit reject cue instead of a bright arcade square beep.
+    this.playNoise(0.055, 0.055, { low: 1050, high: 250, type: 'lowpass', q: 0.65, bus: 'ui' });
+    this.playTone(220, 158, 0.115, 0.12, 'triangle', 'ui', 0.006);
+    this.playTone(328, 224, 0.085, 0.025, 'sine', 'ui', 0.006);
+    this.playNoise(0.06, 0.05, { low: 820, high: 190, type: 'lowpass', q: 0.6, bus: 'ui', delay: 0.15 });
+    this.playTone(184, 126, 0.125, 0.105, 'triangle', 'ui', 0.156);
+    this.playTone(274, 178, 0.09, 0.022, 'sine', 'ui', 0.156);
   }
 
   startEngine() {

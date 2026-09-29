@@ -31,4 +31,8 @@ The public Pages deployment includes the four generated area packages from the [
 
 The game bundles four sound effects under `public/assets/audio/`. The cannon loop and explosion by **qubodup**, and the rocket launch by **gracenew**, are published on Freesound under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). The jet takeoff sound by **dklon** is published on OpenGameArt under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) and is credited here as required. Its original mono WAV was encoded to Ogg Vorbis for the game. Source links, filenames, and use are listed in the in-game **Assets & licenses** panel and [`public/assets/audio/ATTRIBUTION.md`](public/assets/audio/ATTRIBUTION.md).
 
+## Original soundtrack
+
+The original soundtrack tracks `fm-rankaisija.ogg` and `orbital-decay.ogg` are composed and performed by **Erätarkastaja**, the project owner. Copyright remains with Erätarkastaja, who grants permission to include the recordings in ILMATILA. All other rights are reserved; the tracks are not covered by the project GPL license. See [`public/assets/audio/ATTRIBUTION.md`](public/assets/audio/ATTRIBUTION.md).
+
 The in-game **Assets & licenses** panel provides user-facing attribution links. Optional terrain data is not stored in this repository; see [`tools/terrain/README.md`](tools/terrain/README.md) before redistributing generated map packages.
