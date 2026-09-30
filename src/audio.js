@@ -4,7 +4,6 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const AUDIO_FILES = {
   cannonLoop: 'cannon-loop.ogg',
   missileLaunch: 'missile-launch.ogg',
-  missileWarning: 'missile-warning.ogg',
   explosion: 'explosion.ogg',
   jetSurge: 'jet-takeoff.ogg',
 };
@@ -218,12 +217,41 @@ export class GameAudio {
     return { source, gain };
   }
 
-  playMissileWarningCue(volume, playbackRate) {
-    const sample = this.playSample('missileWarning', { volume, playbackRate, bus: this.ui });
-    if (sample) return;
-    // Keep the warning audible if the optional CC0 sample has not loaded yet.
-    this.playTone(620, 510, 0.16, volume * 0.34, 'triangle', 'ui');
-    this.playTone(520, 430, 0.16, volume * 0.34, 'triangle', 'ui', 0.21);
+  playMissileWarningCue(volume) {
+    // A low, gated two-tone buzzer reads as a threat horn instead of a game-like chirp.
+    const ctx = this.getContext();
+    if (!ctx || !this.ui) return;
+    const pulseDuration = 0.32;
+    const pulseGap = 0.1;
+    for (let pulse = 0; pulse < 2; pulse++) {
+      const start = ctx.currentTime + pulse * (pulseDuration + pulseGap);
+      const end = start + pulseDuration;
+      const filter = ctx.createBiquadFilter();
+      const envelope = ctx.createGain();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(760, start);
+      filter.frequency.linearRampToValueAtTime(560, end);
+      filter.Q.value = 0.7;
+      envelope.gain.setValueAtTime(0.0001, start);
+      envelope.gain.linearRampToValueAtTime(volume * 0.38, start + 0.035);
+      envelope.gain.setValueAtTime(volume * 0.38, start + 0.22);
+      envelope.gain.linearRampToValueAtTime(0.0001, end);
+      filter.connect(envelope);
+      envelope.connect(this.ui);
+
+      for (const [frequency, level] of [[285, 1], [297, 0.65], [142.5, 0.24]]) {
+        const oscillator = ctx.createOscillator();
+        const oscillatorGain = ctx.createGain();
+        oscillator.type = 'sawtooth';
+        oscillator.frequency.setValueAtTime(frequency, start);
+        oscillator.frequency.linearRampToValueAtTime(frequency * 0.91, end);
+        oscillatorGain.gain.value = level;
+        oscillator.connect(oscillatorGain);
+        oscillatorGain.connect(filter);
+        oscillator.start(start);
+        oscillator.stop(end + 0.02);
+      }
+    }
   }
 
   getContext() {
@@ -562,14 +590,14 @@ export class GameAudio {
     const repeatInterval = 1.28 - urgency * 0.44;
     if (!ctx || ctx.currentTime - this.lastIncomingWarning < repeatInterval) return;
     this.lastIncomingWarning = ctx.currentTime;
-    this.playMissileWarningCue(0.48 + urgency * 0.22, 0.92 + urgency * 0.06);
+    this.playMissileWarningCue(0.48 + urgency * 0.22);
   }
 
   playMissileLaunchWarning() {
     const ctx = this.getContext();
     if (!ctx || ctx.currentTime - this.lastIncomingWarning < 0.38) return;
     this.lastIncomingWarning = ctx.currentTime;
-    this.playMissileWarningCue(0.54, 0.92);
+    this.playMissileWarningCue(0.54);
   }
 
   playGunHit() {

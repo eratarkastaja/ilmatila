@@ -29,7 +29,7 @@ The public Pages deployment includes the four 32 × 32 km area packages from the
 
 ## Sound effects
 
-The game bundles five sound effects under `public/assets/audio/`. The cannon loop and explosion by **qubodup**, the rocket launch by **gracenew**, and the missile warning by **adh.dreaming** are published on Freesound under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). The warning uses a short, faded excerpt of two pulses from the source preview. The jet takeoff sound by **dklon** is published on OpenGameArt under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) and is credited here as required. Its original mono WAV was encoded to Ogg Vorbis for the game. Source links, filenames, and use are listed in the in-game **Assets & licenses** panel and [`public/assets/audio/ATTRIBUTION.md`](public/assets/audio/ATTRIBUTION.md).
+The game bundles four sound effects under `public/assets/audio/`. The cannon loop and explosion by **qubodup** and the rocket launch by **gracenew** are published on Freesound under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). The incoming-missile warning is synthesized in-game and uses no external audio asset. The jet takeoff sound by **dklon** is published on OpenGameArt under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) and is credited here as required. Its original mono WAV was encoded to Ogg Vorbis for the game. Source links, filenames, and use are listed in the in-game **Assets & licenses** panel and [`public/assets/audio/ATTRIBUTION.md`](public/assets/audio/ATTRIBUTION.md).
 
 ## Original soundtrack
 

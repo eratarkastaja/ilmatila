@@ -56,7 +56,7 @@ The heading-up radar keeps the aircraft's nose at the top of the display. Press 
 
 ## Audio
 
-Combat audio includes bundled CC0 samples for cannon fire, missile launch, incoming-missile warnings, and explosions, plus a CC BY 3.0 jet-engine accent. Their sources and attribution are listed in the in-game **Assets & licenses** panel and [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). Procedural audio remains available if a sample fails to load.
+Combat audio uses bundled CC0 samples for cannon fire, missile launch, and explosions, plus a CC BY 3.0 jet-engine accent. The incoming-missile warning is synthesized in-game. Sample sources and attribution are listed in the in-game **Assets & licenses** panel and [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
 
 The optional soundtrack contains two original tracks by Erätarkastaja. They are encoded as stereo Ogg Vorbis and total about 4.6 MB; the WAV masters remain outside the repository. Music is loaded only after the player enables it from the menu or pause dialog, and the preference persists between visits. Copyright and use details are in [`public/assets/audio/ATTRIBUTION.md`](public/assets/audio/ATTRIBUTION.md); the soundtrack is not covered by the project GPL license.
 

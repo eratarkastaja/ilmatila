@@ -78,12 +78,14 @@ export async function createTerrain({ areaId, fallback = true, onProgress, signa
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.y = -250;
     mesh.receiveShadow = true;
+    const heightSampler = (x, z) => sampleHeight(values, metadata.width, metadata.height, metadata.referenceHeight, areaMeters, x, z);
+    mesh.add(makeHorizonTerrain(areaMeters, heightSampler));
     const detailStreamer = hasMovingDetailMetadata(metadata)
       ? createDetailStreamer({ base, metadata, terrainGeometry: geometry, parent: mesh, anisotropy: textureAnisotropy })
       : null;
     const terrain = {
       id:areaConfig?.id ?? selected.id, label:areaConfig?.label ?? selected.label, mesh, real: true, metadata, worldSize:areaMeters,
-      sampleHeight: (x, z) => sampleHeight(values, metadata.width, metadata.height, metadata.referenceHeight, areaMeters, x, z),
+      sampleHeight: heightSampler,
       isWater: (x, z) => sampleWater(water, orthoGrid, tilePixels, orthoAreaMeters, x, z),
       updateDetailPosition: (x, z) => detailStreamer?.update(x, z),
       detailStreamer,
@@ -312,7 +314,71 @@ function makePreviewTerrain() {
   geometry.computeVertexNormals();
   const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true }));
   mesh.position.y = -250; mesh.receiveShadow = true;
+  mesh.add(makeHorizonTerrain(size, previewHeight));
   return { mesh, real: false, worldSize:size, sampleHeight: previewHeight, isWater: () => false };
+}
+
+function makeHorizonTerrain(worldSize, sampleWorldHeight) {
+  // A lightweight 1 km grid extends the landform beyond the playable map.
+  // It is visual only: mission bounds, radar, and collision remain unchanged.
+  const extent = 160_000;
+  const segments = 160;
+  const halfWorld = worldSize / 2;
+  const geometry = new THREE.PlaneGeometry(extent, extent, segments, segments);
+  geometry.rotateX(-Math.PI / 2);
+  const positions = geometry.attributes.position;
+  const colors = new Float32Array(positions.count * 3);
+  const low = new THREE.Color('#263b36');
+  const high = new THREE.Color('#53604a');
+  const color = new THREE.Color();
+  const transitionInside = 3_000;
+  const transitionOutside = 10_000;
+
+  for (let i = 0; i < positions.count; i++) {
+    const x = positions.getX(i);
+    const z = positions.getZ(i);
+    const clampedX = THREE.MathUtils.clamp(x, -halfWorld, halfWorld);
+    const clampedZ = THREE.MathUtils.clamp(z, -halfWorld, halfWorld);
+    const outsideDistance = Math.hypot(x - clampedX, z - clampedZ);
+    const edgeDistance = halfWorld - Math.max(Math.abs(x), Math.abs(z));
+    const edgeHeight = sampleWorldHeight(clampedX, clampedZ);
+    let worldHeight;
+
+    if (outsideDistance === 0) {
+      const edgeBlend = 1 - smoothstep(0, transitionInside, edgeDistance);
+      worldHeight = edgeHeight - THREE.MathUtils.lerp(88, 5, edgeBlend);
+    } else {
+      const rollingLowland = -250
+        + Math.sin(x * 0.00019 + Math.sin(z * 0.00011)) * 8
+        + Math.cos(z * 0.00023 - Math.sin(x * 0.00009)) * 5;
+      const blend = smoothstep(0, transitionOutside, outsideDistance);
+      worldHeight = THREE.MathUtils.lerp(edgeHeight - 5, rollingLowland, blend);
+    }
+
+    positions.setY(i, worldHeight + 250);
+    const broadVariation = Math.sin(x * 0.0007 + z * 0.00031) * 0.5 + 0.5;
+    const edgeFade = THREE.MathUtils.clamp(outsideDistance / 18_000, 0, 1);
+    color.copy(low).lerp(high, 0.15 + broadVariation * 0.24 + edgeFade * 0.08);
+    colors[i * 3] = color.r;
+    colors[i * 3 + 1] = color.g;
+    colors[i * 3 + 2] = color.b;
+  }
+
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = 'visual-horizon-terrain';
+  mesh.frustumCulled = false;
+  mesh.receiveShadow = false;
+  mesh.castShadow = false;
+  return mesh;
+}
+
+function smoothstep(min, max, value) {
+  const t = THREE.MathUtils.clamp((value - min) / (max - min), 0, 1);
+  return t * t * (3 - 2 * t);
 }
 
 function previewHeight(x, z) {

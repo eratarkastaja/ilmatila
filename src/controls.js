@@ -10,13 +10,13 @@ const GAME_KEY_CODES = new Set([
   'Minus', 'NumpadAdd', 'NumpadSubtract',
 ]);
 const CAMERA_DISTANCE_DEFAULT = 22;
-const CAMERA_DISTANCE_MIN = 11;
+const CAMERA_DISTANCE_MIN = 3.8;
 const CAMERA_DISTANCE_MAX = 70;
 
 function flightKeyCode(event) {
-  if (event.key === '+' || event.code === 'NumpadAdd' || (event.code === 'Equal' && event.shiftKey)) return 'ZoomIn';
+  if (event.key === '+' || event.key === 'Add' || event.code === 'NumpadAdd' || (event.code === 'Equal' && event.shiftKey)) return 'ZoomIn';
   if (event.key === '−'
-    || event.key === '-' || event.code === 'Minus' || event.code === 'NumpadSubtract') return 'ZoomOut';
+    || event.key === '-' || event.key === 'Subtract' || event.code === 'Minus' || event.code === 'NumpadSubtract') return 'ZoomOut';
   return GAME_KEY_CODES.has(event.code) ? event.code : null;
 }
 
@@ -51,6 +51,7 @@ export class FlightControls {
     this.rollRotation = new THREE.Quaternion();
     this.yawRotation = new THREE.Quaternion();
     this.cameraDistance = CAMERA_DISTANCE_DEFAULT;
+    this.cameraDistanceTarget = CAMERA_DISTANCE_DEFAULT;
     this.mouseDeltaX = 0;
     this.mouseDeltaY = 0;
     this.mouseRoll = 0;
@@ -79,7 +80,7 @@ export class FlightControls {
           this.keys.delete('ShiftLeft');
           this.keys.delete('ShiftRight');
         }
-        const step = event.repeat ? 0.8 : 2.8;
+        const step = event.repeat ? 1.3 : 4;
         this.adjustCameraZoom(code === 'ZoomIn' ? -step : step);
         return;
       }
@@ -115,7 +116,7 @@ export class FlightControls {
       if (!this.enabled || event.ctrlKey) return;
       event.preventDefault();
       const deltaUnit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? innerHeight : 1;
-      this.adjustCameraZoom(event.deltaY * deltaUnit * 0.025);
+      this.adjustCameraZoom(event.deltaY * deltaUnit * 0.07);
     };
     addEventListener('keydown', this.onKeyDown);
     addEventListener('keyup', this.onKeyUp);
@@ -200,11 +201,16 @@ export class FlightControls {
     // The enlarged envelope lets players climb into the thin, cold air where contrails form.
     this.plane.position.y = Math.min(this.plane.position.y, 8800);
     // Keep the chase view above the airframe instead of banking it sideways with the jet.
-    this.cameraOffset.set(0, 6.2 + (this.cameraDistance - CAMERA_DISTANCE_DEFAULT) * .08, 0)
+    this.cameraDistance = THREE.MathUtils.damp(this.cameraDistance, this.cameraDistanceTarget, 14, dt);
+    const cameraHeight = this.cameraDistance < CAMERA_DISTANCE_DEFAULT
+      ? THREE.MathUtils.lerp(2.4, 6.2, (this.cameraDistance - CAMERA_DISTANCE_MIN) / (CAMERA_DISTANCE_DEFAULT - CAMERA_DISTANCE_MIN))
+      : 6.2 + (this.cameraDistance - CAMERA_DISTANCE_DEFAULT) * .08;
+    this.cameraOffset.set(0, cameraHeight, 0)
       .addScaledVector(this.forward, -this.cameraDistance);
     this.cameraTarget.copy(this.plane.position).add(this.cameraOffset);
-    this.camera.position.lerp(this.cameraTarget, 1 - Math.exp(-3.2 * dt));
-    this.camera.lookAt(this.cameraTarget.copy(this.plane.position).addScaledVector(this.forward, 44));
+    const zooming = Math.abs(this.cameraDistanceTarget - this.cameraDistance) > 0.2;
+    this.camera.position.lerp(this.cameraTarget, 1 - Math.exp(-(zooming ? 8 : 3.2) * dt));
+    this.camera.lookAt(this.cameraTarget.copy(this.plane.position).addScaledVector(this.forward, this.cameraDistance * 2));
   }
 
   resetMouseAim() {
@@ -239,12 +245,12 @@ export class FlightControls {
   }
 
   resetCameraZoom() {
-    this.cameraDistance = CAMERA_DISTANCE_DEFAULT;
+    this.cameraDistanceTarget = CAMERA_DISTANCE_DEFAULT;
   }
 
   adjustCameraZoom(delta) {
-    this.cameraDistance = THREE.MathUtils.clamp(
-      this.cameraDistance + delta,
+    this.cameraDistanceTarget = THREE.MathUtils.clamp(
+      this.cameraDistanceTarget + delta,
       CAMERA_DISTANCE_MIN,
       CAMERA_DISTANCE_MAX,
     );

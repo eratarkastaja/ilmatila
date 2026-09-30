@@ -2,16 +2,14 @@
 
 ILMATILA uses the following sound assets. The Freesound clips are high-quality
 previews from their source pages, encoded as Ogg Vorbis for browser delivery.
-The `missile-warning.ogg` file is a short excerpt of two alert pulses from the
-source preview, filtered and faded at the end to avoid a cut-off click. The
-`jet-takeoff.ogg` file was encoded from the original mono WAV; no other edits
-were made to those samples.
+The `jet-takeoff.ogg` file was encoded from the original mono WAV; no other
+edits were made to those samples. The incoming-missile warning is synthesized
+in-game and does not use an external audio file.
 
 | Bundled file | Source and creator | License | Use |
 | --- | --- | --- | --- |
 | `cannon-loop.ogg` | [Machine Gun Burst Loop Middle (10 Shots), qubodup, Freesound](https://freesound.org/people/qubodup/sounds/854643/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Looping cannon-fire texture |
 | `missile-launch.ogg` | [Rocket Launch, gracenew, Freesound](https://freesound.org/people/gracenew/sounds/857959/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Missile launch |
-| `missile-warning.ogg` | [Missile Alert!, adh.dreaming, Freesound](https://freesound.org/people/adh.dreaming/sounds/656060/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Two-pulse incoming missile warning; excerpt and Ogg encoding |
 | `explosion.ogg` | [Explosion, qubodup, Freesound](https://freesound.org/people/qubodup/sounds/442958/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Explosion and collision layer |
 | `jet-takeoff.ogg` | [Jet Engine Takeoff, dklon, OpenGameArt](https://opengameart.org/content/jet-engine-takeoff) | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | Brief engine surge when afterburner engages |
 

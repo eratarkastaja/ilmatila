@@ -6,10 +6,10 @@
 
 - Expanded all four Finnish theaters to 32 × 32 km and published refreshed MML terrain packages. The Pages workflow now downloads and verifies terrain data release v1.2.0.
 - Extended mission ingress, recovery, convoy fronts, and ground engagements to use more of the larger theaters.
-- Added precise mouse flight controls and adjustable camera zoom, with input reset behavior to prevent stale mouse aim from affecting a new sortie.
+- Added precise mouse flight controls and fast, smoothly interpolated chase-camera zoom with a much closer minimum view; input reset prevents stale mouse aim from affecting a new sortie.
 - Reworked hostile attack runs, firing windows, missile timing, and defensive reactions across difficulty levels. Hard now applies more sustained pressure; Easy retains longer breathing room.
 - Added shared airframe damage effects: damaged aircraft begin trailing smoke below 50% health and lose some handling authority as health falls below 30%.
-- Improved theater-edge haze, incoming missile warning audio, and several cockpit and menu sound cues.
+- Extended visual terrain beyond the playable map so its edge fades into distant haze; improved theater-edge fog and replaced the electronic missile-warning chirp with a low synthesized two-pulse buzzer.
 - Added a brighter sun with a view-angle-sensitive lens flare, including a restrained anamorphic glint and optical ghosts.
 - Improved terrain downloading with retry handling and support for staged output directories; updated terrain package validation and attribution details.
 - Updated the Pages deployment workflow to current Node.js 24-compatible GitHub Actions.
