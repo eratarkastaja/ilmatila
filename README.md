@@ -1,6 +1,6 @@
 # ILMATILA
 
-**ILMATILA 0.1.0-alpha.7** is an independent browser-based air-combat game by **ERÄGAMES**, built with Three.js. It remains in **alpha**: the sortie loop and progression are playable, but combat balance and mission pacing still need broader player testing. Aircraft handling, radar, weapons, opponents, and ground battles are game simulations and are not intended for real-world training or operational use.
+**ILMATILA 0.1.0-alpha.8** is an independent browser-based air-combat game by **ERÄGAMES**, built with Three.js. It remains in **alpha**: the sortie loop and progression are playable, but combat balance and mission pacing still need broader player testing. Aircraft handling, radar, weapons, opponents, and ground battles are game simulations and are not intended for real-world training or operational use.
 
 The interface defaults to English and also supports Finnish. See the [changelog](CHANGELOG.md) for this alpha's updates.
 

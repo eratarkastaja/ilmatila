@@ -60,6 +60,7 @@ export class FlightControls {
     this.mouseViewportHeight = canvas.clientHeight || innerHeight;
     this.pointerLockActive = false;
     this.cameraOffset = new THREE.Vector3();
+    this.cameraFollowOffset = new THREE.Vector3(0, 5, -CAMERA_DISTANCE_DEFAULT);
     this.cameraTarget = new THREE.Vector3();
     this.onKeyDown = event => {
       const code = flightKeyCode(event);
@@ -207,9 +208,18 @@ export class FlightControls {
       : 6.2 + (this.cameraDistance - CAMERA_DISTANCE_DEFAULT) * .08;
     this.cameraOffset.set(0, cameraHeight, 0)
       .addScaledVector(this.forward, -this.cameraDistance);
-    this.cameraTarget.copy(this.plane.position).add(this.cameraOffset);
     const zooming = Math.abs(this.cameraDistanceTarget - this.cameraDistance) > 0.2;
-    this.camera.position.lerp(this.cameraTarget, 1 - Math.exp(-(zooming ? 8 : 3.2) * dt));
+    const followRate = zooming ? 14 : 10;
+    this.cameraFollowOffset.lerp(this.cameraOffset, 1 - Math.exp(-followRate * dt));
+    if (this.cameraFollowOffset.lengthSq() > 1e-6) {
+      this.cameraFollowOffset.setLength(this.cameraOffset.length());
+    } else {
+      this.cameraFollowOffset.copy(this.cameraOffset);
+    }
+    // Smooth only the camera's offset around the jet. Following its world-space
+    // position with a spring makes the aircraft outrun the camera at high speed.
+    this.cameraTarget.copy(this.plane.position).add(this.cameraFollowOffset);
+    this.camera.position.copy(this.cameraTarget);
     this.camera.lookAt(this.cameraTarget.copy(this.plane.position).addScaledVector(this.forward, this.cameraDistance * 2));
   }
 
@@ -245,7 +255,10 @@ export class FlightControls {
   }
 
   resetCameraZoom() {
+    this.cameraDistance = CAMERA_DISTANCE_DEFAULT;
     this.cameraDistanceTarget = CAMERA_DISTANCE_DEFAULT;
+    this.cameraOffset.set(0, 6.2, -CAMERA_DISTANCE_DEFAULT);
+    this.cameraFollowOffset.set(0, 5, -CAMERA_DISTANCE_DEFAULT);
   }
 
   adjustCameraZoom(delta) {

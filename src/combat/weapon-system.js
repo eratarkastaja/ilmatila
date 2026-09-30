@@ -37,6 +37,7 @@ export class WeaponSystem {
     this._up=new THREE.Vector3();
     this._muzzleOffset=new THREE.Vector3();
     this._start=new THREE.Vector3();
+    this._tracerVisualStart=new THREE.Vector3();
     this.missileFeedbackKey = null;
     this.missileFeedbackTimer = 0;
   }
@@ -102,9 +103,14 @@ export class WeaponSystem {
     shot.mesh.position.copy(start);
     const velocity = shot.velocity.copy(direction).multiplyScalar(GUN_PROJECTILE_SPEED).add(this.playerVelocity);
     if (tracer) {
-      shot.mesh.quaternion.setFromUnitVectors(localBulletAxis,tracerDirection.copy(velocity).normalize());
+      const shotDirection=tracerDirection.copy(velocity).normalize();
+      shot.mesh.quaternion.setFromUnitVectors(localBulletAxis,shotDirection);
       this.scene.add(shot.mesh);
-      this.fx?.addMovingTracer(start, velocity, '#ffd282', {
+      // Keep the long luminous streak clear of the aircraft silhouette in
+      // the close chase camera. The ballistic projectile and hit testing still
+      // begin at the actual cannon muzzle above.
+      const visibleStart=this._tracerVisualStart.copy(start).addScaledVector(shotDirection,4.5);
+      this.fx?.addMovingTracer(visibleStart, velocity, '#ffd282', {
         life: .14, trailTime: .06, gravity: GUN_PROJECTILE_GRAVITY,
       });
     }

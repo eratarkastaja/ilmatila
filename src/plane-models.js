@@ -77,21 +77,32 @@ export function buildF35Asset(plane, aircraftAsset, friendly) {
     }
   }
 
+  // The source airframe ends at z ≈ -6.2; place the custom F135 exhaust exit
+  // there so its lip meets the fuselage instead of hanging behind the tail.
+  const exhaustExitZ = -6.18;
+  const nozzleLength = 0.78;
   const nozzleMaterial = material('#343d43', 0.38, 0.68);
-  const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.56, 0.78, 16, 1, true), nozzleMaterial);
+  const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.56, nozzleLength, 16, 1, true), nozzleMaterial);
   nozzle.rotation.x = Math.PI / 2;
-  nozzle.position.set(0, -0.02, -7.55);
+  nozzle.position.set(0, -0.02, exhaustExitZ + nozzleLength * 0.5);
   plane.add(nozzle);
   const nozzleLip = new THREE.Mesh(new THREE.TorusGeometry(0.51, 0.075, 8, 20), material('#59636a', 0.34, 0.72));
-  nozzleLip.position.set(0, -0.02, -7.94);
+  nozzleLip.position.set(0, -0.02, exhaustExitZ);
   plane.add(nozzleLip);
-  const nozzleInterior = new THREE.Mesh(new THREE.CylinderGeometry(0.39, 0.42, 0.1, 16), material('#141a1e', 0.56, 0.35));
+  const nozzleLiner = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.39, 0.43, 0.46, 20, 1, true),
+    material('#3a4246', 0.54, 0.48),
+  );
+  nozzleLiner.rotation.x = Math.PI / 2;
+  nozzleLiner.position.set(0, -0.02, exhaustExitZ + 0.23);
+  plane.add(nozzleLiner);
+  const nozzleInterior = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.39, 0.07, 20), material('#20272b', 0.62, 0.38));
   nozzleInterior.rotation.x = Math.PI / 2;
-  nozzleInterior.position.set(0, -0.02, -7.95);
+  nozzleInterior.position.set(0, -0.02, exhaustExitZ + 0.3);
   plane.add(nozzleInterior);
 
-  const afterburner = createAfterburnerFlame({ radius: 0.46, length: 2.75 });
-  afterburner.position.set(0, -0.02, -7.9);
+  const afterburner = createAfterburnerFlame({ radius: 0.53, length: 3.2 });
+  afterburner.position.set(0, -0.02, exhaustExitZ + 0.04);
   afterburner.visible = false;
   afterburner.userData.keepSeparate = true;
   plane.add(afterburner);
@@ -196,10 +207,11 @@ export function buildFlanker(plane, m) {
 export function createAfterburnerFlame({ radius = 0.45, length = 2.5 } = {}) {
   const flame = new THREE.Group();
   const layers = [
-    { radius: radius * 1.12, length, color: '#714cff', opacity: 0.2 },
-    { radius: radius * 0.86, length: length * 0.9, color: '#ff4a12', opacity: 0.66 },
-    { radius: radius * 0.54, length: length * 0.72, color: '#ff9b24', opacity: 0.92 },
-    { radius: radius * 0.27, length: length * 0.46, color: '#fff0bd', opacity: 1 },
+    { radius: radius * 1.04, length: length * 1.08, color: '#e85bff', opacity: 0.12 },
+    { radius: radius * 0.88, length: length, color: '#ff4b16', opacity: 0.28 },
+    { radius: radius * 0.66, length: length * 0.88, color: '#ff7b20', opacity: 0.52 },
+    { radius: radius * 0.4, length: length * 0.7, color: '#ffc04d', opacity: 0.68 },
+    { radius: radius * 0.2, length: length * 0.52, color: '#fff0c4', opacity: 0.72 },
   ];
   for (const layer of layers) {
     const material = new THREE.MeshBasicMaterial({
@@ -212,22 +224,68 @@ export function createAfterburnerFlame({ radius = 0.45, length = 2.5 } = {}) {
       toneMapped: false,
     });
     material.userData.ilmatilaOwned=true;
-    const mesh = new THREE.Mesh(new THREE.ConeGeometry(layer.radius, layer.length, 12, 1), material);
+    const mesh = new THREE.Mesh(createFlameEnvelope(layer.radius, layer.length), material);
     mesh.userData.ilmatilaOwnedGeometry=true;
-    // ConeGeometry points along +Y; turn its bright tip aft along -Z.
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.z = -layer.length * 0.48;
     flame.add(mesh);
   }
-  const coreMaterial=new THREE.MeshBasicMaterial({ color: '#fff7d8', blending: THREE.AdditiveBlending, toneMapped: false });
+  // A small hot disk makes the plume read as attached to the engine when
+  // viewed directly from behind, without adding a light or a particle emitter.
+  const coreMaterial = new THREE.MeshBasicMaterial({
+    color: '#fff5d6',
+    transparent: true,
+    opacity: 0.78,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    toneMapped: false,
+  });
   coreMaterial.userData.ilmatilaOwned=true;
-  const core = new THREE.Mesh(new THREE.SphereGeometry(radius * 0.19, 10, 7),coreMaterial);
+  const core = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.22, 20), coreMaterial);
   core.userData.ilmatilaOwnedGeometry=true;
-  core.scale.set(1, 1, 1.9);
-  core.position.z = -0.08;
+  core.position.z = -0.015;
   flame.add(core);
   flame.visible = false;
   return flame;
+}
+
+function createFlameEnvelope(radius, length) {
+  const radialSegments = 20;
+  const profile = [
+    [0, 0.72], [0.08, 0.9], [0.19, 1], [0.32, 0.96], [0.47, 0.84],
+    [0.62, 0.68], [0.76, 0.51], [0.88, 0.34], [0.96, 0.17], [1, 0.012],
+  ];
+  const positions = [];
+  const indices = [];
+
+  for (let ring = 0; ring < profile.length; ring++) {
+    const [along, width] = profile[ring];
+    for (let side = 0; side < radialSegments; side++) {
+      const angle = side / radialSegments * Math.PI * 2;
+      // Subtle fixed lobes break the perfect plastic-cone silhouette without
+      // introducing per-frame noise, particles, or additional draw calls.
+      const turbulence = 1
+        + Math.sin(angle * 3 + ring * 0.55) * 0.035
+        + Math.sin(angle * 5 - ring * 0.72) * 0.018;
+      const ringRadius = radius * width * turbulence;
+      positions.push(Math.cos(angle) * ringRadius, Math.sin(angle) * ringRadius, -length * along);
+    }
+  }
+
+  for (let ring = 0; ring < profile.length - 1; ring++) {
+    for (let side = 0; side < radialSegments; side++) {
+      const a = ring * radialSegments + side;
+      const b = ring * radialSegments + (side + 1) % radialSegments;
+      const c = (ring + 1) * radialSegments + side;
+      const d = (ring + 1) * radialSegments + (side + 1) % radialSegments;
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
 }
 
 function addFuselage(parent, material, profile) {

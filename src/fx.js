@@ -536,14 +536,13 @@ export class FlightFX {
       const altitude = aircraftMesh.position.y - terrain.sampleHeight(aircraftMesh.position.x, aircraftMesh.position.z);
       const cruiseContrail = THREE.MathUtils.smoothstep(altitude, base, full) * moisture;
       const afterburnerWake = aircraftMesh.userData.boosting
-        ? THREE.MathUtils.smoothstep(altitude, 1800, 3600) * moisture * 0.24
+        ? (0.075 + THREE.MathUtils.smoothstep(altitude, 1800, 3600) * 0.16) * moisture
         : 0;
-      const density = Math.max(cruiseContrail, afterburnerWake);
-      const shortAfterburnerWake = afterburnerWake > cruiseContrail;
       let state = this.contrailStates.get(aircraftMesh);
       if (!state) {
         const offsets = aircraftMesh.userData.trailOffsets ?? [[0, 0, -7]];
-        const trails = offsets.map(() => ({
+        const trails = offsets.map((_, index) => ({
+          engineTrail: offsets.length <= 2 || index === offsets.length - 1,
           positions: new Float32Array(this.trailPointCapacity * 3),
           ages: new Float32Array(this.trailPointCapacity),
           strengths: new Float32Array(this.trailPointCapacity),
@@ -555,9 +554,11 @@ export class FlightFX {
         state = { trails };
         this.contrailStates.set(aircraftMesh, state);
       }
-      if (density <= 0.025) continue;
       for (let i = 0; i < state.trails.length; i++) {
         const trail = state.trails[i];
+        const wakeDensity = trail.engineTrail ? afterburnerWake : 0;
+        const density = Math.max(cruiseContrail, wakeDensity);
+        if (density <= 0.025) continue;
         trail.timer -= dt;
         if (trail.timer > 0) continue;
         const offset = aircraftMesh.userData.trailOffsets?.[i] ?? [0, 0, -7];
@@ -569,8 +570,9 @@ export class FlightFX {
         trail.positions[positionOffset + 1] = this._world.y;
         trail.positions[positionOffset + 2] = this._world.z;
         trail.ages[index] = 0;
-        trail.lifetimes[index] = shortAfterburnerWake ? 4.5 : 14;
-        trail.strengths[index] = density * (shortAfterburnerWake ? 0.31 : 0.62);
+        const shortAfterburnerWake = wakeDensity > cruiseContrail;
+        trail.lifetimes[index] = shortAfterburnerWake ? 2.6 : 14;
+        trail.strengths[index] = density * (shortAfterburnerWake ? 0.4 : 0.62);
         trail.head = (index + 1) % this.trailPointCapacity;
         trail.count = Math.min(trail.count + 1, this.trailPointCapacity);
         trail.timer = 0.07;

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0-alpha.8 — 2026-09-30
+
+### English
+
+- Improved close chase-camera behavior so the aircraft stays framed during fast flight and turns; camera zoom remains continuous and now reaches a closer view.
+- Repositioned the F-35 exhaust nozzle to meet the airframe, added a deeper nozzle interior, and replaced the harsh afterburner cones with a smooth, layered orange plume.
+- Added a restrained, short afterburner wake using the existing pooled trail effect, with no per-frame particle allocation.
+- Moved the visible cannon tracer streak just ahead of the aircraft silhouette while preserving the actual projectile muzzle origin and hit testing.
+
+Alpha 8 remains an early playable prototype. Flight, radar, weapons, AI, and battlefield behavior are simplified game systems, not real-world training or operational tools.
+
 ## 0.1.0-alpha.7 — 2026-09-30
 
 ### English
