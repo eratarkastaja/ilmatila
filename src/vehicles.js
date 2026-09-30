@@ -60,6 +60,14 @@ export function getGroundVehicleSpec(platformId) {
   return platforms[platformId];
 }
 
+export function disposeGroundVehicleVisual(root){
+  if(!root||root.userData.visualResourcesDisposed)return;
+  root.userData.visualResourcesDisposed=true;
+  const geometries=new Set();
+  root.traverse(object=>{if(object.geometry)geometries.add(object.geometry);});
+  for(const geometry of geometries)geometry.dispose();
+}
+
 function buildLeopard(group, s, m) {
   addHull(group, s.width, s.length, s.hullHeight, m.body, { topScale: 0.88, frontCut: 0.65, rearCut: 0.35 });
   addBox(group, [s.width * 0.18, 0.36, s.length * 0.66], [0, s.hullHeight + 0.18, -0.08], m.bodyLight);

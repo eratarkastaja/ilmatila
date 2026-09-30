@@ -104,7 +104,7 @@ describe('ProjectileSystem', () => {
     expect(audio.stopMissileFlight).toHaveBeenCalledTimes(2);
   });
 
-  it('marks an approaching hostile missile as a threat and reports swept player impact', () => {
+  it('clears a missile threat after swept impact resolves', () => {
     const { system, player, scene, hostiles, hooks } = makeSystem();
     const missile = {
       projectile: true,
@@ -123,7 +123,7 @@ describe('ProjectileSystem', () => {
 
     system.update(1);
 
-    expect(system.incomingMissile).toBe(true);
+    expect(system.incomingMissile).toBe(false);
     expect(hooks.onPlayerDestroyed).toHaveBeenCalledWith('combat.hostileMissile');
     expect(hooks.addExplosion).toHaveBeenCalledOnce();
     expect(hostiles).toHaveLength(0);

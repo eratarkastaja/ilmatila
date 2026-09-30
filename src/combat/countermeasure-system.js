@@ -21,7 +21,7 @@ function disposeTransientMaterials(object) {
 export class CountermeasureSystem {
   constructor({
     scene, player, playerVelocity, fx, audio, decoys = [], playerShots = [], hostileShots = [],
-    addTransientGlow, onInventoryChange = () => {},
+    addTransientGlow, onInventoryChange = () => {}, initialCount = 12,
   }) {
     this.scene = scene;
     this.player = player;
@@ -32,9 +32,12 @@ export class CountermeasureSystem {
     this.playerShots = playerShots;
     this.hostileShots = hostileShots;
     this.addTransientGlow = addTransientGlow;
+    this._drift=new THREE.Vector3();
+    this._jitter=new THREE.Vector3();
     this.onInventoryChange = onInventoryChange;
-    this.countermeasures = 12;
+    this.countermeasures = initialCount;
     this.cooldown = 0;
+    this.lastPlayerDeployment = 'ready';
   }
 
   tick(dt) {
@@ -42,10 +45,21 @@ export class CountermeasureSystem {
   }
 
   deployPlayer() {
-    if (this.cooldown > 0 || this.countermeasures <= 0) {
-      this.audio?.playWeaponNoLock();
+    if (this.cooldown > 0) {
+      this.lastPlayerDeployment = 'rearming';
+      if (this.audio?.playCountermeasureUnavailable) this.audio.playCountermeasureUnavailable();
+      else this.audio?.playWeaponNoLock();
+      this.onInventoryChange();
       return false;
     }
+    if (this.countermeasures <= 0) {
+      this.lastPlayerDeployment = 'empty';
+      if (this.audio?.playCountermeasureUnavailable) this.audio.playCountermeasureUnavailable();
+      else this.audio?.playWeaponNoLock();
+      this.onInventoryChange();
+      return false;
+    }
+    this.lastPlayerDeployment = 'deployed';
     this.countermeasures--;
     this.cooldown = .85;
     const attitude = this.player.quaternion;
@@ -165,8 +179,8 @@ export class CountermeasureSystem {
           }
           decoy.trailClock -= dt;
           if (decoy.trailClock <= 0) {
-            const drift = decoy.velocity.clone().multiplyScalar(.055)
-              .add(new THREE.Vector3((Math.random() - .5) * 7, Math.random() * 8, (Math.random() - .5) * 7));
+            const drift = this._drift.copy(decoy.velocity).multiplyScalar(.055)
+              .add(this._jitter.set((Math.random() - .5) * 7, Math.random() * 8, (Math.random() - .5) * 7));
             this.fx?.emitParticle(decoy.position, drift, flareParticleColor, .42, 2.4 + Math.random() * 1.2, .98, 1);
             decoy.trailClock = .035;
           }
@@ -174,8 +188,8 @@ export class CountermeasureSystem {
           decoy.mesh.scale.setScalar(1 + progress * .72);
           decoy.trailClock -= dt;
           if (decoy.trailClock <= 0) {
-            const drift = decoy.velocity.clone().multiplyScalar(.025)
-              .add(new THREE.Vector3((Math.random() - .5) * 9, (Math.random() - .5) * 6, (Math.random() - .5) * 9));
+            const drift = this._drift.copy(decoy.velocity).multiplyScalar(.025)
+              .add(this._jitter.set((Math.random() - .5) * 9, (Math.random() - .5) * 6, (Math.random() - .5) * 9));
             this.fx?.emitParticle(decoy.position, drift, chaffParticleColor, .34, 1.15 + Math.random() * .55, .58, .3);
             decoy.trailClock = .11;
           }

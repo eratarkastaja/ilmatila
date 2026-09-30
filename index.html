@@ -34,35 +34,47 @@
 
           <div class="mission-heading"><span>01</span><strong data-i18n="menu.chooseProfile">Select a mission</strong><i data-i18n="menu.missionCount">4 MISSIONS</i></div>
           <div class="mission-grid" role="group" data-i18n-aria-label="menu.selectMissionAria">
-            <button class="mission-card selected" type="button" data-mission="intercept" aria-pressed="true">
-              <span class="mission-card-top"><b>01 / QRA</b><i data-i18n="mission.intercept.posture">ALERT</i></span>
-              <strong data-i18n="mission.intercept.title">INTERCEPT FLIGHT</strong>
-              <small data-i18n="mission.intercept.summary">Intercept the hostile formation approaching Finnish airspace.</small>
-              <span class="mission-card-bottom"><i class="contact-mark hostile"></i> <span data-i18n="mission.intercept.count">04 HOSTILE FIGHTERS</span> <b>↗</b></span>
-            </button>
-            <button class="mission-card" type="button" data-mission="patrol" aria-pressed="false">
-              <span class="mission-card-top"><b>02 / CAP</b><i data-i18n="mission.patrol.posture">ON STATION</i></span>
+            <button class="mission-card selected" type="button" data-mission="patrol" aria-pressed="true">
+              <span class="mission-card-top"><b>01 / CAP</b><i data-i18n="mission.patrol.posture">ON STATION</i></span>
               <strong data-i18n="mission.patrol.title">COMBAT AIR PATROL</strong>
               <small data-i18n="mission.patrol.summary">Patrol the assigned sector and intercept hostile fighters operating in the area.</small>
               <span class="mission-card-bottom"><i class="contact-mark hostile"></i> <span data-i18n="mission.patrol.count">02 HOSTILE FIGHTERS</span> <b>↗</b></span>
+              <span class="mission-card-state" data-mission-state="patrol"></span>
+            </button>
+            <button class="mission-card" type="button" data-mission="intercept" aria-pressed="false">
+              <span class="mission-card-top"><b>02 / QRA</b><i data-i18n="mission.intercept.posture">ALERT</i></span>
+              <strong data-i18n="mission.intercept.title">INTERCEPT FLIGHT</strong>
+              <small data-i18n="mission.intercept.summary">Intercept the hostile formation approaching Finnish airspace.</small>
+              <span class="mission-card-bottom"><i class="contact-mark hostile"></i> <span data-i18n="mission.intercept.count">04 HOSTILE FIGHTERS</span> <b>↗</b></span>
+              <span class="mission-card-state" data-mission-state="intercept"></span>
             </button>
             <button class="mission-card" type="button" data-mission="support" aria-pressed="false">
               <span class="mission-card-top"><b>03 / CAS</b><i data-i18n="mission.support.posture">CAS</i></span>
               <strong data-i18n="mission.support.title">CLOSE AIR SUPPORT</strong>
               <small data-i18n="mission.support.summary">Support friendly ground forces in contact by engaging hostile ground units.</small>
               <span class="mission-card-bottom"><i class="contact-mark ground"></i> <span data-i18n="mission.support.count">GROUND FORCES ENGAGED</span> <b>↗</b></span>
+              <span class="mission-card-state" data-mission-state="support"></span>
             </button>
             <button class="mission-card" type="button" data-mission="training" aria-pressed="false">
               <span class="mission-card-top"><b>04 / TRG</b><i data-i18n="mission.training.posture">TRAINING</i></span>
               <strong data-i18n="mission.training.title">TRAINING SORTIE</strong>
               <small data-i18n="mission.training.summary">Practice aircraft handling, aerobatics, and formation flying with your wingmen.</small>
               <span class="mission-card-bottom"><i class="contact-mark friendly"></i> <span data-i18n="mission.training.count">NO HOSTILE CONTACTS</span> <b>↗</b></span>
+              <span class="mission-card-state" data-mission-state="training"></span>
             </button>
           </div>
 
           <div class="theater-select-row">
             <label for="menu-theater"><span class="theater-index">02</span><strong data-i18n="menu.areaLabel">AREA OF OPERATIONS</strong></label>
             <div class="select-wrap"><select id="menu-theater" data-i18n-aria-label="menu.theaterAria"><option value="paijanne">PÄIJÄNNE</option><option value="virolahti">VIROLAHTI</option><option value="ilomantsi">ILOMANTSI</option><option value="kuusamo">KUUSAMO</option></select><i>⌄</i></div>
+          </div>
+          <div class="theater-select-row difficulty-select-row">
+            <label for="menu-difficulty"><span class="theater-index">03</span><strong data-i18n="menu.difficultyLabel">DIFFICULTY</strong></label>
+            <div class="select-wrap"><select id="menu-difficulty" data-i18n-aria-label="menu.difficultyAria">
+              <option value="easy" data-i18n="difficulty.easy">EASY</option>
+              <option value="standard" data-i18n="difficulty.standard">STANDARD</option>
+              <option value="hard" data-i18n="difficulty.hard">HARD</option>
+            </select><i>⌄</i></div>
           </div>
 
           <div class="briefing-line">
@@ -92,6 +104,7 @@
               <span class="menu-control"><kbd>R</kbd><b data-i18n="controls.radar">SELECT RADAR MODE</b></span>
               <span class="menu-control"><kbd>T</kbd><b data-i18n="controls.targetCycle">CYCLE RADAR TARGET</b></span>
               <span class="menu-control"><kbd>C</kbd><b data-i18n="controls.countermeasures">FLARES / CHAFF</b></span>
+              <span class="menu-control menu-control-wide"><span class="menu-keys"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></span><b data-i18n="controls.wingmen">WINGMEN · ATTACK / DEFEND / REGROUP</b></span>
             </div>
             <p class="menu-lock-instruction" data-i18n="menu.lockInstruction">T cycles hostile radar tracks. Follow the target brackets and keep the target ahead of the nose until LOCK appears; press M to fire.</p>
           </section>
@@ -142,6 +155,37 @@
       </div>
     </dialog>
 
+    <dialog id="mission-debrief" class="mission-debrief" aria-labelledby="debrief-title" aria-describedby="debrief-outcome">
+      <div class="debrief-card">
+        <header class="debrief-header">
+          <span class="debrief-mark" aria-hidden="true"><i></i><b>EG</b></span>
+          <div><small data-i18n="mission.debrief.kicker">SORTIE REPORT</small><h2 id="debrief-title">MISSION COMPLETE</h2></div>
+          <span class="debrief-stamp" data-i18n="mission.debrief.classification">FLIGHT RECORD</span>
+        </header>
+        <p id="debrief-outcome" class="debrief-outcome"></p>
+        <p id="debrief-career-note" class="debrief-career-note" hidden></p>
+        <div class="debrief-mission">
+          <div><small data-i18n="mission.debrief.mission">MISSION</small><strong id="debrief-mission"></strong></div>
+          <div><small data-i18n="mission.debrief.difficulty">DIFFICULTY</small><strong id="debrief-difficulty"></strong></div>
+        </div>
+        <dl class="debrief-stats">
+          <div><dt data-i18n="mission.debrief.duration">SORTIE TIME</dt><dd id="debrief-duration">00:00</dd></div>
+          <div><dt data-i18n="mission.debrief.airKills">HOSTILE AIRCRAFT</dt><dd id="debrief-air-kills">0</dd></div>
+          <div><dt data-i18n="mission.debrief.groundKills">HOSTILE GROUND UNITS</dt><dd id="debrief-ground-kills">0</dd></div>
+          <div><dt data-i18n="mission.debrief.accuracy">CANNON ACCURACY</dt><dd id="debrief-accuracy">—</dd></div>
+          <div><dt data-i18n="mission.debrief.damage">DAMAGE TAKEN</dt><dd id="debrief-damage">0</dd></div>
+          <div><dt data-i18n="mission.debrief.objectives">OBJECTIVES COMPLETED</dt><dd id="debrief-objectives">0 / 1</dd></div>
+          <div><dt data-i18n="mission.debrief.gunRounds">CANNON ROUNDS</dt><dd id="debrief-gun-rounds">0</dd></div>
+          <div><dt data-i18n="mission.debrief.missiles">GUIDED MISSILES</dt><dd id="debrief-missiles">0</dd></div>
+          <div><dt data-i18n="mission.debrief.score">MISSION SCORE</dt><dd id="debrief-score">00000</dd></div>
+        </dl>
+        <footer class="debrief-footer">
+          <span data-i18n="mission.debrief.closed">SORTIE CLOSED</span>
+          <button id="mission-debrief-return" type="button"><span data-i18n="mission.debrief.return">RETURN TO MISSION SELECTION</span><b>⌂</b></button>
+        </footer>
+      </div>
+    </dialog>
+
     <main id="flight-hud" class="hud" data-i18n-aria-label="hud.aria" hidden>
       <header class="topline"><span class="flag"><i></i><i></i></span><span data-i18n="hud.airForce">FINNISH AIR FORCE</span> <b>/</b> F-35A <span class="status"><i></i> <span data-i18n="hud.ready">MISSION ACTIVE</span></span></header>
       <section class="readout speed"><small data-i18n="hud.speed">AIRSPEED</small><strong id="speed">420</strong><span>KT</span></section>
@@ -152,18 +196,23 @@
       <div class="crosshair" data-i18n-aria-label="hud.targetSight"><i></i><b></b></div>
       <div class="gun-aim-cue" id="gun-aim-cue" data-i18n-aria-label="hud.gunAimCue" hidden><i></i><i></i><i></i><i></i></div>
       <div class="target-designator" id="target-designator" hidden><i></i><i></i><i></i><i></i><b id="target-code"></b><small id="target-state"></small></div>
-      <div class="threat-warning" id="threat-warning" hidden role="status"><i></i><b data-i18n="hud.missileInbound">HOSTILE MISSILE · C</b></div>
+      <div class="missile-approach-cue" id="missile-approach-cue" hidden aria-hidden="true"><i></i><b></b></div>
+      <div class="gun-hit-feedback" id="gun-hit-feedback" hidden aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div class="combat-feedback" id="combat-feedback" hidden role="status" aria-live="polite"><i></i><b></b></div>
+      <div class="threat-warning" id="threat-warning" hidden role="alert"><i></i><span><b id="threat-warning-label" data-i18n="hud.missileInbound">HOSTILE MISSILE</b><small id="threat-warning-detail"></small></span></div>
       <div class="boundary-warning" id="boundary-warning" hidden role="status" aria-live="polite"><i></i><b id="boundary-warning-text"></b><span id="boundary-warning-distance" aria-hidden="true"></span></div>
+      <div class="mission-waypoint-cue" id="mission-waypoint-cue" hidden aria-hidden="true"><i></i><b></b></div>
       <section class="mission-objective" id="mission-objective" data-i18n-aria-label="mission.objectiveLabel">
-        <small data-i18n="mission.objectiveLabel">MISSION OBJECTIVE</small>
-        <strong id="mission-objective-title"></strong>
-        <span id="mission-objective-progress"></span>
+        <div class="mission-phase-heading"><i></i><small data-i18n="mission.phaseLabel">SORTIE PHASE</small><b id="mission-phase-title"></b></div>
+        <strong id="mission-phase-detail"></strong>
+        <div id="mission-route-readout" class="mission-route-readout" hidden><span id="mission-route-label"></span><b id="mission-route-range"></b></div>
+        <div class="mission-objective-task"><small data-i18n="mission.objectiveLabel">MISSION OBJECTIVE</small><strong id="mission-objective-title"></strong><span id="mission-objective-progress"></span></div>
       </section>
       <section class="mission-complete" id="mission-complete" hidden role="status" aria-live="assertive" aria-labelledby="mission-complete-title">
         <div class="mission-complete-card"><small><i></i> <span data-i18n="mission.objectiveAchieved">MISSION OBJECTIVE ACHIEVED</span></small><h2 id="mission-complete-title" data-i18n="mission.objectiveAchieved">MISSION OBJECTIVE ACHIEVED</h2><p id="mission-complete-detail"></p></div>
       </section>
       <section class="radar" data-i18n-aria-label="hud.radar"><div class="radar-screen" data-i18n-aria-label="hud.radarScreen"><i class="range-ring ring-inner"></i><i class="range-ring ring-middle"></i><i class="range-ring ring-outer"></i><i class="azimuth-line"></i><i class="ownship"></i><span class="radar-mode-indicator" id="radar-mode-indicator">AIR</span></div></section>
-      <section class="weapons"><div class="weapon-row"><i class="weapon-icon gun-icon"></i><div><small data-i18n="hud.gun">GAU-22/A · 25 mm</small><strong id="weapon">READY</strong></div></div><div class="weapon-row"><i class="weapon-icon missile-icon"></i><div><small id="missile-type">AIM-120C · AMRAAM</small><strong id="ammo">AIR SEARCH</strong></div><b class="ammo-count" id="missile-count">06</b><kbd>M</kbd></div><div class="weapon-row countermeasure-row"><i class="weapon-icon countermeasure-icon"></i><div><small data-i18n="hud.countermeasures">FLARES / CHAFF</small><strong id="countermeasure-count">12</strong></div><kbd>C</kbd></div><div class="score-row"><span data-i18n="hud.score">MISSION SCORE</span><b id="score">00000</b></div></section>
+      <section class="weapons"><div class="weapon-row"><i class="weapon-icon gun-icon"></i><div><small data-i18n="hud.gun">GAU-22/A · 25 mm</small><strong id="weapon">READY</strong></div></div><div class="weapon-row"><i class="weapon-icon missile-icon"></i><div><small id="missile-type">AIM-120C · AMRAAM</small><strong id="ammo">AIR SEARCH</strong></div><b class="ammo-count" id="missile-count">06</b><kbd>M</kbd></div><div class="weapon-row countermeasure-row"><i class="weapon-icon countermeasure-icon"></i><div><small data-i18n="hud.countermeasures">FLARES / CHAFF</small><strong id="countermeasure-count">12</strong></div><kbd>C</kbd></div><div class="wingman-order-row"><small data-i18n="hud.wingmanOrder">WINGMAN ORDERS</small><b id="wingman-order">ATTACK</b></div><div class="hull-row"><div><small data-i18n="hud.airframeIntegrity">AIRFRAME</small><strong id="hull-value">100%</strong></div><i><b id="hull-fill"></b></i></div><div class="score-row"><span data-i18n="hud.score">MISSION SCORE</span><b id="score">00000</b></div></section>
       <div class="reticle-label"><span data-i18n="hud.area">AREA</span> <b id="area-name">PÄIJÄNNE</b> <span>›</span></div>
     </main>
     <section id="death-screen" class="death-screen" hidden aria-live="assertive" aria-labelledby="death-title">

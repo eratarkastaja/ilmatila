@@ -210,6 +210,7 @@ export class FlightFX {
 
     this.tracerCapacity = 256;
     this.tracers = [];
+    this.freeTracers=[];
     this.tracerPositions = new Float32Array(this.tracerCapacity * 2 * 3);
     this.tracerColors = new Float32Array(this.tracerCapacity * 2 * 3);
     const tracerGeometry = new THREE.BufferGeometry();
@@ -247,19 +248,33 @@ export class FlightFX {
     this._missileColor = new THREE.Color();
     this._tracerHead = new THREE.Vector3();
     this._tracerTail = new THREE.Vector3();
+    this._activeAircraft = new Set();
+    this._activeMissiles = new Set();
   }
 
   addTracer(start, end, color = '#fff1ad') {
-    if (this.tracers.length >= this.tracerCapacity) this.tracers.shift();
-    this.tracers.push({ start: start.clone(), end: end.clone(), color: new THREE.Color(color), life: 0.085, maxLife: 0.085 });
+    if (this.tracers.length >= this.tracerCapacity) this.releaseTracer(this.tracers.shift());
+    const tracer=this.acquireTracer();
+    tracer.start.copy(start);tracer.end.copy(end);tracer.isMoving=false;tracer.color.set(color);
+    tracer.life=.085;tracer.maxLife=.085;tracer.age=0;tracer.trailTime=0;tracer.gravity=0;
+    this.tracers.push(tracer);
   }
 
   addMovingTracer(start, velocity, color = '#ffd282', { life = 0.14, trailTime = 0.06, gravity = 0 } = {}) {
-    if (this.tracers.length >= this.tracerCapacity) this.tracers.shift();
-    this.tracers.push({
-      start: start.clone(), velocity: velocity.clone(), color: new THREE.Color(color),
-      life, maxLife: life, age: 0, trailTime, gravity,
-    });
+    if (this.tracers.length >= this.tracerCapacity) this.releaseTracer(this.tracers.shift());
+    const tracer=this.acquireTracer();
+    tracer.start.copy(start);tracer.end.set(0,0,0);tracer.velocity.copy(velocity);tracer.color.set(color);
+    tracer.life=life;tracer.maxLife=life;tracer.age=0;tracer.trailTime=trailTime;tracer.gravity=gravity;tracer.isMoving=true;
+    this.tracers.push(tracer);
+  }
+
+  acquireTracer(){
+    return this.freeTracers.pop()??{start:new THREE.Vector3(),end:new THREE.Vector3(),velocity:new THREE.Vector3(),color:new THREE.Color()};
+  }
+
+  releaseTracer(tracer){
+    tracer.isMoving=false;
+    this.freeTracers.push(tracer);
   }
 
   update(dt, aircraft, missiles, terrain, weather, camera) {
@@ -274,7 +289,7 @@ export class FlightFX {
     this.contrailStates.clear();
     this.wingVaporStates.clear();
     this.missileTrailStates.clear();
-    this.tracers.length = 0;
+    while(this.tracers.length)this.releaseTracer(this.tracers.pop());
     this.lifetimes.fill(0);
     this.alphas.fill(0);
     this.glows.fill(0);
@@ -291,12 +306,19 @@ export class FlightFX {
     this.missileTrailMesh.geometry.attributes.alpha.needsUpdate = true;
   }
 
+  forgetAircraft(mesh){
+    this.contrailStates.delete(mesh);
+    this.wingVaporStates.delete(mesh);
+  }
+
   updateWingVapor(dt, aircraft, terrain, weather, camera) {
     const humidity = THREE.MathUtils.clamp(weather?.humidity ?? 0.78, 0, 1);
     const coverage = THREE.MathUtils.clamp(weather?.cloudCoverage ?? 0.62, 0, 1);
     const moisture = humidity * (0.55 + coverage * 0.45);
     const wind = weather?.wind ?? this._wind.set(5, 0.15, -3);
-    const active = new Set(aircraft);
+    const active = this._activeAircraft;
+    active.clear();
+    for (const mesh of aircraft) active.add(mesh);
     const lifetime = 0.72;
 
     for (const [mesh, state] of this.wingVaporStates) {
@@ -444,7 +466,9 @@ export class FlightFX {
     const coverage = THREE.MathUtils.clamp(weather?.cloudCoverage ?? 0.62, 0, 1);
     const moisture = humidity * (0.52 + coverage * 0.48);
     const wind = weather?.wind ?? this._wind.set(5, 0.15, -3);
-    const active = new Set(aircraft);
+    const active = this._activeAircraft;
+    active.clear();
+    for (const mesh of aircraft) active.add(mesh);
     for (const [mesh, state] of this.contrailStates) {
       let hasPoints = false;
       for (const trail of state.trails) {
@@ -556,7 +580,8 @@ export class FlightFX {
   }
 
   emitMissileTrails(dt, missiles, camera) {
-    const active = new Set();
+    const active = this._activeMissiles;
+    active.clear();
     const wind = this._wind.set(5, 0.15, -3);
     for (const missile of missiles) {
       if (missile.homing && missile.mesh?.parent) active.add(missile.mesh);
@@ -749,15 +774,15 @@ export class FlightFX {
     for (let i = this.tracers.length - 1; i >= 0; i--) {
       const tracer = this.tracers[i];
       tracer.life -= dt;
-      if (tracer.velocity) tracer.age += dt;
-      if (tracer.life <= 0) this.tracers.splice(i, 1);
+      if (tracer.isMoving) tracer.age += dt;
+      if (tracer.life <= 0){this.tracers.splice(i, 1);this.releaseTracer(tracer);}
     }
     for (const tracer of this.tracers) {
       if (count >= this.tracerCapacity) break;
       const offset = count * 6;
       let start = tracer.start;
       let end = tracer.end;
-      if (tracer.velocity) {
+      if (tracer.isMoving) {
         const headAge = tracer.age;
         const tailAge = Math.max(0, headAge - tracer.trailTime);
         end = this._tracerHead.copy(tracer.start).addScaledVector(tracer.velocity, headAge);
@@ -784,5 +809,26 @@ export class FlightFX {
     geometry.attributes.position.needsUpdate = true;
     geometry.attributes.color.needsUpdate = true;
     geometry.setDrawRange(0, count * 2);
+  }
+
+  dispose() {
+    this.scene.remove(this.particles, this.contrailLines, this.wingVaporRibbon, this.missileTrailMesh, this.tracerLines);
+    this.particles.geometry.dispose();
+    this.particles.material.dispose();
+    this.contrailLines.geometry.dispose();
+    this.contrailLines.material.dispose();
+    this.wingVaporRibbon.geometry.dispose();
+    this.wingVaporRibbon.material.dispose();
+    this.missileTrailMesh.geometry.dispose();
+    this.missileTrailMesh.material.dispose();
+    this.tracerLines.geometry.dispose();
+    this.tracerLines.material.dispose();
+    this.contrailStates.clear();
+    this.wingVaporStates.clear();
+    this.missileTrailStates.clear();
+    this.tracers.length = 0;
+    this.freeTracers.length=0;
+    this._activeAircraft.clear();
+    this._activeMissiles.clear();
   }
 }

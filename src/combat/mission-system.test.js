@@ -82,4 +82,39 @@ describe('MissionSystem', () => {
     expect(completed.system.outcome).toBe(MISSION_OUTCOME.COMPLETE);
     expect(completed.system.missionFailed).toBe(false);
   });
+
+  it('defers objective completion until an inactive phase is activated and then allows RTB completion', () => {
+    const nodes = {
+      objectiveTitle: makeElement(),
+      objectiveProgress: makeElement(),
+      status: makeElement(),
+      statusText: makeElement(),
+    };
+    const system = new MissionSystem({
+      mission: { id: 'intercept' },
+      objective: { type: 'clearAir' },
+      totals: { air: 1, ground: 0 },
+      getRemaining: () => ({ airRemaining: 0, groundRemaining: 0 }),
+      nodes,
+      deferCompletion: true,
+      initiallyActive: false,
+    });
+
+    system.update(1);
+    expect(system.objectiveSatisfied).toBe(false);
+    expect(system.outcome).toBe(MISSION_OUTCOME.ACTIVE);
+
+    system.activate();
+    system.update(1);
+    expect(system.objectiveSatisfied).toBe(true);
+    expect(system.missionComplete).toBe(false);
+    expect(system.outcome).toBe(MISSION_OUTCOME.ACTIVE);
+
+    system.notifyObjectiveAchieved();
+    system.returnToBase();
+    expect(nodes.statusText.textContent).toBe('RETURN TO BASE');
+    system.finish(MISSION_OUTCOME.COMPLETE);
+    expect(system.missionComplete).toBe(true);
+    expect(system.outcome).toBe(MISSION_OUTCOME.COMPLETE);
+  });
 });

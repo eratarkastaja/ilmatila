@@ -27,6 +27,8 @@ export class GameAudio {
     this.missileLoops = new Map();
     this.lastDistantShot = -Infinity;
     this.lastIncomingWarning = -Infinity;
+    this.lastGunHit = -Infinity;
+    this.lastDamageSound = -Infinity;
     this.lastEngineUpdate = 0;
     this.musicEnabled = this.readMusicPreference();
     this.musicTrackIndex = -1;
@@ -276,6 +278,12 @@ export class GameAudio {
     const toGround = mode === 'ground';
     this.playTone(toGround ? 720 : 490, toGround ? 450 : 790, 0.105, 0.13, 'sine', 'ui');
     this.playTone(toGround ? 500 : 800, toGround ? 360 : 980, 0.075, 0.07, 'triangle', 'ui', 0.085);
+  }
+
+  playWingmanOrder(order) {
+    const base = order === 'attack' ? 660 : order === 'defend' ? 520 : 430;
+    this.playTone(base, base + 145, 0.065, 0.075, 'triangle', 'ui');
+    this.playTone(base + 145, base + 250, 0.07, 0.055, 'sine', 'ui', 0.085);
   }
 
   playLockAcquire() {
@@ -544,6 +552,35 @@ export class GameAudio {
     this.lastIncomingWarning = ctx.currentTime;
     this.playTone(920, 680, 0.11, 0.12, 'square', 'ui');
     this.playTone(760, 510, 0.12, 0.11, 'square', 'ui', 0.16);
+  }
+
+  playMissileLaunchWarning() {
+    const ctx = this.getContext();
+    if (!ctx || ctx.currentTime - this.lastIncomingWarning < 0.38) return;
+    this.lastIncomingWarning = ctx.currentTime;
+    this.playTone(1040, 810, 0.09, 0.12, 'square', 'ui');
+    this.playTone(920, 700, 0.11, 0.11, 'square', 'ui', 0.13);
+  }
+
+  playGunHit() {
+    const ctx = this.getContext();
+    if (!ctx || ctx.currentTime - this.lastGunHit < 0.16) return;
+    this.lastGunHit = ctx.currentTime;
+    this.playTone(1080, 740, 0.045, 0.045, 'triangle', 'ui');
+  }
+
+  playAirframeDamage(amount = 10) {
+    const ctx = this.getContext();
+    if (!ctx || ctx.currentTime - this.lastDamageSound < 0.22) return;
+    this.lastDamageSound = ctx.currentTime;
+    const weight = Math.min(1, amount / 55);
+    this.playNoise(0.13, 0.065 + weight * 0.09, { low: 460, high: 90, type: 'lowpass', q: 0.8, bus: 'effects' });
+    this.playTone(118 - weight * 24, 62 - weight * 12, 0.18, 0.09 + weight * 0.12, 'triangle', 'effects');
+  }
+
+  playCountermeasureUnavailable() {
+    this.playTone(245, 172, 0.085, 0.075, 'triangle', 'ui');
+    this.playTone(178, 132, 0.075, 0.06, 'triangle', 'ui', 0.11);
   }
 
   playCountermeasure() {

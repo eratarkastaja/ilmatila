@@ -15,7 +15,9 @@ export class TacticalHud {
     this.headingMarks = [];
     this.targetDesignator = document.querySelector('#target-designator');
     this.targetCode = this.targetDesignator?.querySelector('#target-code');
+    this.missileApproachCue = document.querySelector('#missile-approach-cue');
     this.gunAimCue = document.querySelector('#gun-aim-cue');
+    this.missionWaypointCue = document.querySelector('#mission-waypoint-cue');
     this.verticalSpeed = document.querySelector('#vertical-speed');
     this.lastLabeledHeading = null;
     this.cameraForward = new THREE.Vector3();
@@ -25,6 +27,9 @@ export class TacticalHud {
     this.gunAimVelocity = new THREE.Vector3();
     this.gunAimPoint = new THREE.Vector3();
     this.smoothedGunAimPoint = new THREE.Vector3();
+    this.markerProjected = new THREE.Vector3();
+    this.markerOffset = new THREE.Vector3();
+    this.missileMarkerPosition = new THREE.Vector3();
     this.gunAimTarget = null;
     this.hasGunAimPoint = false;
 
@@ -65,6 +70,24 @@ export class TacticalHud {
     }
 
     this.updateGunAimCue(player, camera, combat, dt);
+    const waypoint = combat.missionFlow?.waypoint;
+    if (this.missionWaypointCue && waypoint) {
+      this.placeWorldMarker(this.missionWaypointCue, waypoint, camera);
+    } else if (this.missionWaypointCue) {
+      this.missionWaypointCue.hidden = true;
+    }
+
+    const missileThreat = combat.projectileSystem?.missileThreat;
+    const launchSource = combat.missileLaunchTimer > 0 ? combat.missileLaunchSource : null;
+    const threatPosition = missileThreat?.mesh?.position ?? launchSource?.mesh?.position;
+    if (this.missileApproachCue && threatPosition && !combat.destroyed) {
+      this.placeWorldMarker(this.missileApproachCue, this.missileMarkerPosition.copy(threatPosition), camera);
+      this.missileApproachCue.classList.toggle('urgent', Boolean(missileThreat && combat.projectileSystem.missileThreatEta < 4.5));
+      this.missileApproachCue.classList.toggle('launch-detected', !missileThreat);
+    } else if (this.missileApproachCue) {
+      this.missileApproachCue.hidden = true;
+      this.missileApproachCue.classList.remove('urgent', 'launch-detected');
+    }
 
     const radar = combat.radar;
     const target = radar.target;
@@ -102,6 +125,7 @@ export class TacticalHud {
     this.targetDesignator.classList.toggle('out-of-range', !radar.inLockEnvelope);
     this.targetDesignator.classList.toggle('acquiring', radar.lockCueTarget && !radar.lockCueConfirmed);
     this.targetDesignator.classList.toggle('locked', radar.lockCueConfirmed);
+    this.targetDesignator.style.setProperty('--lock-progress', `${THREE.MathUtils.clamp(radar.lock, 0, 1) * 100}%`);
   }
 
   updateGunAimCue(player, camera, combat, dt) {
@@ -154,9 +178,9 @@ export class TacticalHud {
   placeWorldMarker(element, position, camera) {
     if (!element) return false;
     camera.updateMatrixWorld();
-    const projected = position.clone().project(camera);
+    const projected = this.markerProjected.copy(position).project(camera);
     camera.getWorldDirection(this.cameraForward);
-    const behind = position.clone().sub(camera.position).dot(this.cameraForward) <= 0;
+    const behind = this.markerOffset.subVectors(position, camera.position).dot(this.cameraForward) <= 0;
     const marginX = Math.min(72, innerWidth * 0.18);
     const marginY = Math.min(80, innerHeight * 0.16);
     const maxX = 1 - marginX * 2 / innerWidth;

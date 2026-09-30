@@ -62,7 +62,7 @@
 .mission-card {
   position: relative;
   min-width: 0;
-  min-height: 128px;
+  min-height: 146px;
   padding: 13px 15px 12px;
   overflow: hidden;
   border: 1px solid rgba(161, 193, 179, .18);
@@ -77,7 +77,7 @@
 .mission-card:hover { border-color: rgba(174, 221, 192, .48); background: linear-gradient(145deg, rgba(29, 51, 50, .92), rgba(8, 21, 27, .9)); transform: translateY(-1px); }
 .mission-card.selected { border-color: rgba(169, 225, 189, .66); background: linear-gradient(145deg, rgba(30, 54, 49, .9), rgba(9, 22, 26, .9)); box-shadow: inset 0 0 22px #9ad4ae0b; }
 .mission-card.selected::before { background: var(--menu-accent); box-shadow: 0 0 10px #a9e1bd88; }
-.mission-card:focus-visible, .launch-button:focus-visible, .credits-button:focus-visible, .select-wrap select:focus-visible, .credits-dialog button:focus-visible, .credits-dialog a:focus-visible, .credits-dialog summary:focus-visible, .pause-dialog button:focus-visible { outline: 2px solid #a9e1bd; outline-offset: 3px; }
+.mission-card:focus-visible, .launch-button:focus-visible, .credits-button:focus-visible, .select-wrap select:focus-visible, .credits-dialog button:focus-visible, .credits-dialog a:focus-visible, .credits-dialog summary:focus-visible, .pause-dialog button:focus-visible, .mission-debrief button:focus-visible { outline: 2px solid #a9e1bd; outline-offset: 3px; }
 .mission-card-top, .mission-card-bottom { display: flex; align-items: center; }
 .mission-card-top { justify-content: space-between; margin-bottom: 8px; color: #a2b4aa; font: 600 11px 'Rajdhani', sans-serif; letter-spacing: .12em; }
 .mission-card-top i { color: #a8c6b5; font-style: normal; }
@@ -85,10 +85,18 @@
 .mission-card > small { display: block; min-height: 36px; color: #c0cbc4; font: 400 14px/1.4 'Rajdhani', sans-serif; }
 .mission-card-bottom { gap: 7px; margin-top: 8px; color: #a9bbb0; font: 600 11px 'Rajdhani', sans-serif; letter-spacing: .06em; }
 .mission-card-bottom > b { margin-left: auto; color: #a9e1bd; font-size: 11px; font-weight: 500; }
+.mission-card-state { display: block; min-height: 12px; margin-top: 7px; color: #9fdfb5; font: 700 9px 'Rajdhani', sans-serif; letter-spacing: .13em; }
+.mission-card-state[data-state="empty"] { color: #81978c; }
+.mission-card-state[data-state="locked"] { color: #c2a678; }
+.mission-card.locked { border-color: rgba(161, 173, 163, .12); background: linear-gradient(145deg, rgba(15, 25, 28, .72), rgba(7, 14, 18, .75)); }
+.mission-card.locked > strong, .mission-card.locked > small, .mission-card.locked .mission-card-top { opacity: .58; }
+.mission-card:disabled { cursor: not-allowed; }
+.mission-card:disabled:hover { transform: none; border-color: rgba(161, 173, 163, .12); }
 .contact-mark { width: 6px; height: 6px; display: inline-block; border: 1px solid #ff9b7a; border-radius: 50%; box-shadow: 0 0 7px #ff856066; }
 .contact-mark.ground { border-color: #e7c18b; border-radius: 1px; transform: rotate(45deg); }
 .contact-mark.friendly { border-color: #9fe5d0; box-shadow: 0 0 7px #9fe5d066; }
 .theater-select-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 17px; padding: 11px 0; border-top: 1px solid var(--menu-line); border-bottom: 1px solid var(--menu-line); }
+.difficulty-select-row { margin-top: 0; border-top: 0; }
 .theater-select-row label { display: flex; align-items: center; gap: 13px; cursor: pointer; }
 .select-wrap { position: relative; width: min(220px, 52%); }
 .select-wrap select { width: 100%; appearance: none; padding: 10px 33px 10px 12px; border: 1px solid rgba(165, 199, 185, .4); border-radius: 0; color: #e3ece5; background: rgba(7, 19, 23, .9); font: 600 16px 'Rajdhani', sans-serif; letter-spacing: .08em; cursor: pointer; }
@@ -116,6 +124,7 @@
 .menu-controls-head small { color: #b3d8bf; font-size: inherit; font-weight: 700; }
 .menu-control-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 16px; margin-top: 10px; }
 .menu-control { display: flex; min-width: 0; align-items: center; gap: 7px; color: #d0d9d2; font: 600 12px 'Rajdhani', sans-serif; letter-spacing: .03em; white-space: nowrap; }
+.menu-control-wide { grid-column: 1 / -1; }
 .menu-control b { overflow: hidden; font-weight: 600; text-overflow: ellipsis; }
 .menu-control kbd { display: inline-grid; min-width: 22px; height: 22px; flex: 0 0 auto; place-items: center; padding: 0 4px; border: 1px solid #9dbdad78; color: #e5f0e8; background: #13231f; font: 700 12px 'Rajdhani', sans-serif; letter-spacing: .02em; }
 .menu-keys { display: inline-flex; gap: 2px; }
@@ -230,6 +239,52 @@
 .pause-quit { border: 1px solid #9eb4a541; color: #becdc3; background: #0d191d; }
 .pause-quit:hover { border-color: #b4d7c27a; color: #edf5ee; background: #142421; }
 .pause-quit b { color: #a9e1bd; font: 500 16px 'Rajdhani', sans-serif; }
+
+.mission-debrief {
+  width: min(610px, calc(100% - 32px));
+  max-width: none;
+  max-height: min(88vh, 760px);
+  padding: 0;
+  overflow: auto;
+  border: 1px solid #a9d7b677;
+  color: #e4eee7;
+  background: #091419f7;
+  box-shadow: 0 28px 110px #000d, 0 0 52px #a9e1bd0c;
+}
+.mission-debrief::backdrop { background: #03090dd9; backdrop-filter: blur(8px) saturate(.7); }
+.debrief-card { position: relative; padding: 25px 30px 20px; }
+.debrief-card::before { content: ''; position: absolute; inset: 0 0 auto; height: 2px; background: linear-gradient(90deg, #a9e1bd, #a9e1bd20 74%, transparent); }
+.debrief-header { display: flex; align-items: center; gap: 13px; }
+.debrief-mark { position: relative; display: grid; width: 40px; height: 40px; place-items: center; border: 1px solid #a9e1bd66; color: #bce8c9; background: #10221d; }
+.debrief-mark i { position: absolute; inset: 5px; border: 1px solid #a9e1bd30; transform: rotate(45deg); }
+.debrief-mark b { position: relative; font: 700 12px 'Rajdhani', sans-serif; letter-spacing: .05em; }
+.debrief-header > div { min-width: 0; }
+.debrief-header small, .debrief-mission small { color: #a9e1bd; font: 700 9px 'Rajdhani', sans-serif; letter-spacing: .2em; }
+.debrief-header h2 { margin: 2px 0 0; color: #eff6ef; font: 700 30px/.98 'Barlow Condensed', sans-serif; letter-spacing: .08em; }
+.debrief-stamp { margin-left: auto; padding: 5px 7px; border: 1px solid #9dbdad3c; color: #96aa9e; font: 600 8px 'Rajdhani', sans-serif; letter-spacing: .14em; }
+.debrief-outcome { margin: 20px 0 15px; padding: 11px 13px; border-left: 2px solid #9fdfb5; background: linear-gradient(90deg, #12251dbb, #12251d20); color: #d2e1d6; font: 500 14px/1.35 'Rajdhani', sans-serif; }
+.debrief-career-note { margin: -7px 0 15px; color: #a9e1bd; font: 700 11px/1.4 'Rajdhani', sans-serif; letter-spacing: .1em; }
+.debrief-mission { display: flex; align-items: end; justify-content: space-between; gap: 16px; padding: 0 2px 13px; border-bottom: 1px solid #9ab2a429; }
+.debrief-mission > div { display: grid; gap: 3px; }
+.debrief-mission > div:last-child { text-align: right; }
+.debrief-mission strong { color: #edf4ed; font: 600 17px 'Barlow Condensed', sans-serif; letter-spacing: .1em; }
+.debrief-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 0; background: #95b6a31f; border: 1px solid #95b6a31f; }
+.debrief-stats > div { min-height: 66px; display: flex; flex-direction: column; justify-content: center; gap: 5px; padding: 10px 12px; background: #0b171bf5; }
+.debrief-stats dt { color: #8ca398; font: 600 8px 'Rajdhani', sans-serif; letter-spacing: .15em; }
+.debrief-stats dd { margin: 0; color: #e3eee5; font: 700 21px 'Barlow Condensed', sans-serif; font-variant-numeric: tabular-nums; }
+.debrief-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 17px; }
+.debrief-footer > span { color: #74897e; font: 600 8px 'Rajdhani', sans-serif; letter-spacing: .16em; }
+.debrief-footer button { display: flex; min-height: 40px; align-items: center; justify-content: space-between; gap: 20px; padding: 0 12px; border: 1px solid #b6e7c6; color: #08140e; background: #a9dcbc; font: 700 11px 'Rajdhani', sans-serif; letter-spacing: .12em; cursor: pointer; }
+.debrief-footer button:hover { background: #c4efd0; }
+.debrief-footer button b { font: 500 16px 'Rajdhani', sans-serif; }
+@media (max-width: 560px) {
+  .debrief-card { padding: 21px 16px 16px; }
+  .debrief-stamp { display: none; }
+  .debrief-header h2 { font-size: 25px; }
+  .debrief-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .debrief-footer { align-items: stretch; flex-direction: column; }
+  .debrief-footer button { width: 100%; }
+}
 
 @keyframes menu-arrive { from { opacity: 0; } to { opacity: 1; } }
 @keyframes menu-depart { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(1.012); } }

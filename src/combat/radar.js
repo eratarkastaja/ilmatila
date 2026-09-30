@@ -18,6 +18,9 @@ export class CombatRadar {
     this.lockCueTarget = false;
     this.lockCueConfirmed = false;
     this.tracks = new Map();
+    this._delta = new THREE.Vector3();
+    this._forward = new THREE.Vector3();
+    this._lockOffset = new THREE.Vector3();
     this.screen = document.querySelector('.radar-screen');
     this.modeIndicator = document.querySelector('#radar-mode-indicator');
     this.crosshair = document.querySelector('.crosshair');
@@ -39,6 +42,7 @@ export class CombatRadar {
   }
 
   updateContacts(dt, playerHeading, { airFriendly, airHostile, groundFriendly, groundHostile }) {
+    this.playerHeading=playerHeading;
     for (const [key, track] of this.tracks) {
       track.age += dt;
       if (track.age > 1.4) {
@@ -50,31 +54,43 @@ export class CombatRadar {
       }
     }
 
-    const contacts = this.mode === 'ground'
-      ? [...this.liveContacts(groundFriendly, 'friendly', 'ground'), ...this.liveContacts(groundHostile, 'hostile', 'ground')]
-      : [...this.liveContacts(airFriendly, 'friendly', 'air'), ...this.liveContacts(airHostile, 'hostile', 'air')];
-    for (const contact of contacts) {
-      const delta = contact.mesh.position.clone().sub(this.player.position);
+    if(this.mode==='ground'){
+      this.updateContactList(groundFriendly,'friendly','ground');
+      this.updateContactList(groundHostile,'hostile','ground');
+    }else{
+      this.updateContactList(airFriendly,'friendly','air');
+      this.updateContactList(airHostile,'hostile','air');
+    }
+  }
+
+  updateContactList(units,team,domain){
+    for(const unit of units){
+      if(unit.dead)continue;
+      const mesh=unit.mesh;
+      const delta = this._delta.copy(mesh.position).sub(this.player.position);
       const distance = delta.length();
       if (distance > this.range) continue;
       // Keep the aircraft nose fixed at the top of the scope. Contacts rotate
       // around ownship with heading so the display reads as a heading-up radar.
-      const bearing = Math.atan2(delta.x, delta.z) - playerHeading;
-      let track = this.tracks.get(contact.mesh);
+      const bearing = Math.atan2(delta.x, delta.z) - this.playerHeading;
+      let track = this.tracks.get(mesh);
       if (!track) {
         track = { age: 0, node: document.createElement('span') };
         this.screen?.append(track.node);
-        this.tracks.set(contact.mesh, track);
+        this.tracks.set(mesh, track);
       }
       track.age = 0;
-      track.domain = contact.domain;
-      track.team = contact.team;
-      const selected = this.target?.mesh === contact.mesh;
-      track.node.className = ['radar-contact', contact.domain, contact.team, selected ? 'target' : '', selected && this.lockCueConfirmed ? 'locked' : ''].filter(Boolean).join(' ');
+      track.domain = domain;
+      track.team = team;
+      const selected = this.target?.mesh === mesh;
+      const className = selected
+        ? `radar-contact ${domain} ${team}${this.lockCueConfirmed ? ' target locked' : ' target'}`
+        : `radar-contact ${domain} ${team}`;
+      if(track.node.className!==className)track.node.className=className;
       const radius = THREE.MathUtils.clamp(distance / this.range, 0, 1) * 43;
       track.node.style.left = `${50 - Math.sin(bearing) * radius}%`;
       track.node.style.top = `${50 - Math.cos(bearing) * radius}%`;
-      track.node.style.opacity = '1';
+      if(track.node.style.opacity!=='1')track.node.style.opacity = '1';
     }
   }
 
@@ -102,29 +118,24 @@ export class CombatRadar {
 
   updateLock(dt, enemies, groundHostiles) {
     const groundMode = this.mode === 'ground';
-    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.player.quaternion);
+    const forward = this._forward.set(0,0,1).applyQuaternion(this.player.quaternion);
     const candidates = groundMode ? groundHostiles : enemies;
     const maxRange = groundMode ? this.groundLockRange : this.airRange;
     const boresight = groundMode ? 0.55 : 0.88;
     let candidate = this.target;
 
-    const tracked = contact => {
-      if (contact.dead) return false;
-      const offset = contact.mesh.position.clone().sub(this.player.position);
-      const distance = offset.length();
-      return this.tracks.has(contact.mesh) && distance <= this.range;
-    };
-
     // Only the pilot may select a track. Keep it selected while it remains on
     // radar, even when it is outside the weapon's boresight.
-    if (!candidate || !candidates.includes(candidate) || !tracked(candidate)) candidate = null;
+    if (!candidate || candidate.dead || !candidates.includes(candidate)
+      || !this.tracks.has(candidate.mesh)
+      || candidate.mesh.position.distanceTo(this.player.position)>this.range) candidate = null;
 
     const targetChanged = candidate !== this.target;
     const hadTarget = this.lockCueTarget;
     const wasConfirmed = this.lockCueConfirmed && !targetChanged;
     if (targetChanged) this.lock = 0;
     this.target = candidate;
-    const offset = candidate?.mesh.position.clone().sub(this.player.position);
+    const offset = candidate ? this._lockOffset.copy(candidate.mesh.position).sub(this.player.position) : null;
     const distance = offset?.length() ?? Infinity;
     this.inLockEnvelope = Boolean(candidate && distance <= maxRange);
     const inBoresight = Boolean(this.inLockEnvelope && distance > 0 && forward.dot(offset.normalize()) > boresight);
@@ -167,7 +178,4 @@ export class CombatRadar {
     this.screen?.querySelectorAll('.radar-contact').forEach(node => node.remove());
   }
 
-  liveContacts(units, team, domain) {
-    return units.filter(unit => !unit.dead).map(unit => ({ mesh: unit.mesh, team, domain }));
-  }
 }

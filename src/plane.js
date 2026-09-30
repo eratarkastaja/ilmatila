@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { buildF35Asset, buildImportedEnemyAircraft, createAfterburnerFlame } from './plane-models.js';
+import { buildF35Asset, buildImportedEnemyAircraft, createAfterburnerFlame, disposeAircraftVisual } from './plane-models.js';
 
 export { createAfterburnerFlame };
+export { disposeAircraftVisual };
 
 const F35_HIT_ZONES = [
   { x: 0, y: 0.02, z: -0.7, rx: 0.94, ry: 0.62, rz: 4.7, damage: 1 },

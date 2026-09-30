@@ -1,6 +1,11 @@
 export const MISSIONS = {
   intercept: {
     id: 'intercept',
+    unlocks: ['support'],
+    deferredHostiles: true,
+    navigationDistance: 3600,
+    navigationRadius: 850,
+    departureDuration: 4,
     hostiles: 4,
     hostileSpawnDistance: 7300,
     hostileLateralSpacing: 580,
@@ -15,6 +20,11 @@ export const MISSIONS = {
   },
   patrol: {
     id: 'patrol',
+    unlocks: ['intercept'],
+    deferredHostiles: true,
+    navigationDistance: 4200,
+    navigationRadius: 850,
+    departureDuration: 4,
     hostiles: 2,
     hostileSpawnDistance: 7300,
     hostileLateralSpacing: 680,
@@ -29,6 +39,11 @@ export const MISSIONS = {
   },
   support: {
     id: 'support',
+    unlocks: [],
+    deferredHostiles: true,
+    navigationDistance: 3500,
+    navigationRadius: 850,
+    departureDuration: 4,
     hostiles: 1,
     hostileSpawnDistance: 7100,
     openingDelay: 19,
@@ -42,6 +57,11 @@ export const MISSIONS = {
   },
   training: {
     id: 'training',
+    unlocks: [],
+    deferredHostiles: true,
+    navigationDistance: 3200,
+    navigationRadius: 850,
+    departureDuration: 3,
     hostiles: 0,
     wingmen: 2,
     groundBattle: false,

@@ -5,10 +5,12 @@ const localStart = new THREE.Vector3();
 const localEnd = new THREE.Vector3();
 const localDelta = new THREE.Vector3();
 const PROJECTILE_HIT_ASSIST = 1.25;
+const axes=['x','y','z'];
+const defaultVehicleBounds={min:[-10,0,-12],max:[10,14,20]};
 
 /** Segment against the aircraft's authored ellipsoid hit zones, in local space. */
-export function traceFighterHit(start, end, fighter) {
-  fighter.updateWorldMatrix(true, false);
+export function traceFighterHit(start, end, fighter, worldMatrixCurrent=false) {
+  if(!worldMatrixCurrent)fighter.updateWorldMatrix(true, false);
   inverseWorld.copy(fighter.matrixWorld).invert();
   const a = localStart.copy(start).applyMatrix4(inverseWorld);
   const b = localEnd.copy(end).applyMatrix4(inverseWorld);
@@ -40,18 +42,18 @@ export function traceFighterHit(start, end, fighter) {
 }
 
 /** Segment against the vehicle's local axis-aligned authored hit bounds. */
-export function traceVehicleHit(start, end, vehicle, hitAssist = PROJECTILE_HIT_ASSIST) {
-  vehicle.updateWorldMatrix(true, false);
+export function traceVehicleHit(start, end, vehicle, hitAssist = PROJECTILE_HIT_ASSIST, worldMatrixCurrent=false) {
+  if(!worldMatrixCurrent)vehicle.updateWorldMatrix(true, false);
   inverseWorld.copy(vehicle.matrixWorld).invert();
   const a = localStart.copy(start).applyMatrix4(inverseWorld);
   const b = localEnd.copy(end).applyMatrix4(inverseWorld);
   const delta = localDelta.copy(b).sub(a);
-  const bounds = vehicle.userData.hitBounds ?? { min: [-10, 0, -12], max: [10, 14, 20] };
+  const bounds = vehicle.userData.hitBounds ?? defaultVehicleBounds;
   let enter = 0;
   let leave = 1;
 
   for (let axis = 0; axis < 3; axis++) {
-    const key = ['x', 'y', 'z'][axis];
+    const key = axes[axis];
     const velocity = delta[key];
     const center = (bounds.min[axis] + bounds.max[axis]) * .5;
     const halfExtent = (bounds.max[axis] - bounds.min[axis]) * .5 * hitAssist;
@@ -63,7 +65,11 @@ export function traceVehicleHit(start, end, vehicle, hitAssist = PROJECTILE_HIT_
     }
     let near = (minimum - a[key]) / velocity;
     let far = (maximum - a[key]) / velocity;
-    if (near > far) [near, far] = [far, near];
+    if (near > far) {
+      const swap=near;
+      near=far;
+      far=swap;
+    }
     enter = Math.max(enter, near);
     leave = Math.min(leave, far);
     if (enter > leave) return null;

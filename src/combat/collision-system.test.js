@@ -84,4 +84,33 @@ describe('CollisionSystem', () => {
       new THREE.Vector3(0, 0, -5), new THREE.Vector3(0, 0, 5),
     )).toBe(0);
   });
+
+  it('allows a locked missile proximity fuze to resolve a near pass', () => {
+    const aircraftMesh = new THREE.Object3D();
+    aircraftMesh.position.set(50, 10, 0);
+    aircraftMesh.userData.hitZones = [{ x: 0, y: 0, z: 0, rx: .5, ry: .5, rz: .5, damage: 1 }];
+    const aircraft = { mesh: aircraftMesh, velocity: new THREE.Vector3(), dead: false };
+    const { system } = makeCollisionSystem({ enemies: [aircraft] });
+
+    const nearPass = system.findMissileProximityImpact(
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(100, 0, 0),
+      .1,
+      aircraft,
+      12,
+      .8,
+    );
+    const outsideFuse = system.findMissileProximityImpact(
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(100, 0, 0),
+      .1,
+      aircraft,
+      8,
+      .8,
+    );
+
+    expect(nearPass?.target).toBe(aircraft);
+    expect(nearPass?.hitInfo).toMatchObject({ damage: .8, proximity: true });
+    expect(outsideFuse).toBeNull();
+  });
 });

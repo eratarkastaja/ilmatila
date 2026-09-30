@@ -23,12 +23,18 @@ export class CollisionSystem {
     this.redUnits = redUnits;
     this.lastCollisionPosition = lastCollisionPosition;
     this.onPlayerDestroyed = onPlayerDestroyed;
+    this.projectileTargetMatricesPrepared=false;
+    this._start = new THREE.Vector3();
+    this._travel = new THREE.Vector3();
+    this._relativeStart = new THREE.Vector3();
+    this._relativeEnd = new THREE.Vector3();
+    this._center = new THREE.Vector3();
   }
 
   checkPlayerCollision(dt = 0) {
     const position = this.player.position;
-    const start = this.lastCollisionPosition.clone();
-    const travel = position.clone().sub(start);
+    const start = this._start.copy(this.lastCollisionPosition);
+    const travel = this._travel.subVectors(position,start);
     const samples = Math.max(1, Math.ceil(travel.length() / 8));
     this.lastCollisionPosition.copy(position);
     for (let step = 0; step <= samples; step++) {
@@ -52,8 +58,9 @@ export class CollisionSystem {
       if (collider.mesh && !collider.mesh.parent) continue;
       const centerY = collider.y + collider.height * .5;
       const displacement = collider.velocity ?? stationaryVelocity;
-      const relativeStart = start.clone().addScaledVector(displacement, -dt).sub(new THREE.Vector3(collider.x, centerY, collider.z));
-      const relativeEnd = position.clone().sub(new THREE.Vector3(collider.x, centerY, collider.z));
+      const center=this._center.set(collider.x,centerY,collider.z);
+      const relativeStart = this._relativeStart.copy(start).addScaledVector(displacement, -dt).sub(center);
+      const relativeEnd = this._relativeEnd.copy(position).sub(center);
       const fraction = closestSegmentFractionXZ(relativeStart, relativeEnd);
       const closestY = THREE.MathUtils.lerp(relativeStart.y, relativeEnd.y, fraction);
       const closestX = THREE.MathUtils.lerp(relativeStart.x, relativeEnd.x, fraction);
@@ -83,27 +90,35 @@ export class CollisionSystem {
   sweptAircraftCollision(start, end, aircraft, dt) {
     if (aircraft.dead) return false;
     const displacement = aircraft.velocity ?? stationaryVelocity;
-    const relativeStart = start.clone().addScaledVector(displacement, -dt).sub(aircraft.mesh.position);
-    const relativeEnd = end.clone().sub(aircraft.mesh.position);
+    const relativeStart = this._relativeStart.copy(start).addScaledVector(displacement, -dt).sub(aircraft.mesh.position);
+    const relativeEnd = this._relativeEnd.copy(end).sub(aircraft.mesh.position);
     return pointSegmentDistanceSquared(origin, relativeStart, relativeEnd) < 14 ** 2;
   }
 
   sweptDistanceSquared(movingStart, movingEnd, targetStart, targetEnd) {
     return pointSegmentDistanceSquared(
       origin,
-      movingStart.clone().sub(targetStart),
-      movingEnd.clone().sub(targetEnd),
+      this._relativeStart.subVectors(movingStart,targetStart),
+      this._relativeEnd.subVectors(movingEnd,targetEnd),
     );
+  }
+
+  prepareProjectileTargetMatrices(){
+    for(const enemy of this.enemies)if(!enemy.dead)enemy.mesh.updateWorldMatrix(true,false);
+    for(const unit of this.redUnits)if(!unit.dead)unit.mesh.updateWorldMatrix(true,false);
+    this.projectileTargetMatricesPrepared=true;
   }
 
   findProjectileImpact(start, end, dt, { ally = false, ballistic = false } = {}) {
     let target = null;
     let hitInfo = null;
+    const matricesPrepared=this.projectileTargetMatricesPrepared;
     for (const enemy of this.enemies) {
       if (enemy.dead) continue;
       // Trace against the target's current pose, compensating for its motion during this step.
-      const relativeStart = start.clone().addScaledVector(enemy.velocity ?? stationaryVelocity, dt);
-      const impact = traceFighterHit(relativeStart, end, enemy.mesh);
+      const relativeStart = this._relativeStart.copy(start).addScaledVector(enemy.velocity ?? stationaryVelocity, dt);
+      if(pointSegmentDistanceSquared(enemy.mesh.position,relativeStart,end)>20**2)continue;
+      const impact = traceFighterHit(relativeStart, end, enemy.mesh,matricesPrepared);
       if (impact && (!hitInfo || impact.t < hitInfo.t)) {
         target = enemy;
         hitInfo = impact;
@@ -111,14 +126,29 @@ export class CollisionSystem {
     }
     if (!ally) for (const unit of this.redUnits) {
       if (unit.dead) continue;
-      const relativeStart = start.clone().addScaledVector(unit.velocity ?? stationaryVelocity, dt);
-      const impact = traceVehicleHit(relativeStart, end, unit.mesh, ballistic ? 1.5 : undefined);
+      const relativeStart = this._relativeStart.copy(start).addScaledVector(unit.velocity ?? stationaryVelocity, dt);
+      if(pointSegmentDistanceSquared(unit.mesh.position,relativeStart,end)>26**2)continue;
+      const impact = traceVehicleHit(relativeStart, end, unit.mesh, ballistic ? 1.5 : undefined,matricesPrepared);
       if (impact && (!hitInfo || impact.t < hitInfo.t)) {
         target = unit;
         hitInfo = impact;
       }
     }
     return target ? { target, hitInfo } : null;
+  }
+
+  findMissileProximityImpact(start, end, dt, target, radius, damage = .8) {
+    if (!target || target.dead || !target.mesh) return null;
+    const targetVelocity = target.velocity ?? stationaryVelocity;
+    const relativeStart = this._relativeStart.copy(start).addScaledVector(targetVelocity, dt).sub(target.mesh.position);
+    const relativeEnd = this._relativeEnd.copy(end).sub(target.mesh.position);
+    const travel = this._travel.subVectors(relativeEnd, relativeStart);
+    const fraction = travel.lengthSq() > 1e-9
+      ? THREE.MathUtils.clamp(-relativeStart.dot(travel) / travel.lengthSq(), 0, 1)
+      : 0;
+    const miss = this._center.copy(relativeStart).addScaledVector(travel, fraction);
+    if (miss.lengthSq() > radius * radius) return null;
+    return { target, hitInfo: { t: fraction, damage, proximity: true } };
   }
 
   groundHeight(x, z) {

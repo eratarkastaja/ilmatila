@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.0-alpha.6 — 2026-09-30
+
+### English
+
+- Reordered sortie progression so Combat Air Patrol is the first combat mission, followed by Intercept Flight and Close Air Support. Training remains available from the start; combat missions unlock after a successful objective and extraction.
+- Added persistent best-score records per mission and difficulty, plus a debrief with score, cannon accuracy, air and ground targets destroyed, damage taken, sortie time, and objectives completed.
+- Added Easy, Standard, and Hard settings that tune player durability, countermeasures, incoming damage, hostile aircraft durability and aim, and wingman effectiveness.
+- Improved player missile guidance with smoother terminal steering and proximity-fuze damage on close passes. Missile fuel and seeker countermeasures remain part of the flight model.
+- Added structured departure, navigation, contact, engagement, objective, return, extraction, and debrief phases, with wingman attack, defend, and regroup orders.
+- Split combat responsibilities into weapon, projectile, collision, countermeasure, mission, and feedback systems. Added projectile reuse and cleanup coverage for combat entities and visual resources.
+- Added a development stress scenario and documented its Chrome Performance and Memory profiling workflow and measurements.
+- Added regression coverage for ballistic math, hit testing, radar targeting, mission outcomes, system behavior, projectile reuse, and Three.js resource cleanup; added `npm test`, `npm run test:watch`, and `npm run lint`.
+
+Alpha 6 is still an early playable prototype. The mission structure is in place, but combat balance and pacing need broader player testing before the project is ready for beta.
+
 ## 0.1.0-alpha.5 — 2026-09-29
 
 ### English

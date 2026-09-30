@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import { createGroundVehicle, getGroundVehicleSpec } from '../vehicles.js';
+import { createGroundVehicle, getGroundVehicleSpec, disposeGroundVehicleVisual } from '../vehicles.js';
 
 const groundShotGeo = new THREE.SphereGeometry(.75, 5, 4);
 const blueGroundShotMaterial = new THREE.MeshBasicMaterial({ color: '#ffd889' });
 const redGroundShotMaterial = new THREE.MeshBasicMaterial({ color: '#ff785d' });
+const dryRouteOffsets=[0,.38,-.38,.78,-.78,1.22,-1.22,1.58,-1.58,Math.PI];
 
 /** Owns ground-unit placement, movement, engagement and fire control. */
 export class GroundBattle {
@@ -43,8 +44,8 @@ export class GroundBattle {
       blue.position.set(bluePos.x,bluePos.y,bluePos.z); blue.rotation.y=Math.PI/2;
       red.position.set(redPos.x,redPos.y,redPos.z); red.rotation.y=-Math.PI/2;
       this.scene.add(blue,red);
-      const blueUnit={mesh:blue,hp:blueSpec.hp,maxHp:blueSpec.hp,team:'blue',cool:1+i*.33,phase:i*.8,armed:true,speed:blueSpec.kind==='tracked'?10.5+rnd()*2:14+rnd()*2.5,flank:i%2===0?1:-1,velocity:new THREE.Vector3()};
-      const redUnit={mesh:red,hp:redSpec.hp,maxHp:redSpec.hp,team:'red',cool:2+i*.25,phase:i*.8+1,armed:true,speed:redSpec.kind==='tracked'?10+rnd()*2:13.5+rnd()*2.5,flank:i%2===0?-1:1,velocity:new THREE.Vector3(),aaCooldown:2+rnd()*5,aaBurstClock:0,aaBurstRemaining:0};
+      const blueUnit={mesh:blue,hp:blueSpec.hp,maxHp:blueSpec.hp,team:'blue',cool:1+i*.33,phase:i*.8,armed:true,speed:blueSpec.kind==='tracked'?10.5+rnd()*2:14+rnd()*2.5,flank:i%2===0?1:-1,velocity:new THREE.Vector3(),travel:new THREE.Vector3(),toTarget:new THREE.Vector3(),tangent:new THREE.Vector3(),waypoint:new THREE.Vector3(),separation:new THREE.Vector3(),facing:new THREE.Vector3(),pathDirection:new THREE.Vector3()};
+      const redUnit={mesh:red,hp:redSpec.hp,maxHp:redSpec.hp,team:'red',cool:2+i*.25,phase:i*.8+1,armed:true,speed:redSpec.kind==='tracked'?10+rnd()*2:13.5+rnd()*2.5,flank:i%2===0?-1:1,velocity:new THREE.Vector3(),aaCooldown:2+rnd()*5,aaBurstClock:0,aaBurstRemaining:0,travel:new THREE.Vector3(),toTarget:new THREE.Vector3(),tangent:new THREE.Vector3(),waypoint:new THREE.Vector3(),separation:new THREE.Vector3(),facing:new THREE.Vector3(),pathDirection:new THREE.Vector3()};
       this.friends.push(blueUnit);this.redUnits.push(redUnit);
       blueUnit.collider={type:'vehicle',mesh:blue,x:bluePos.x,y:bluePos.y,z:bluePos.z,radius:blueSpec.radius,height:blueSpec.totalHeight,velocity:blueUnit.velocity,collisionKey:'combat.collisionFriendlyVehicle',vehicle:blueSpec.name};
       redUnit.collider={type:'vehicle',mesh:red,x:redPos.x,y:redPos.y,z:redPos.z,radius:redSpec.radius,height:redSpec.totalHeight,velocity:redUnit.velocity,collisionKey:'combat.collisionHostileVehicle',vehicle:redSpec.name};
@@ -57,14 +58,16 @@ export class GroundBattle {
       const dryPoint=nearestDryPoint(this.terrain,x,z);
       if(!dryPoint)continue;
       truck.position.set(dryPoint.x,dryPoint.y,dryPoint.z); truck.rotation.y=(rnd()-.5)*1.2; this.scene.add(truck);
-      const convoy={mesh:truck,hp:spec.hp,maxHp:spec.hp,team:'red',cool:0,phase:rnd()*Math.PI*2,armed:false,speed:12+rnd()*3,flank:1,velocity:new THREE.Vector3(),routeOrigin:truck.position.clone(),routeHeading:new THREE.Vector3((rnd()-.5)*.5,0,1).normalize(),routeTravel:0,routeSign:1};
+      const convoy={mesh:truck,hp:spec.hp,maxHp:spec.hp,team:'red',cool:0,phase:rnd()*Math.PI*2,armed:false,speed:12+rnd()*3,flank:1,velocity:new THREE.Vector3(),routeOrigin:truck.position.clone(),routeHeading:new THREE.Vector3((rnd()-.5)*.5,0,1).normalize(),routeTravel:0,routeSign:1,travel:new THREE.Vector3(),toTarget:new THREE.Vector3(),tangent:new THREE.Vector3(),waypoint:new THREE.Vector3(),separation:new THREE.Vector3(),facing:new THREE.Vector3(),pathDirection:new THREE.Vector3()};
       this.redUnits.push(convoy);
       convoy.collider={type:'vehicle',mesh:truck,x:truck.position.x,z:truck.position.z,y:truck.position.y,radius:spec.radius,height:spec.totalHeight,velocity:convoy.velocity,collisionKey:'combat.collisionHostileVehicle',vehicle:spec.name};
       this.colliders.push(convoy.collider);
     }
   }
   update(dt){
-    for(const list of [this.friends,this.redUnits])for(const unit of list){if(unit.dead)continue;
+    for(let listIndex=0;listIndex<2;listIndex++){
+      const list=listIndex===0?this.friends:this.redUnits;
+      for(const unit of list){if(unit.dead)continue;
       if(unit.team==='red')this.updateAntiAir(unit,dt);
       unit.phase+=dt*(unit.armed===false?.38:.25);
       let target=null,nearest=1550;
@@ -77,10 +80,10 @@ export class GroundBattle {
         }
       }
 
-      let travel=new THREE.Vector3(),speed=unit.speed;
+      const travel=unit.travel.set(0,0,0);let speed=unit.speed;
       if(target){
-        const toTarget=new THREE.Vector3(target.mesh.position.x-unit.mesh.position.x,0,target.mesh.position.z-unit.mesh.position.z).normalize();
-        const tangent=new THREE.Vector3(-toTarget.z,0,toTarget.x).multiplyScalar(unit.flank);
+        const toTarget=unit.toTarget.set(target.mesh.position.x-unit.mesh.position.x,0,target.mesh.position.z-unit.mesh.position.z).normalize();
+        const tangent=unit.tangent.set(-toTarget.z,0,toTarget.x).multiplyScalar(unit.flank);
         if(nearest>650){travel.copy(toTarget);}
         else if(nearest<235){travel.copy(toTarget).multiplyScalar(-.86).addScaledVector(tangent,.3);speed*=.7;}
         else{
@@ -96,18 +99,19 @@ export class GroundBattle {
           unit.cool=(spec?.weapon?.includes('120')||spec?.weapon?.includes('125')?3.1:1.9)+Math.random()*.9;
         }
       }else if(unit.armed===false){
-        const threat=this.friends.reduce((best,candidate)=>{
-          if(candidate.dead)return best;
+        let threat=null,threatDistance=Infinity;
+        for(const candidate of this.friends){
+          if(candidate.dead)continue;
           const d=candidate.mesh.position.distanceTo(unit.mesh.position);
-          return d<best.distance?{unit:candidate,distance:d}:best;
-        },{unit:null,distance:Infinity});
-        if(threat.unit&&threat.distance<650){
-          travel.set(unit.mesh.position.x-threat.unit.mesh.position.x,0,unit.mesh.position.z-threat.unit.mesh.position.z).normalize();
+          if(d<threatDistance){threat=candidate;threatDistance=d;}
+        }
+        if(threat&&threatDistance<650){
+          travel.set(unit.mesh.position.x-threat.mesh.position.x,0,unit.mesh.position.z-threat.mesh.position.z).normalize();
           speed*=1.12;
         }else{
           unit.routeTravel+=unit.speed*dt*unit.routeSign;
           if(Math.abs(unit.routeTravel)>360){unit.routeSign*=-1;unit.routeTravel=THREE.MathUtils.clamp(unit.routeTravel,-360,360);}
-          const waypoint=unit.routeOrigin.clone().addScaledVector(unit.routeHeading,unit.routeTravel);
+          const waypoint=unit.waypoint.copy(unit.routeOrigin).addScaledVector(unit.routeHeading,unit.routeTravel);
           travel.set(waypoint.x-unit.mesh.position.x,0,waypoint.z-unit.mesh.position.z).normalize();
           travel.x+=Math.sin(unit.phase)*.12;travel.normalize();speed*=.82;
         }
@@ -122,6 +126,7 @@ export class GroundBattle {
 
       const healthFactor=THREE.MathUtils.clamp(.58+.42*unit.hp/unit.maxHp,.58,1);
       this.driveGroundUnit(unit,travel,speed*healthFactor,dt);
+      }
     }
   }
   updateAntiAir(unit,dt){
@@ -163,7 +168,7 @@ export class GroundBattle {
     this.addProjectile({projectile:true,flak:true,mesh:line,velocity:direction.multiplyScalar(720),life:flightTime+.35});
   }
   driveGroundUnit(unit,desiredDirection,speed,dt){
-    const separation=new THREE.Vector3();
+    const separation=unit.separation.set(0,0,0);
     for(const other of this.groundUnits){
       if(other===unit||other.dead)continue;
       const dx=unit.mesh.position.x-other.mesh.position.x,dz=unit.mesh.position.z-other.mesh.position.z;
@@ -171,14 +176,14 @@ export class GroundBattle {
       if(distanceSq>0&&distanceSq<34*34){const distance=Math.sqrt(distanceSq);separation.x+=(dx/distance)*(34-distance)/34;separation.z+=(dz/distance)*(34-distance)/34;}
     }
     if(separation.lengthSq()>0)desiredDirection.addScaledVector(separation,.85).normalize();
-    const direction=this.findDryGroundDirection(unit.mesh.position,desiredDirection);
+    const direction=this.findDryGroundDirection(unit.mesh.position,desiredDirection,unit);
     if(!direction){unit.velocity.multiplyScalar(Math.exp(-4*dt));return;}
     const wantedYaw=Math.atan2(direction.x,direction.z);
     let yawDelta=THREE.MathUtils.euclideanModulo(wantedYaw-unit.mesh.rotation.y+Math.PI,Math.PI*2)-Math.PI;
     const turnRate=unit.mesh.userData.vehicleSpec?.kind==='tracked' ? .82 : 1.12;
     yawDelta=THREE.MathUtils.clamp(yawDelta,-turnRate*dt,turnRate*dt);
     unit.mesh.rotation.y+=yawDelta;
-    const facing=new THREE.Vector3(Math.sin(unit.mesh.rotation.y),0,Math.cos(unit.mesh.rotation.y));
+    const facing=unit.facing.set(Math.sin(unit.mesh.rotation.y),0,Math.cos(unit.mesh.rotation.y));
     const movingSpeed=speed*Math.max(.18,facing.dot(direction));
     if(!this.groundPathIsClear(unit.mesh.position,facing,Math.max(24,movingSpeed*2.3))){
       unit.velocity.multiplyScalar(Math.exp(-5*dt));
@@ -190,18 +195,18 @@ export class GroundBattle {
     unit.mesh.position.y=this.terrain.sampleHeight(unit.mesh.position.x,unit.mesh.position.z);
     if(unit.collider){unit.collider.x=unit.mesh.position.x;unit.collider.y=unit.mesh.position.y;unit.collider.z=unit.mesh.position.z;}
   }
-  findDryGroundDirection(position,desiredDirection){
+  findDryGroundDirection(position,desiredDirection,unit){
     if(desiredDirection.lengthSq()<1e-5)return null;
     const base=Math.atan2(desiredDirection.x,desiredDirection.z);
-    const offsets=[0,.38,-.38,.78,-.78,1.22,-1.22,1.58,-1.58,Math.PI];
-    let best=null,bestScore=-Infinity;
-    for(const offset of offsets){
-      const angle=base+offset,direction=new THREE.Vector3(Math.sin(angle),0,Math.cos(angle));
+    const best=unit.pathDirection;
+    let bestScore=-Infinity,hasBest=false;
+    for(const offset of dryRouteOffsets){
+      const angle=base+offset,direction=unit.tangent.set(Math.sin(angle),0,Math.cos(angle));
       if(!this.groundPathIsClear(position,direction,82))continue;
       const score=Math.cos(offset)*100-Math.abs(offset)*2;
-      if(score>bestScore){bestScore=score;best=direction;}
+      if(score>bestScore){bestScore=score;best.copy(direction);hasBest=true;}
     }
-    return best;
+    return hasBest?best:null;
   }
   groundPathIsClear(position,direction,distance){
     const half=this.terrain.worldSize/2-35;
@@ -226,7 +231,7 @@ export class GroundBattle {
   }
 
   dispose() {
-    for (const unit of this.groundUnits) this.scene.remove(unit.mesh);
+    for (const unit of this.groundUnits){this.scene.remove(unit.mesh);disposeGroundVehicleVisual(unit.mesh);}
     this.friends.length = 0;
     this.redUnits.length = 0;
     this.groundUnits.length = 0;

@@ -4,7 +4,7 @@ import { AssetRepository } from './asset-repository.js';
 import { makeClouds } from './clouds.js';
 import { MenuRadar } from './menu-radar.js';
 import { FlightControls } from './controls.js';
-import { CombatWorld } from './combat.js';
+import { CombatWorld, disposeCombatEffectResources } from './combat.js';
 import { createPreviewTerrain, disposeTerrain, TERRAIN_AREAS } from './terrain.js';
 import { FlightFX } from './fx.js';
 import { GameAudio } from './audio.js';
@@ -12,6 +12,9 @@ import { TacticalHud } from './hud.js';
 import { SunEffects, SUN_DIRECTION } from './sun.js';
 import { ATMOSPHERE } from './atmosphere.js';
 import { MISSIONS } from './missions.js';
+import { CareerProgress } from './progression.js';
+import { CombatStressScenario } from './performance/stress-scenario.js';
+import { disposeMissilePool } from './combat/projectiles.js';
 import { getLanguage, initializeLanguagePicker, t } from './i18n.js';
 import './style.css';
 import './hud.css';
@@ -22,6 +25,7 @@ const startMenu = document.querySelector('#start-menu');
 const flightHud = document.querySelector('#flight-hud');
 const menuStatus = document.querySelector('#menu-status');
 const menuTheater = document.querySelector('#menu-theater');
+const menuDifficulty = document.querySelector('#menu-difficulty');
 const launchButton = document.querySelector('#launch-mission');
 const launchProgress = document.querySelector('#launch-progress');
 const launchProgressFill = document.querySelector('#launch-progress-fill');
@@ -30,9 +34,13 @@ const launchProgressTitle = document.querySelector('#launch-progress-title');
 initializeLanguagePicker();
 const audio = new GameAudio();
 const missionCards = [...document.querySelectorAll('[data-mission]')];
+const careerProgress = new CareerProgress();
+menuDifficulty.value = careerProgress.difficulty;
 const urlParams = new URLSearchParams(location.search);
+const stressMode = import.meta.env.DEV && urlParams.get('stress') === '1';
 const areaAliases = new Map([['vironlahti', 'virolahti']]);
-let selectedMissionId = Object.hasOwn(MISSIONS, urlParams.get('mission')) ? urlParams.get('mission') : 'intercept';
+let selectedMissionId = Object.hasOwn(MISSIONS, urlParams.get('mission')) ? urlParams.get('mission') : 'patrol';
+if (!careerProgress.isUnlocked(selectedMissionId)) selectedMissionId = 'patrol';
 let menuRadar = null;
 const theaterAreas = TERRAIN_AREAS;
 if (!menuTheater.options.length) {
@@ -94,6 +102,7 @@ const weather = {
   wind: new THREE.Vector3(5, 0.15, -3),
 };
 let combat = null;
+let stressScenario = null;
 let tacticalHud = null;
 let gameStarted = false;
 let gamePaused = false;
@@ -103,6 +112,7 @@ let menuStatusDescriptor = { key: 'menu.statusReady', params: {}, state: 'ready'
 let launchProgressDescriptor = { progress: 0, titleKey: 'menu.launchButton', detailKey: 'menu.launchReadyStatus', params: {} };
 document.addEventListener('ilmatila:languagechange', () => {
   selectMission(selectedMissionId);
+  renderMissionProgress();
   const areaLabel = menuStatusDescriptor.key === 'menu.statusTerrainError'
     ? terrain
     : theaterAreas.find(area => area.id === selectedAreaId);
@@ -157,8 +167,34 @@ function ensureTerrainLoaded(areaId, onProgress, signal) {
   return assets.ensureTerrainLoaded(areaId, onProgress, signal);
 }
 
+function renderMissionProgress() {
+  for (const card of missionCards) {
+    const id = card.dataset.mission;
+    const unlocked = careerProgress.isUnlocked(id);
+    const state = card.querySelector('[data-mission-state]');
+    const best = careerProgress.getBest(id);
+    card.disabled = !unlocked;
+    card.classList.toggle('locked', !unlocked);
+    card.setAttribute('aria-disabled', String(!unlocked));
+    if (!state) continue;
+    if (!unlocked) {
+      state.textContent = t('menu.missionLocked');
+      state.dataset.state = 'locked';
+    } else if (best) {
+      state.textContent = t('menu.bestScore', {
+        score: best.score.toLocaleString(getLanguage() === 'fi' ? 'fi-FI' : 'en-US'),
+        accuracy: `${Math.round(best.accuracy * 100)}%`,
+      });
+      state.dataset.state = 'record';
+    } else {
+      state.textContent = t('menu.noRecord');
+      state.dataset.state = 'empty';
+    }
+  }
+}
+
 function selectMission(id) {
-  if (!Object.hasOwn(MISSIONS, id)) return;
+  if (!Object.hasOwn(MISSIONS, id) || !careerProgress.isUnlocked(id)) return false;
   selectedMissionId = id;
   menuRadar?.setMission(id);
   for (const card of missionCards) {
@@ -169,6 +205,7 @@ function selectMission(id) {
   document.querySelector('#briefing-code').textContent = t(`mission.${id}.code`);
   document.querySelector('#briefing-copy').textContent = t(`mission.${id}.briefing`);
   document.querySelector('#theater-mission-name').textContent = t(`mission.${id}.title`).toUpperCase();
+  return true;
 }
 
 function updateMenuArea(area) {
@@ -190,6 +227,7 @@ function installTerrain(replacement) {
 
 updateMenuArea(theaterAreas.find(area => area.id === initialAreaId));
 selectMission(selectedMissionId);
+renderMissionProgress();
 setMenuStatus('menu.statusReady', 'ready');
 setLaunchProgress(0, 'menu.launchButton', 'menu.launchReadyStatus');
 menuTheater.disabled = false;
@@ -243,13 +281,19 @@ menuTheater.addEventListener('change', () => {
   updateMenuArea(requestedArea);
   void loadTerrainForMenu(selectedAreaId);
 });
+menuDifficulty.addEventListener('change', () => {
+  careerProgress.setDifficulty(menuDifficulty.value);
+  renderMissionProgress();
+});
 
 for (const card of missionCards) card.addEventListener('click', () => selectMission(card.dataset.mission));
 
 const creditsDialog = document.querySelector('#credits-dialog');
 const pauseDialog = document.querySelector('#pause-dialog');
+const missionDebriefDialog = document.querySelector('#mission-debrief');
 const resumeFlightButton = document.querySelector('#resume-flight');
 const quitToMenuButton = document.querySelector('#quit-to-menu');
+const missionDebriefReturnButton = document.querySelector('#mission-debrief-return');
 document.querySelector('#open-credits').addEventListener('click', () => creditsDialog.showModal());
 document.querySelector('#close-credits').addEventListener('click', () => creditsDialog.close());
 document.querySelector('#credits-back').addEventListener('click', () => creditsDialog.close());
@@ -282,10 +326,14 @@ function returnToMenu() {
   if (!gameStarted) return;
   gamePaused = false;
   if (pauseDialog.open) pauseDialog.close();
+  if (missionDebriefDialog.open) missionDebriefDialog.close();
   audio.setPaused(false);
   audio.setGunFiring(false);
   audio.stopEngine(true);
   combat?.dispose();
+  stressScenario?.stop();
+  stressScenario = null;
+  if (stressMode) delete window.__ilmatilaStress;
   combat = null;
   tacticalHud = null;
   controls.enabled = false;
@@ -313,6 +361,7 @@ function returnToMenu() {
   startMenu.classList.remove('menu-leaving');
   launchInProgress = false;
   launchButton.disabled = false;
+  menuDifficulty.disabled = false;
   launchButton.setAttribute('aria-busy', 'false');
   menuTheater.disabled = false;
   setLaunchProgress(0, 'menu.launchButton', 'menu.launchReadyStatus');
@@ -329,12 +378,19 @@ function returnToMenu() {
 
 resumeFlightButton.addEventListener('click', resumeFlight);
 quitToMenuButton.addEventListener('click', returnToMenu);
+missionDebriefReturnButton.addEventListener('click', returnToMenu);
+missionDebriefDialog.addEventListener('cancel', event => event.preventDefault());
 pauseDialog.addEventListener('cancel', event => {
   event.preventDefault();
   resumeFlight();
 });
 document.addEventListener('keydown', event => {
   if (event.code !== 'Escape' || event.repeat || !gameStarted || combat?.destroyed) return;
+  if (missionDebriefDialog.open) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
   event.preventDefault();
   event.stopPropagation();
   if (gamePaused) resumeFlight();
@@ -348,6 +404,7 @@ launchButton.addEventListener('click', async () => {
   menuTerrainController = null;
   launchInProgress = true;
   launchButton.disabled = true;
+  menuDifficulty.disabled = true;
   launchButton.setAttribute('aria-busy', 'true');
   menuTheater.disabled = true;
 
@@ -434,7 +491,44 @@ launchButton.addEventListener('click', async () => {
     setMenuStatus(usingPreviewTerrain ? 'launch.previewFinishing' : 'launch.finalizingArea', usingPreviewTerrain ? 'warning' : 'loading');
     await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
 
-    const nextCombat = new CombatWorld(scene, player, terrain, fx, asset, MISSIONS[selectedMissionId], audio);
+    const mission = stressMode
+      ? {
+          ...MISSIONS[selectedMissionId],
+          deferredHostiles: false,
+          hostiles: 36,
+          hostileSpawnDistance: 6900,
+          hostileLateralSpacing: 420,
+          openingDelay: 0,
+          wingmen: 8,
+          groundBattle: true,
+          groundPairs: 14,
+          groundTrucks: 24,
+          groundFrontSpan: 11800,
+          convoyArea: 11600,
+        }
+      : MISSIONS[selectedMissionId];
+    const nextCombat = new CombatWorld(scene, player, terrain, fx, asset, mission, audio, (outcome, result) => {
+      const careerUpdate = careerProgress.recordMission({ ...result, outcome });
+      renderMissionProgress();
+      const note = document.querySelector('#debrief-career-note');
+      const messages = [];
+      if (careerUpdate.newRecord) messages.push(t('mission.debrief.newBest'));
+      if (careerUpdate.unlocked.length) {
+        const names = careerUpdate.unlocked.map(id => t(`mission.${id}.title`)).join(', ');
+        messages.push(t('mission.debrief.unlocked', { missions: names }));
+      }
+      note.textContent = messages.join(' · ');
+      note.hidden = messages.length === 0;
+      gamePaused = true;
+      controls.enabled = false;
+      controls.keys.clear();
+      combat?.clearInput();
+      audio.setPaused(true);
+      if (pauseDialog.open) pauseDialog.close();
+      document.querySelector('#death-screen').hidden = true;
+      if (!missionDebriefDialog.open) missionDebriefDialog.showModal();
+      missionDebriefReturnButton.focus({ preventScroll: true });
+    }, careerProgress.difficulty);
     const nextHud = new TacticalHud();
     const nextUrl = new URL(location.href);
     nextUrl.searchParams.set('mission', selectedMissionId);
@@ -442,6 +536,10 @@ launchButton.addEventListener('click', async () => {
     history.replaceState(null, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
 
     combat = nextCombat;
+    if (stressMode) {
+      stressScenario = new CombatStressScenario({ combat, scene, player, renderer });
+      window.__ilmatilaStress = stressScenario;
+    }
     tacticalHud = nextHud;
     gameStarted = true;
     launchInProgress = false;
@@ -460,6 +558,7 @@ launchButton.addEventListener('click', async () => {
     aircraftLoadController.abort();
     launchInProgress = false;
     launchButton.disabled = false;
+    menuDifficulty.disabled = false;
     launchButton.setAttribute('aria-busy', 'false');
     menuTheater.disabled = false;
     setLaunchProgress(0, 'launch.startFlight', 'launch.loadingFailed');
@@ -474,6 +573,8 @@ const headingEl = document.querySelector('#heading');
 const gunReticle = document.querySelector('.crosshair');
 const gunBoresightPoint = new THREE.Vector3();
 const gunReticleShift = new THREE.Vector2();
+const activeAircraft = [];
+const activeMissiles = [];
 let hasGunReticleShift = false;
 let previousAltitude = player.position.y;
 let needsMenuRender = true;
@@ -497,24 +598,28 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.04);
   if (!startMenu.hidden) menuRadar.update(dt);
   if (gameStarted && !gamePaused && combat) {
+    stressScenario?.recordFrame(performance.now());
     if (!combat.destroyed) {
       controls.update(dt);
       audio.updateEngine(controls.speed, Boolean(player.userData.boosting), dt);
       combat.update(dt);
-      combat.checkPlayerCollision(dt);
+      if (!gamePaused) {
+        stressScenario?.update(dt);
+        combat.checkPlayerCollision(dt);
+      }
     } else {
       combat.updateEffects(dt);
     }
     terrain.updateDetailPosition?.(player.position.x, player.position.z);
-    const activeAircraft = combat.destroyed ? [] : [
-      player,
-      ...combat.enemies.filter(unit => !unit.dead).map(unit => unit.mesh),
-      ...combat.allies.filter(unit => !unit.dead).map(unit => unit.mesh),
-    ];
-    const activeMissiles = combat.destroyed ? [] : [
-      ...combat.playerShots.filter(shot => shot.homing),
-      ...combat.hostiles.filter(shot => shot.missile),
-    ];
+    activeAircraft.length = 0;
+    activeMissiles.length = 0;
+    if (!combat.destroyed) {
+      activeAircraft.push(player);
+      for (const unit of combat.enemies) if (!unit.dead) activeAircraft.push(unit.mesh);
+      for (const unit of combat.allies) if (!unit.dead) activeAircraft.push(unit.mesh);
+      for (const shot of combat.playerShots) if (shot.homing) activeMissiles.push(shot);
+      for (const shot of combat.hostiles) if (shot.missile) activeMissiles.push(shot);
+    }
     fx.update(dt, activeAircraft, activeMissiles, terrain, weather, camera);
     const altitude = Math.max(0, player.position.y - terrain.sampleHeight(player.position.x, player.position.z));
     const verticalSpeed = dt > 0 ? (player.position.y - previousAltitude) / dt : 0;
@@ -563,6 +668,14 @@ addEventListener('resize', () => {
   needsMenuRender = true;
 });
 addEventListener('contextmenu', e => e.preventDefault());
+addEventListener('pagehide', event => {
+  if(event.persisted)return;
+  stressScenario?.stop();
+  combat?.dispose();
+  fx.dispose();
+  disposeMissilePool();
+  disposeCombatEffectResources();
+},{once:true});
 animate();
 void loadTerrainForMenu(initialAreaId);
 void assets.ensureAircraftLoaded().catch((error) => {

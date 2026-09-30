@@ -1,6 +1,6 @@
 # ILMATILA
 
-**ILMATILA 0.1.0-alpha.5** is an independent browser-based air-combat game by **ERÄGAMES**, built with Three.js. It is an early playable prototype: aircraft handling, radar, weapons, opponents, and ground battles are game simulations and are not intended for real-world training or operational use.
+**ILMATILA 0.1.0-alpha.6** is an independent browser-based air-combat game by **ERÄGAMES**, built with Three.js. It remains in **alpha**: the sortie loop and progression are playable, but combat balance and mission pacing still need broader player testing. Aircraft handling, radar, weapons, opponents, and ground battles are game simulations and are not intended for real-world training or operational use.
 
 The interface defaults to English and also supports Finnish. See the [changelog](CHANGELOG.md) for this alpha's updates.
 
@@ -21,6 +21,14 @@ After GitHub Pages is enabled with **Settings → Pages → Build and deployment
 
 Generated MML terrain packages stay out of Git history. The Pages workflow downloads the four versioned area archives from the [terrain data release](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.1.0), verifies their SHA-256 checksums, and includes them in the deployed site. The in-game terrain viewer needs no API key; the key is only required to fetch updated source data.
 
+## Missions and progression
+
+Combat Air Patrol is the first available combat sortie, followed by Intercept Flight and Close Air Support as each previous mission is completed and the aircraft returns to the extraction area. Training remains available from the start. The debrief reports score, gun accuracy, aircraft and ground-unit losses, damage, sortie time, and objective completion. Best scores are stored in browser local storage separately for each mission and difficulty. Clearing site data resets this local progression.
+
+Choose Easy, Standard, or Hard in the mission menu. The setting adjusts aircraft durability, countermeasure stores, hostile weapon damage and accuracy, hostile aircraft durability, and wingman effectiveness. Scores are compared only within the same mission and difficulty.
+
+The mission flow is departure, navigation, contact, engagement, objective, return to base, extraction, and debrief. Not every task requires an air-to-air engagement; the exact objective is shown in the briefing and cockpit HUD.
+
 ## Flight controls
 
 | Input | Action |
@@ -36,11 +44,12 @@ Generated MML terrain packages stay out of Git history. The Pages workflow downl
 | M | Fire a guided missile when the selected hostile contact is within range and locked |
 | R | Switch radar between air and ground modes |
 | C | Deploy flares and chaff |
+| 1 / 2 / 3 | Order wingmen: attack / defend / regroup |
 | Esc | Pause the sortie |
 
 ## Weapons and radar
 
-The heading-up radar keeps the aircraft's nose at the top of the display. Press `R` to choose air or ground mode, then `T` to select a hostile track. The cannon lead cue shows the predicted firing point for the selected aircraft or ground vehicle. The missile cue and count follow the selected radar mode: six AIM-120C AMRAAM air-to-air missiles and four AGM-65D Maverick air-to-ground missiles are carried as separate game inventories. Missile guidance ends after its powered flight phase; a missile cannot pursue a target indefinitely.
+The heading-up radar keeps the aircraft's nose at the top of the display. Press `R` to choose air or ground mode, then `T` to select a hostile track. The cannon lead cue shows the predicted firing point for the selected aircraft or ground vehicle. The missile cue and count follow the selected radar mode: six AIM-120C AMRAAM air-to-air missiles and four AGM-65D Maverick air-to-ground missiles are carried as separate game inventories. Missiles use limited powered guidance and a forgiving proximity fuze; chaff and flares can still defeat a seeker.
 
 ## Audio
 

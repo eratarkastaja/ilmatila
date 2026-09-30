@@ -6,11 +6,13 @@ const roundelRaycaster = new THREE.Raycaster();
 
 export function buildF35Asset(plane, aircraftAsset, friendly) {
   const airframe = aircraftAsset.clone(true);
+  airframe.userData.sharedAircraftModel=true;
   airframe.position.y = -0.38;
   airframe.traverse((object) => {
     if (!object.isMesh || !object.material) return;
     const makeSunlitMaterial = (source) => {
       const cloned = source.clone();
+      cloned.userData.ilmatilaOwned=true;
       if (/canopy|glass/i.test(source.name)) {
         // MeshPhysicalMaterial.copy expects fields that MeshStandardMaterial does
         // not define (such as clearcoatNormalScale), so copy the glTF PBR values
@@ -30,6 +32,7 @@ export function buildF35Asset(plane, aircraftAsset, friendly) {
           emissiveIntensity: cloned.emissiveIntensity ?? 1,
         });
         canopy.name = source.name;
+        canopy.userData.ilmatilaOwned=true;
         canopy.metalness = 0.38;
         canopy.roughness = 0.105;
         canopy.ior = 1.48;
@@ -66,6 +69,7 @@ export function buildF35Asset(plane, aircraftAsset, friendly) {
 
   if (friendly) {
     const formationLight = new THREE.MeshBasicMaterial({ color: '#55d4e8', toneMapped: false });
+    formationLight.userData.ilmatilaOwned=true;
     for (const side of [-1, 1]) {
       const light = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.045, 0.28), formationLight);
       light.position.set(side * 4.45, 0.12, -1.72);
@@ -99,6 +103,7 @@ export function buildImportedEnemyAircraft(plane, aircraftAsset, variant) {
   if (!aircraftAsset) throw new Error(`The ${variant} aircraft model has not been loaded.`);
 
   const airframe = aircraftAsset.clone(true);
+  airframe.userData.sharedAircraftModel=true;
   // The FlightGear AC3D source models use -X as their forward axis. The game
   // uses +Z, with Y up, so rotate the visual once and center it around origin.
   airframe.rotation.y = Math.PI / 2;
@@ -206,16 +211,18 @@ export function createAfterburnerFlame({ radius = 0.45, length = 2.5 } = {}) {
       side: THREE.DoubleSide,
       toneMapped: false,
     });
+    material.userData.ilmatilaOwned=true;
     const mesh = new THREE.Mesh(new THREE.ConeGeometry(layer.radius, layer.length, 12, 1), material);
+    mesh.userData.ilmatilaOwnedGeometry=true;
     // ConeGeometry points along +Y; turn its bright tip aft along -Z.
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.z = -layer.length * 0.48;
     flame.add(mesh);
   }
-  const core = new THREE.Mesh(
-    new THREE.SphereGeometry(radius * 0.19, 10, 7),
-    new THREE.MeshBasicMaterial({ color: '#fff7d8', blending: THREE.AdditiveBlending, toneMapped: false })
-  );
+  const coreMaterial=new THREE.MeshBasicMaterial({ color: '#fff7d8', blending: THREE.AdditiveBlending, toneMapped: false });
+  coreMaterial.userData.ilmatilaOwned=true;
+  const core = new THREE.Mesh(new THREE.SphereGeometry(radius * 0.19, 10, 7),coreMaterial);
+  core.userData.ilmatilaOwnedGeometry=true;
   core.scale.set(1, 1, 1.9);
   core.position.z = -0.08;
   flame.add(core);
@@ -355,7 +362,33 @@ function box(parent, material, size, position, rotation = [0, 0, 0]) {
 }
 
 export function material(color, roughness = 0.8, metalness = 0.1) {
-  return new THREE.MeshStandardMaterial({ color, roughness, metalness, flatShading: false, side: THREE.DoubleSide });
+  const result=new THREE.MeshStandardMaterial({ color, roughness, metalness, flatShading: false, side: THREE.DoubleSide });
+  result.userData.ilmatilaOwned=true;
+  return result;
+}
+
+export function disposeAircraftVisual(root){
+  if(!root||root.userData.visualResourcesDisposed)return;
+  root.userData.visualResourcesDisposed=true;
+  const geometries=new Set();
+  const materials=new Set();
+  root.traverse(object=>{
+    if(object.geometry&&!isSharedAircraftGeometry(object,root))geometries.add(object.geometry);
+    for(const material of Array.isArray(object.material)?object.material:[object.material]){
+      if(material?.userData?.ilmatilaOwned)materials.add(material);
+    }
+  });
+  for(const geometry of geometries)geometry.dispose();
+  for(const material of materials)material.dispose();
+}
+
+function isSharedAircraftGeometry(object,root){
+  let ancestor=object.parent;
+  while(ancestor&&ancestor!==root){
+    if(ancestor.userData.sharedAircraftModel)return true;
+    ancestor=ancestor.parent;
+  }
+  return false;
 }
 
 function starMesh(material) {

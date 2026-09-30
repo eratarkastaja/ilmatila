@@ -13,6 +13,7 @@ const forward = new THREE.Vector3(0, 0, 1);
 const localRight = new THREE.Vector3(1, 0, 0);
 const localUp = new THREE.Vector3(0, 1, 0);
 const localBulletAxis = new THREE.Vector3(0, 1, 0);
+const tracerDirection=new THREE.Vector3();
 
 /** Owns trigger cadence, weapon selection gates, ammunition and launch feedback. */
 export class WeaponSystem {
@@ -28,6 +29,14 @@ export class WeaponSystem {
     this.cooldown = 0;
     this.gunClock = 0;
     this.gunRoundCount = 0;
+    this.missilesFired = 0;
+    this.freeGunRounds=[];
+    this.freeTracerRounds=[];
+    this._direction=new THREE.Vector3();
+    this._right=new THREE.Vector3();
+    this._up=new THREE.Vector3();
+    this._muzzleOffset=new THREE.Vector3();
+    this._start=new THREE.Vector3();
     this.missileFeedbackKey = null;
     this.missileFeedbackTimer = 0;
   }
@@ -68,30 +77,38 @@ export class WeaponSystem {
 
   fireGun() {
     const attitude = this.player.quaternion;
-    const direction = forward.clone().applyQuaternion(attitude).normalize();
-    const right = localRight.clone().applyQuaternion(attitude).normalize();
-    const up = localUp.clone().applyQuaternion(attitude).normalize();
+    const direction = this._direction.copy(forward).applyQuaternion(attitude).normalize();
+    const right = this._right.copy(localRight).applyQuaternion(attitude).normalize();
+    const up = this._up.copy(localUp).applyQuaternion(attitude).normalize();
     direction
       .addScaledVector(right, (Math.random() - .5) * .0009)
       .addScaledVector(up, (Math.random() - .5) * .0009)
       .normalize();
-    const muzzleOffset = new THREE.Vector3(-.78, .38, 2.65).applyQuaternion(attitude);
-    const start = this.player.position.clone().add(muzzleOffset);
-    const velocity = direction.multiplyScalar(GUN_PROJECTILE_SPEED).add(this.playerVelocity);
+    const muzzleOffset = this._muzzleOffset.set(-.78, .38, 2.65).applyQuaternion(attitude);
+    const start = this._start.copy(this.player.position).add(muzzleOffset);
     const tracer = this.gunRoundCount++ % 4 === 0;
-    const shot = tracer ? new THREE.Mesh(gunTracerRoundGeo, gunTracerRoundMaterial) : new THREE.Object3D();
-    shot.position.copy(start);
+    const pool=tracer?this.freeTracerRounds:this.freeGunRounds;
+    const shot=pool.pop()??{
+      mesh:tracer?new THREE.Mesh(gunTracerRoundGeo,gunTracerRoundMaterial):new THREE.Object3D(),
+      velocity:new THREE.Vector3(),pool,
+    };
+    shot.tracer=tracer;
+    shot.ballistic=true;
+    shot.gravity=GUN_PROJECTILE_GRAVITY;
+    shot.life=GUN_PROJECTILE_LIFETIME;
+    shot.damage=.34;
+    shot.ally=false;
+    shot.target=null;
+    shot.mesh.position.copy(start);
+    const velocity = shot.velocity.copy(direction).multiplyScalar(GUN_PROJECTILE_SPEED).add(this.playerVelocity);
     if (tracer) {
-      shot.quaternion.setFromUnitVectors(localBulletAxis, velocity.clone().normalize());
-      this.scene.add(shot);
+      shot.mesh.quaternion.setFromUnitVectors(localBulletAxis,tracerDirection.copy(velocity).normalize());
+      this.scene.add(shot.mesh);
       this.fx?.addMovingTracer(start, velocity, '#ffd282', {
         life: .14, trailTime: .06, gravity: GUN_PROJECTILE_GRAVITY,
       });
     }
-    this.addProjectile({
-      mesh: shot, velocity, life: GUN_PROJECTILE_LIFETIME, damage: .34,
-      ballistic: true, gravity: GUN_PROJECTILE_GRAVITY, tracer,
-    });
+    this.addProjectile(shot);
   }
 
   fireMissile() {
@@ -99,6 +116,7 @@ export class WeaponSystem {
     const targetDomain = this.radar.targetDomain;
     const missileProfile = targetDomain === 'ground' ? MISSILE_PROFILES.playerGround : MISSILE_PROFILES.playerAir;
     this.missiles[targetDomain]--;
+    this.missilesFired++;
     this.cooldown = 2.8;
     this.clearFeedback();
     const direction = forward.clone().applyQuaternion(this.player.quaternion).normalize();
@@ -119,6 +137,8 @@ export class WeaponSystem {
       motorBurning: true,
       guidanceActive: true,
       damage: missileProfile.damage,
+      proximityRadius: missileProfile.proximityRadius,
+      proximityDamage: missileProfile.proximityDamage,
       homing: true,
       target: this.radar.target,
       targetDomain,

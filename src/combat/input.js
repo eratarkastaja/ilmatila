@@ -1,5 +1,5 @@
 /** Keyboard state scoped to one combat session. */
-const GAME_ACTION_CODES = new Set(['Space', 'KeyM', 'KeyR', 'KeyT', 'KeyC']);
+const GAME_ACTION_CODES = new Set(['Space', 'KeyM', 'KeyR', 'KeyT', 'KeyC', 'Digit1', 'Digit2', 'Digit3']);
 
 export class CombatInput {
   constructor(target = window) {
