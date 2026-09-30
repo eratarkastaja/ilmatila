@@ -106,6 +106,7 @@ let stressScenario = null;
 let tacticalHud = null;
 let gameStarted = false;
 let gamePaused = false;
+let suppressEscapeResumeUntil = 0;
 let launchInProgress = false;
 let aircraftAsset = null;
 let menuStatusDescriptor = { key: 'menu.statusReady', params: {}, state: 'ready' };
@@ -332,6 +333,14 @@ function pauseFlight() {
   resumeFlightButton.focus({ preventScroll: true });
 }
 
+document.addEventListener('pointerlockchange', () => {
+  // Escape first releases pointer lock in the browser. Treat that release as
+  // the pause command so the player does not need to press Escape twice.
+  if (!gameStarted || gamePaused || !controls.enabled || controls.pointerLockActive) return;
+  pauseFlight();
+  suppressEscapeResumeUntil = performance.now() + 150;
+});
+
 function resumeFlight() {
   if (!gamePaused) return;
   gamePaused = false;
@@ -340,6 +349,7 @@ function resumeFlight() {
   controls.resetMouseAim();
   combat?.clearInput();
   controls.setEnabled(true);
+  controls.requestMouseCapture();
   audio.setPaused(false);
 }
 
@@ -416,12 +426,16 @@ document.addEventListener('keydown', event => {
   }
   event.preventDefault();
   event.stopPropagation();
+  if (gamePaused && performance.now() < suppressEscapeResumeUntil) return;
   if (gamePaused) resumeFlight();
   else pauseFlight();
 }, { capture: true });
 
 launchButton.addEventListener('click', async () => {
   if (gameStarted || launchInProgress || launchButton.disabled) return;
+  // Pointer lock must be requested directly in the launch-button gesture;
+  // waiting for the asynchronous terrain/model loads loses browser activation.
+  controls.requestMouseCapture();
   const supersededMenuTerrain = menuTerrainController;
   terrainRequest++;
   menuTerrainController = null;
@@ -563,6 +577,7 @@ launchButton.addEventListener('click', async () => {
   } catch (error) {
     console.error('Mission launch failed.', error);
     launchFailed = true;
+    controls.setEnabled(false);
     if (pendingTerrain && pendingTerrain !== terrain) disposeTerrain(pendingTerrain);
     terrainLoadController.abort();
     aircraftLoadController.abort();

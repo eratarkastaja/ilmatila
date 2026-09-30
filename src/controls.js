@@ -5,7 +5,7 @@ const LOCAL_FORWARD = new THREE.Vector3(0, 0, 1);
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 const GAME_KEY_CODES = new Set([
   'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE',
-  'KeyV', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
   'ShiftLeft', 'ShiftRight', 'Space', 'KeyM', 'KeyR', 'KeyT', 'KeyC',
   'Minus', 'NumpadAdd', 'NumpadSubtract',
 ]);
@@ -70,11 +70,6 @@ export class FlightControls {
         return;
       }
       if (!this.enabled) return;
-      if (code === 'KeyV') {
-        event.preventDefault();
-        if (!event.repeat) this.toggleMouseSteering();
-        return;
-      }
       if (code === 'ZoomIn' || code === 'ZoomOut') {
         event.preventDefault();
         if (code === 'ZoomIn') {
@@ -108,6 +103,10 @@ export class FlightControls {
       this.mouseDeltaX += event.movementX;
       this.mouseDeltaY += event.movementY;
     };
+    this.onCanvasPointerDown = event => {
+      if (!this.enabled || this.pointerLockActive || event.pointerType !== 'mouse') return;
+      this.requestMouseCapture();
+    };
     this.onPointerLockChange = () => {
       this.pointerLockActive = document.pointerLockElement === this.canvas;
       this.canvas.classList.toggle('mouse-locked', this.pointerLockActive);
@@ -123,6 +122,7 @@ export class FlightControls {
     addEventListener('keyup', this.onKeyUp);
     addEventListener('blur', this.onBlur);
     canvas.addEventListener('pointermove', this.onPointerMove);
+    canvas.addEventListener('pointerdown', this.onCanvasPointerDown);
     document.addEventListener('pointerlockchange', this.onPointerLockChange);
     window.addEventListener('wheel', this.onWheel, { passive: false, capture: true });
     this.camera.position.set(0, 75, -22);
@@ -230,12 +230,8 @@ export class FlightControls {
     this.mousePitch = 0;
   }
 
-  toggleMouseSteering() {
-    if (this.pointerLockActive) {
-      document.exitPointerLock?.();
-      return;
-    }
-    if (typeof this.canvas.requestPointerLock !== 'function') return;
+  requestMouseCapture() {
+    if (this.pointerLockActive || typeof this.canvas.requestPointerLock !== 'function') return;
     this.resetMouseAim();
     try {
       const request = this.canvas.requestPointerLock();
@@ -250,7 +246,9 @@ export class FlightControls {
     if (!this.enabled) {
       this.keys.clear();
       this.resetMouseAim();
-      if (this.pointerLockActive) document.exitPointerLock?.();
+      if (this.pointerLockActive || document.pointerLockElement === this.canvas) {
+        document.exitPointerLock?.();
+      }
     }
   }
 

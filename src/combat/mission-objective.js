@@ -2,6 +2,7 @@ export const MISSION_OUTCOME = Object.freeze({
   ACTIVE: 'active',
   COMPLETE: 'complete',
   FAILED: 'failed',
+  ABORTED: 'aborted',
 });
 
 export function evaluateMissionObjective(objective, {

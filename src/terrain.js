@@ -59,7 +59,6 @@ export async function createTerrain({ areaId, fallback = true, onProgress, signa
     const orthoAreaMeters=metadata.orthoAreaMeters??ORTHO_GRID*ORTHO_TILE_METERS;
     const orthoGrid=metadata.orthoGrid??ORTHO_GRID;
     const tilePixels=metadata.orthoTilePixels??TILE_PIXELS;
-    const geometry = makeHeightGeometry(values, metadata.width, metadata.height, metadata.referenceHeight, areaMeters);
     let orthoLoaded = 0, waterLoaded = 0;
     const tileCount = orthoGrid * orthoGrid;
     const reportTiles = () => report(
@@ -71,7 +70,15 @@ export async function createTerrain({ areaId, fallback = true, onProgress, signa
       loadWaterAtlas(base, orthoGrid, tilePixels, (loaded) => { waterLoaded = loaded; reportTiles(); }, signal),
     ]);
     throwIfAborted(signal);
+    repairMissingHeightSamples(values, metadata.width, metadata.height, metadata.referenceHeight, areaMeters, {
+      water,
+      waterGrid: orthoGrid,
+      waterTilePixels: tilePixels,
+      waterAreaMeters: orthoAreaMeters,
+    });
+    blendFallbackIntoUnmappedImagery(texture);
     report(0.95, { key: 'terrain.finalizing' });
+    const geometry = makeHeightGeometry(values, metadata.width, metadata.height, metadata.referenceHeight, areaMeters);
     const material = new THREE.MeshStandardMaterial({
       color: '#d1d6ca', map: texture, roughness: 1, metalness: 0,
     });
@@ -80,12 +87,15 @@ export async function createTerrain({ areaId, fallback = true, onProgress, signa
     mesh.receiveShadow = true;
     const heightSampler = (x, z) => sampleHeight(values, metadata.width, metadata.height, metadata.referenceHeight, areaMeters, x, z);
     mesh.add(makeHorizonTerrain(areaMeters, heightSampler));
+    const boundaryLine = makeTheaterBoundaryLine(areaMeters, heightSampler);
+    mesh.add(boundaryLine);
     const detailStreamer = hasMovingDetailMetadata(metadata)
       ? createDetailStreamer({ base, metadata, terrainGeometry: geometry, parent: mesh, anisotropy: textureAnisotropy })
       : null;
     const terrain = {
       id:areaConfig?.id ?? selected.id, label:areaConfig?.label ?? selected.label, mesh, real: true, metadata, worldSize:areaMeters,
       sampleHeight: heightSampler,
+      boundaryLine,
       isWater: (x, z) => sampleWater(water, orthoGrid, tilePixels, orthoAreaMeters, x, z),
       updateDetailPosition: (x, z) => detailStreamer?.update(x, z),
       detailStreamer,
@@ -221,7 +231,7 @@ async function loadOrthophotoAtlas(base,grid,tilePixels,anisotropy,onProgress,si
   const canvas = document.createElement('canvas');
   canvas.width = grid * tilePixels;
   canvas.height = grid * tilePixels;
-  const ctx = canvas.getContext('2d', { alpha: false });
+  const ctx = canvas.getContext('2d', { alpha: true });
   ctx.fillStyle = '#465347'; ctx.fillRect(0, 0, canvas.width, canvas.height);
   let loaded = 0;
   let completed = 0;
@@ -273,6 +283,203 @@ function sampleWater(mask,grid,tilePixels,areaMeters,x,z){
   return mask[row*size+col]===1;
 }
 
+function repairMissingHeightSamples(values, width, height, referenceHeight, areaMeters, waterData) {
+  const sampleCount = width * height;
+  let missingCount = 0;
+  for (let index = 0; index < sampleCount; index++) {
+    if (!Number.isFinite(values[index]) || values[index] <= -1_000) missingCount++;
+  }
+  if (!missingCount) return;
+
+  const nearestValid = new Int32Array(sampleCount);
+  nearestValid.fill(-1);
+  const distance = new Uint16Array(sampleCount);
+  const queue = new Int32Array(sampleCount);
+  let head = 0;
+  let tail = 0;
+
+  for (let index = 0; index < sampleCount; index++) {
+    const value = values[index];
+    if (Number.isFinite(value) && value > -1_000) {
+      nearestValid[index] = index;
+      queue[tail++] = index;
+    }
+  }
+  if (!tail) {
+    values.fill(referenceHeight);
+    return;
+  }
+
+  // Multi-source flood fill gives each missing cell a nearby real elevation.
+  // This keeps shoreline and coverage holes from turning into vertical walls.
+  while (head < tail) {
+    const index = queue[head++];
+    const row = Math.floor(index / width);
+    const column = index - row * width;
+    const nextDistance = Math.min(65_535, distance[index] + 1);
+    if (column > 0 && nearestValid[index - 1] === -1) {
+      nearestValid[index - 1] = nearestValid[index];
+      distance[index - 1] = nextDistance;
+      queue[tail++] = index - 1;
+    }
+    if (column + 1 < width && nearestValid[index + 1] === -1) {
+      nearestValid[index + 1] = nearestValid[index];
+      distance[index + 1] = nextDistance;
+      queue[tail++] = index + 1;
+    }
+    if (row > 0 && nearestValid[index - width] === -1) {
+      nearestValid[index - width] = nearestValid[index];
+      distance[index - width] = nextDistance;
+      queue[tail++] = index - width;
+    }
+    if (row + 1 < height && nearestValid[index + width] === -1) {
+      nearestValid[index + width] = nearestValid[index];
+      distance[index + width] = nextDistance;
+      queue[tail++] = index + width;
+    }
+  }
+
+  const sampleMeters = areaMeters / Math.max(width - 1, height - 1);
+  for (let index = 0; index < sampleCount; index++) {
+    if (nearestValid[index] === index) continue;
+    const sourceHeight = values[nearestValid[index]];
+    const row = Math.floor(index / width);
+    const column = index - row * width;
+    const x = (column / (width - 1) - 0.5) * areaMeters;
+    const z = (0.5 - row / (height - 1)) * areaMeters;
+    const isWater = sampleWater(
+      waterData.water,
+      waterData.waterGrid,
+      waterData.waterTilePixels,
+      waterData.waterAreaMeters,
+      x,
+      z,
+    );
+    if (isWater && sourceHeight <= 12) {
+      // NLS elevation tiles use NoData over the sea. Keep those areas at sea
+      // level instead of letting the sentinel value stretch the mesh down.
+      values[index] = 0;
+      continue;
+    }
+    const distanceMeters = distance[index] * sampleMeters;
+    const reliefBlend = THREE.MathUtils.smoothstep(distanceMeters, 0, 1_200);
+    const relief = Math.sin(x * 0.00019 + Math.sin(z * 0.00011)) * 8
+      + Math.cos(z * 0.00023 - Math.sin(x * 0.00009)) * 5;
+    values[index] = sourceHeight + relief * reliefBlend;
+  }
+}
+
+function blendFallbackIntoUnmappedImagery(texture) {
+  const atlas = texture?.image;
+  if (!atlas?.getContext) return;
+  const maskSize = 1_024;
+  const scanCanvas = document.createElement('canvas');
+  scanCanvas.width = maskSize;
+  scanCanvas.height = maskSize;
+  const scanContext = scanCanvas.getContext('2d', { willReadFrequently: true });
+  scanContext.drawImage(atlas, 0, 0, maskSize, maskSize);
+  const pixels = scanContext.getImageData(0, 0, maskSize, maskSize).data;
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = maskSize;
+  maskCanvas.height = maskSize;
+  const maskContext = maskCanvas.getContext('2d');
+  const mask = maskContext.createImageData(maskSize, maskSize);
+  let blankPixels = 0;
+
+  for (let pixel = 0; pixel < maskSize * maskSize; pixel++) {
+    const offset = pixel * 4;
+    const red = pixels[offset];
+    const green = pixels[offset + 1];
+    const blue = pixels[offset + 2];
+    const neutral = Math.max(red, green, blue) - Math.min(red, green, blue) <= 3;
+    const brightness = (red + green + blue) / 3;
+    const blank = neutral && (brightness < 4 || brightness > 250 || (brightness >= 202 && brightness <= 216));
+    const alpha = blank ? 0 : 255;
+    mask.data[offset] = 255;
+    mask.data[offset + 1] = 255;
+    mask.data[offset + 2] = 255;
+    mask.data[offset + 3] = alpha;
+    if (blank) blankPixels++;
+  }
+  if (blankPixels < maskSize * 4) return;
+
+  maskContext.putImageData(mask, 0, 0);
+  const fallback = makeFallbackImagery(maskSize);
+  const atlasContext = atlas.getContext('2d');
+  atlasContext.save();
+  atlasContext.globalCompositeOperation = 'destination-in';
+  atlasContext.filter = 'blur(6px)';
+  atlasContext.drawImage(maskCanvas, 0, 0, atlas.width, atlas.height);
+  atlasContext.filter = 'none';
+  atlasContext.globalCompositeOperation = 'destination-over';
+  atlasContext.drawImage(fallback, 0, 0, atlas.width, atlas.height);
+  atlasContext.restore();
+  texture.needsUpdate = true;
+}
+
+function makeFallbackImagery(size) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext('2d');
+  context.fillStyle = '#344636';
+  context.fillRect(0, 0, size, size);
+
+  let seed = 0x56a31d;
+  const random = () => {
+    seed ^= seed << 13;
+    seed ^= seed >>> 17;
+    seed ^= seed << 5;
+    return (seed >>> 0) / 0x1_0000_0000;
+  };
+  const forest = ['#2c4234', '#3a4d37', '#46563c', '#304838'];
+  for (let patch = 0; patch < 760; patch++) {
+    const x = random() * size;
+    const y = random() * size;
+    const rx = 5 + random() * 40;
+    const ry = 4 + random() * 25;
+    context.beginPath();
+    for (let point = 0; point < 9; point++) {
+      const angle = point / 9 * Math.PI * 2;
+      const wobble = 0.72 + random() * 0.5;
+      const px = x + Math.cos(angle) * rx * wobble;
+      const py = y + Math.sin(angle) * ry * wobble;
+      if (point === 0) context.moveTo(px, py);
+      else context.lineTo(px, py);
+    }
+    context.closePath();
+    context.fillStyle = forest[Math.floor(random() * forest.length)];
+    context.globalAlpha = 0.32 + random() * 0.34;
+    context.fill();
+  }
+
+  const fields = ['#6f7552', '#858064', '#747b59', '#938b6c'];
+  for (let patch = 0; patch < 150; patch++) {
+    const x = random() * size;
+    const y = random() * size;
+    const rx = 5 + random() * 29;
+    const ry = 4 + random() * 17;
+    const rotation = random() * Math.PI;
+    context.save();
+    context.translate(x, y);
+    context.rotate(rotation);
+    context.beginPath();
+    context.moveTo(-rx, -ry * 0.3);
+    context.lineTo(-rx * 0.55, -ry);
+    context.lineTo(rx * 0.72, -ry * 0.82);
+    context.lineTo(rx, ry * 0.08);
+    context.lineTo(rx * 0.58, ry);
+    context.lineTo(-rx * 0.66, ry * 0.71);
+    context.closePath();
+    context.fillStyle = fields[Math.floor(random() * fields.length)];
+    context.globalAlpha = 0.62 + random() * 0.28;
+    context.fill();
+    context.restore();
+  }
+  context.globalAlpha = 1;
+  return canvas;
+}
+
 function loadImage(src, signal) {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
@@ -315,7 +522,9 @@ function makePreviewTerrain() {
   const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true }));
   mesh.position.y = -250; mesh.receiveShadow = true;
   mesh.add(makeHorizonTerrain(size, previewHeight));
-  return { mesh, real: false, worldSize:size, sampleHeight: previewHeight, isWater: () => false };
+  const boundaryLine = makeTheaterBoundaryLine(size, previewHeight);
+  mesh.add(boundaryLine);
+  return { mesh, real: false, worldSize:size, sampleHeight: previewHeight, boundaryLine, isWater: () => false };
 }
 
 function makeHorizonTerrain(worldSize, sampleWorldHeight) {
@@ -331,8 +540,8 @@ function makeHorizonTerrain(worldSize, sampleWorldHeight) {
   const low = new THREE.Color('#263b36');
   const high = new THREE.Color('#53604a');
   const color = new THREE.Color();
-  const transitionInside = 3_000;
-  const transitionOutside = 10_000;
+  const transitionInside = 1_500;
+  const transitionOutside = 14_000;
 
   for (let i = 0; i < positions.count; i++) {
     const x = positions.getX(i);
@@ -345,14 +554,19 @@ function makeHorizonTerrain(worldSize, sampleWorldHeight) {
     let worldHeight;
 
     if (outsideDistance === 0) {
-      const edgeBlend = 1 - smoothstep(0, transitionInside, edgeDistance);
-      worldHeight = edgeHeight - THREE.MathUtils.lerp(88, 5, edgeBlend);
+      // Keep the horizon mesh just below the detailed map, then bury it under
+      // the terrain quickly enough that it cannot create an inner trench.
+      worldHeight = edgeHeight - 2 - 92 * smoothstep(0, transitionInside, edgeDistance);
     } else {
-      const rollingLowland = -250
-        + Math.sin(x * 0.00019 + Math.sin(z * 0.00011)) * 8
-        + Math.cos(z * 0.00023 - Math.sin(x * 0.00009)) * 5;
+      // Continue each edge's own elevation instead of snapping to a global
+      // sea-level-like plane. Broad, low-amplitude relief keeps the far field
+      // alive without creating a visible cliff at the map boundary.
+      const rollingLowland = edgeHeight
+        + Math.sin(x * 0.00013 + Math.sin(z * 0.00007)) * 10
+        + Math.cos(z * 0.00016 - Math.sin(x * 0.00006)) * 7
+        + Math.sin((x + z) * 0.00009) * 4;
       const blend = smoothstep(0, transitionOutside, outsideDistance);
-      worldHeight = THREE.MathUtils.lerp(edgeHeight - 5, rollingLowland, blend);
+      worldHeight = THREE.MathUtils.lerp(edgeHeight - 2, rollingLowland, blend);
     }
 
     positions.setY(i, worldHeight + 250);
@@ -374,6 +588,66 @@ function makeHorizonTerrain(worldSize, sampleWorldHeight) {
   mesh.receiveShadow = false;
   mesh.castShadow = false;
   return mesh;
+}
+
+function makeTheaterBoundaryLine(worldSize, sampleWorldHeight) {
+  const half = worldSize * 0.5;
+  const dashLength = 220;
+  const dashStep = 390;
+  const halfWidth = 6;
+  const positions = [];
+  const indices = [];
+  const addSide = (startX, startZ, endX, endZ) => {
+    const dx = endX - startX;
+    const dz = endZ - startZ;
+    const length = Math.hypot(dx, dz);
+    const tangentX = dx / length;
+    const tangentZ = dz / length;
+    const normalX = -tangentZ;
+    const normalZ = tangentX;
+    for (let distance = 0; distance < length; distance += dashStep) {
+      const endDistance = Math.min(distance + dashLength, length);
+      const x0 = startX + tangentX * distance;
+      const z0 = startZ + tangentZ * distance;
+      const x1 = startX + tangentX * endDistance;
+      const z1 = startZ + tangentZ * endDistance;
+      const first = positions.length / 3;
+      for (const [x, z] of [
+        [x0 - normalX * halfWidth, z0 - normalZ * halfWidth],
+        [x0 + normalX * halfWidth, z0 + normalZ * halfWidth],
+        [x1 + normalX * halfWidth, z1 + normalZ * halfWidth],
+        [x1 - normalX * halfWidth, z1 - normalZ * halfWidth],
+      ]) {
+        positions.push(x, sampleWorldHeight(x, z) + 250 + 7, z);
+      }
+      indices.push(first, first + 1, first + 2, first, first + 2, first + 3);
+    }
+  };
+  addSide(-half, -half, half, -half);
+  addSide(half, -half, half, half);
+  addSide(half, half, -half, half);
+  addSide(-half, half, -half, -half);
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeBoundingSphere();
+  const material = new THREE.MeshBasicMaterial({
+    color: '#ff8056',
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    toneMapped: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+  });
+  const line = new THREE.Mesh(geometry, material);
+  line.name = 'theater-boundary-marking';
+  line.frustumCulled = false;
+  line.renderOrder = 2;
+  line.visible = false;
+  return line;
 }
 
 function smoothstep(min, max, value) {

@@ -14,7 +14,7 @@ function closestSegmentFractionXZ(start, end) {
 
 /** Centralizes swept collision queries for aircraft and all projectile types. */
 export class CollisionSystem {
-  constructor({ player, terrain, colliders, enemies, allies, redUnits, lastCollisionPosition, onPlayerDestroyed }) {
+  constructor({ player, terrain, colliders, enemies, allies, redUnits, lastCollisionPosition, onPlayerDestroyed, onPlayerBoundaryAbort = onPlayerDestroyed }) {
     this.player = player;
     this.terrain = terrain;
     this.colliders = colliders;
@@ -23,6 +23,7 @@ export class CollisionSystem {
     this.redUnits = redUnits;
     this.lastCollisionPosition = lastCollisionPosition;
     this.onPlayerDestroyed = onPlayerDestroyed;
+    this.onPlayerBoundaryAbort = onPlayerBoundaryAbort;
     this.projectileTargetMatricesPrepared=false;
     this._start = new THREE.Vector3();
     this._travel = new THREE.Vector3();
@@ -35,6 +36,16 @@ export class CollisionSystem {
     const position = this.player.position;
     const start = this._start.copy(this.lastCollisionPosition);
     const travel = this._travel.subVectors(position,start);
+    const halfSize = this.terrain.worldSize / 2;
+    if (Math.abs(position.x) >= halfSize || Math.abs(position.z) >= halfSize) {
+      // End this sortie at the marked edge and keep the rendered aircraft on
+      // the playable side, even when a fast frame crosses the boundary.
+      position.x = THREE.MathUtils.clamp(position.x, -halfSize + 2, halfSize - 2);
+      position.z = THREE.MathUtils.clamp(position.z, -halfSize + 2, halfSize - 2);
+      this.lastCollisionPosition.copy(position);
+      this.onPlayerBoundaryAbort('combat.collisionBoundary');
+      return true;
+    }
     const samples = Math.max(1, Math.ceil(travel.length() / 8));
     this.lastCollisionPosition.copy(position);
     for (let step = 0; step <= samples; step++) {
@@ -46,12 +57,6 @@ export class CollisionSystem {
         this.onPlayerDestroyed('combat.collisionTerrain');
         return true;
       }
-    }
-
-    const halfSize = this.terrain.worldSize / 2;
-    if (Math.abs(position.x) > halfSize - 10 || Math.abs(position.z) > halfSize - 10) {
-      this.onPlayerDestroyed('combat.collisionBoundary');
-      return true;
     }
 
     for (const collider of this.colliders) {
@@ -153,5 +158,9 @@ export class CollisionSystem {
 
   groundHeight(x, z) {
     return this.terrain.sampleHeight(x, z);
+  }
+
+  isWater(x, z) {
+    return this.terrain.isWater?.(x, z) ?? false;
   }
 }

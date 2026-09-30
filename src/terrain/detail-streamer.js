@@ -51,7 +51,10 @@ export function createDetailStreamer({ base, metadata, terrainGeometry, parent, 
   }
 
   function makeTileMaterial(image) {
-    const texture = new THREE.Texture(image);
+    const prepared = prepareOrthophotoTile(image);
+    if (!prepared) return null;
+
+    const texture = new THREE.Texture(prepared.image);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.generateMipmaps = true;
     texture.minFilter = THREE.LinearMipmapLinearFilter;
@@ -61,6 +64,8 @@ export function createDetailStreamer({ base, metadata, terrainGeometry, parent, 
     const material = new THREE.MeshStandardMaterial({
       color: '#d1d6ca', map: texture, roughness: 1, metalness: 0,
       polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+      transparent: prepared.hasNoData,
+      depthWrite: !prepared.hasNoData,
     });
     return { texture, material };
   }
@@ -100,6 +105,7 @@ export function createDetailStreamer({ base, metadata, terrainGeometry, parent, 
       .then(image => {
         if (disposed) return null;
         const resources = makeTileMaterial(image);
+        if (!resources) return null;
         entry.texture = resources.texture;
         entry.material = resources.material;
         const tile = tiles.get(key);
@@ -156,6 +162,58 @@ export function createDetailStreamer({ base, metadata, terrainGeometry, parent, 
   }
 
   return { update, dispose };
+}
+
+function prepareOrthophotoTile(image) {
+  // The NLS imagery coverage contains whole tiles and partial areas encoded as
+  // pure white/black pixels. Probe first so wholly empty 1 MP tiles can simply
+  // reveal the lower-resolution base map without allocating another canvas.
+  const probe = document.createElement('canvas');
+  probe.width = 16;
+  probe.height = 16;
+  const probeContext = probe.getContext('2d', { willReadFrequently: true });
+  probeContext.drawImage(image, 0, 0, probe.width, probe.height);
+  const samples = probeContext.getImageData(0, 0, probe.width, probe.height).data;
+  let blankSamples = 0;
+  for (let index = 0; index < samples.length; index += 4) {
+    if (isNoDataPixel(samples[index], samples[index + 1], samples[index + 2])) blankSamples++;
+  }
+  if (blankSamples === probe.width * probe.height) return null;
+  if (blankSamples === 0) return { image, hasNoData: false };
+
+  const canvas = document.createElement('canvas');
+  canvas.width = image.naturalWidth || image.width;
+  canvas.height = image.naturalHeight || image.height;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  context.drawImage(image, 0, 0);
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = canvas.width;
+  maskCanvas.height = canvas.height;
+  const maskContext = maskCanvas.getContext('2d');
+  const mask = maskContext.createImageData(canvas.width, canvas.height);
+  for (let index = 0; index < pixels.data.length; index += 4) {
+    const alpha = isNoDataPixel(pixels.data[index], pixels.data[index + 1], pixels.data[index + 2]) ? 0 : 255;
+    mask.data[index] = 255;
+    mask.data[index + 1] = 255;
+    mask.data[index + 2] = 255;
+    mask.data[index + 3] = alpha;
+  }
+  maskContext.putImageData(mask, 0, 0);
+  context.save();
+  context.globalCompositeOperation = 'destination-in';
+  context.filter = 'blur(2px)';
+  context.drawImage(maskCanvas, 0, 0);
+  context.restore();
+  return { image: canvas, hasNoData: true };
+}
+
+function isNoDataPixel(red, green, blue) {
+  const brightest = Math.max(red, green, blue);
+  const darkest = Math.min(red, green, blue);
+  if (brightest - darkest > 4) return false;
+  const brightness = (red + green + blue) / 3;
+  return brightness <= 4 || brightness >= 250 || (brightness >= 202 && brightness <= 216);
 }
 
 function makeDetailTileGeometry(sourceGeometry, sourceWidth, sourceHeight, areaMeters, tileMeters, tileRow, tileCol) {

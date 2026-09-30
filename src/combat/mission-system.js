@@ -46,7 +46,7 @@ export class MissionSystem {
       return;
     }
     this.outcome=evaluatedOutcome;
-    this.missionFailed=this.outcome===MISSION_OUTCOME.FAILED;
+    this.missionFailed=this.outcome!==MISSION_OUTCOME.ACTIVE&&this.outcome!==MISSION_OUTCOME.COMPLETE;
     this.renderObjective(remaining);
   }
 
@@ -63,7 +63,7 @@ export class MissionSystem {
     this.evaluation.outcome=this.outcome;
     this.outcome = evaluateMissionObjective(this.objective,this.evaluation);
     this.missionComplete = this.outcome === MISSION_OUTCOME.COMPLETE;
-    this.missionFailed = this.outcome === MISSION_OUTCOME.FAILED;
+    this.missionFailed = this.outcome !== MISSION_OUTCOME.ACTIVE && this.outcome !== MISSION_OUTCOME.COMPLETE;
   }
 
   renderObjective(remaining = this.getRemaining(this.remaining)) {
@@ -127,7 +127,7 @@ export class MissionSystem {
     if (this.outcome !== MISSION_OUTCOME.ACTIVE) return;
     this.outcome = outcome;
     this.missionComplete = outcome === MISSION_OUTCOME.COMPLETE;
-    this.missionFailed = outcome === MISSION_OUTCOME.FAILED;
+    this.missionFailed = outcome !== MISSION_OUTCOME.ACTIVE && outcome !== MISSION_OUTCOME.COMPLETE;
     if (this.missionComplete) this.objectiveSatisfied = true;
     this.renderObjective();
     if (this.missionComplete) {

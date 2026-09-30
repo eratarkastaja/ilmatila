@@ -14,6 +14,7 @@ function makeCollisionSystem({
 } = {}) {
   const player = { position };
   const onPlayerDestroyed = vi.fn();
+  const onPlayerBoundaryAbort = vi.fn();
   const system = new CollisionSystem({
     player,
     terrain: { worldSize, sampleHeight: () => terrainHeight },
@@ -23,8 +24,9 @@ function makeCollisionSystem({
     redUnits,
     lastCollisionPosition: previousPosition.clone(),
     onPlayerDestroyed,
+    onPlayerBoundaryAbort,
   });
-  return { system, player, onPlayerDestroyed };
+  return { system, player, onPlayerDestroyed, onPlayerBoundaryAbort };
 }
 
 describe('CollisionSystem', () => {
@@ -51,14 +53,16 @@ describe('CollisionSystem', () => {
     expect(onPlayerDestroyed).toHaveBeenCalledWith('combat.collisionHostile');
   });
 
-  it('detects theater-edge contact and reports the boundary failure', () => {
-    const { system, onPlayerDestroyed } = makeCollisionSystem({
-      position: new THREE.Vector3(991, 100, 0),
+  it('aborts at the theater edge and clamps the aircraft inside', () => {
+    const { system, player, onPlayerDestroyed, onPlayerBoundaryAbort } = makeCollisionSystem({
+      position: new THREE.Vector3(1001, 100, 0),
       worldSize: 2000,
     });
 
     expect(system.checkPlayerCollision(.1)).toBe(true);
-    expect(onPlayerDestroyed).toHaveBeenCalledWith('combat.collisionBoundary');
+    expect(onPlayerBoundaryAbort).toHaveBeenCalledWith('combat.collisionBoundary');
+    expect(onPlayerDestroyed).not.toHaveBeenCalled();
+    expect(player.position.x).toBe(998);
   });
 
   it('returns the earliest aircraft or vehicle impact on a projectile sweep', () => {

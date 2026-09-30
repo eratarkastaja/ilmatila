@@ -1,8 +1,15 @@
 # Changelog
 
-## 0.1.0-alpha.8 — 2026-09-30
+## 0.1.0-alpha.9 — 2026-09-30
 
-### English
+- Repaired missing elevation samples and blank orthophoto areas so terrain coverage gaps blend into the surrounding landscape instead of forming pits, white tiles, or abrupt edges.
+- Extended the distant terrain from the map edge's elevation and added a visible operational boundary; crossing it now ends the sortie as aborted.
+- Made mouse steering active throughout flight, hid the cursor while flying, and made Escape open the pause menu on the first press.
+- Refined the F-35 exhaust fit, clipped cannon tracer visuals against the aircraft, and added pooled water-splash impacts for shots hitting lakes and sea.
+
+Alpha 9 remains an early playable prototype. Flight, radar, weapons, AI, and battlefield behavior are simplified game systems, not real-world training or operational tools.
+
+## 0.1.0-alpha.8 — 2026-09-30
 
 - Improved close chase-camera behavior so the aircraft stays framed during fast flight and turns; camera zoom remains continuous and now reaches a closer view.
 - Repositioned the F-35 exhaust nozzle to meet the airframe, added a deeper nozzle interior, and replaced the harsh afterburner cones with a smooth, layered orange plume.
@@ -12,8 +19,6 @@
 Alpha 8 remains an early playable prototype. Flight, radar, weapons, AI, and battlefield behavior are simplified game systems, not real-world training or operational tools.
 
 ## 0.1.0-alpha.7 — 2026-09-30
-
-### English
 
 - Expanded all four Finnish theaters to 32 × 32 km and published refreshed MML terrain packages. The Pages workflow now downloads and verifies terrain data release v1.2.0.
 - Extended mission ingress, recovery, convoy fronts, and ground engagements to use more of the larger theaters.
@@ -29,8 +34,6 @@ Alpha 7 remains an early playable prototype. Flight, radar, weapons, AI, and bat
 
 ## 0.1.0-alpha.6 — 2026-09-30
 
-### English
-
 - Reordered sortie progression so Combat Air Patrol is the first combat mission, followed by Intercept Flight and Close Air Support. Training remains available from the start; combat missions unlock after a successful objective and extraction.
 - Added persistent best-score records per mission and difficulty, plus a debrief with score, cannon accuracy, air and ground targets destroyed, damage taken, sortie time, and objectives completed.
 - Added Easy, Standard, and Hard settings that tune player durability, countermeasures, incoming damage, hostile aircraft durability and aim, and wingman effectiveness.
@@ -44,8 +47,6 @@ Alpha 6 is still an early playable prototype. The mission structure is in place,
 
 ## 0.1.0-alpha.5 — 2026-09-29
 
-### English
-
 - Added distinct air and ground missile inventories, with AIM-120C AMRAAM and AGM-65D Maverick designations shown for the active radar mode.
 - Limited missile powered flight and guidance, with a coast phase after motor burnout.
 - Reworked the cannon lead cue around the actual aircraft boresight and gun muzzle; it now supports air and ground targets and accounts for target motion, aircraft velocity, and projectile drop.
@@ -58,8 +59,6 @@ Alpha 5 remains an early prototype. Flight, radar, weapons, AI, and battlefield 
 
 ## 0.1.0-alpha.4 — 2026-09-29
 
-### English
-
 - Added a moving 6 × 6 km high-detail terrain window that follows the aircraft across every theater, with cached tile geometry and imagery to reduce transition stutter.
 - Reworked theater-wide terrain packages and Pages delivery; the 2 m/pixel orthophoto tiles now cover the full map area instead of favoring the mission start point.
 - Improved air-combat opening distance and pacing, ground-unit movement and engagements, and low-altitude anti-aircraft fire.
@@ -69,8 +68,6 @@ Alpha 5 remains an early prototype. Flight, radar, weapons, AI, and battlefield 
 Alpha 4 remains an early prototype. Flight, radar, weapons, AI, and battlefield behavior are simplified game systems, not real-world training or operational tools.
 
 ## 0.1.0-alpha.3 — 2026-09-29
-
-### English
 
 - Refined the GAU-22/A cannon as a rotary weapon, with a 55-round-per-second firing cadence, heavier sound, and directional tracer rounds.
 - Improved cannon hit detection and collision checks at high speed, and tuned projectile behavior.
@@ -82,8 +79,6 @@ Alpha 4 remains an early prototype. Flight, radar, weapons, AI, and battlefield 
 Alpha 3 remains an early prototype. Flight, radar, weapons, AI, and battlefield behavior are simplified game systems, not real-world training or operational tools.
 
 ## 0.1.0-alpha.2 — 2026-09-29
-
-### English
 
 - Made air engagements more active: aircraft AI now holds tighter combat patterns in the mission area, wingmen engage hostile aircraft, and hostile pilots can deploy countermeasures against incoming missiles.
 - Clarified radar target selection and missile locking, added a target cue in the flight view, and introduced a subtle cannon lead cue with tuned hit detection.

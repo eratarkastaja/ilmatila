@@ -1,6 +1,6 @@
 # ILMATILA
 
-**ILMATILA 0.1.0-alpha.8** is an independent browser-based air-combat game by **ERÄGAMES**, built with Three.js. It remains in **alpha**: the sortie loop and progression are playable, but combat balance and mission pacing still need broader player testing. Aircraft handling, radar, weapons, opponents, and ground battles are game simulations and are not intended for real-world training or operational use.
+**ILMATILA 0.1.0-alpha.9** is an independent browser-based air-combat game by **ERÄGAMES**, built with Three.js. It remains in **alpha**: the sortie loop and progression are playable, but combat balance and mission pacing still need broader player testing. Aircraft handling, radar, weapons, opponents, and ground battles are game simulations and are not intended for real-world training or operational use.
 
 The interface defaults to English and also supports Finnish. See the [changelog](CHANGELOG.md) for this alpha's updates.
 
@@ -45,10 +45,12 @@ The mission flow is departure, navigation, contact, engagement, objective, retur
 | R | Switch radar between air and ground modes |
 | C | Deploy flares and chaff |
 | 1 / 2 / 3 | Order wingmen: attack / defend / regroup |
-| V, then move mouse | Toggle hidden-cursor mouse steering |
+| Move mouse | Steer the aircraft; mouse steering is active throughout flight |
 | Left / right mouse button | Fire cannon / launch a missile |
 | Mouse wheel or + / − | Zoom the chase camera in / out |
 | Esc | Pause the sortie |
+
+The pointer is captured and hidden during flight, and returns in the pause menu. Keyboard and mouse steering work together.
 
 ## Weapons and radar
 

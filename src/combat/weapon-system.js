@@ -37,7 +37,6 @@ export class WeaponSystem {
     this._up=new THREE.Vector3();
     this._muzzleOffset=new THREE.Vector3();
     this._start=new THREE.Vector3();
-    this._tracerVisualStart=new THREE.Vector3();
     this.missileFeedbackKey = null;
     this.missileFeedbackTimer = 0;
   }
@@ -106,12 +105,16 @@ export class WeaponSystem {
       const shotDirection=tracerDirection.copy(velocity).normalize();
       shot.mesh.quaternion.setFromUnitVectors(localBulletAxis,shotDirection);
       this.scene.add(shot.mesh);
-      // Keep the long luminous streak clear of the aircraft silhouette in
-      // the close chase camera. The ballistic projectile and hit testing still
-      // begin at the actual cannon muzzle above.
-      const visibleStart=this._tracerVisualStart.copy(start).addScaledVector(shotDirection,4.5);
-      this.fx?.addMovingTracer(visibleStart, velocity, '#ffd282', {
-        life: .14, trailTime: .06, gravity: GUN_PROJECTILE_GRAVITY,
+      // FlightFX clips the visible streak against the aircraft's current nose
+      // plane. The projectile and hit testing still start at the real muzzle.
+      this.fx?.addMovingTracer(start, velocity, '#ffd282', {
+        life: .14,
+        trailTime: .06,
+        gravity: GUN_PROJECTILE_GRAVITY,
+        ownerAircraft: this.player,
+        // Keep the streak close to the gun port while allowing the tracer to
+        // clear the F-35's forward fuselage before it becomes visible.
+        aircraftForwardClearance: 7.2,
       });
     }
     this.addProjectile(shot);

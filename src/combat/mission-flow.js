@@ -129,6 +129,10 @@ export class MissionFlowSystem {
     this.finish(MISSION_OUTCOME.FAILED);
   }
 
+  abort() {
+    this.finish(MISSION_OUTCOME.ABORTED);
+  }
+
   setPhase(phase) {
     if (this.phase === phase) return;
     this.phase = phase;

@@ -79,10 +79,10 @@ async function fetchRegion(region) {
   } else {
     console.log(`\n${region.label}: 32 x 32 km height data around E ${region.e}, N ${region.n} (EPSG:3067)`);
     const { width, height, values } = await fetchElevationGrid(region);
-    const valid = values.filter(Number.isFinite);
+    const valid = values.filter(value => Number.isFinite(value) && value > -1_000);
     if (!valid.length) throw new Error('elevation grid contains no data');
     const referenceHeight = valid[Math.floor(valid.length / 2)];
-    for (let i = 0; i < values.length; i++) if (!Number.isFinite(values[i])) values[i] = referenceHeight;
+    fillMissingElevations(values, width, height, referenceHeight);
     const raw = Buffer.allocUnsafe(values.length * 4);
     for (let i = 0; i < values.length; i++) raw.writeFloatLE(values[i], i * 4);
     await writeFile(new URL('height.f32', out), raw);
@@ -264,6 +264,51 @@ async function fetchElevationGrid(region) {
     }
   }
   return { width, height, values };
+}
+
+function fillMissingElevations(values, width, height, fallbackHeight) {
+  const nearestValid = new Int32Array(values.length);
+  nearestValid.fill(-1);
+  const queue = new Int32Array(values.length);
+  let head = 0;
+  let tail = 0;
+  for (let index = 0; index < values.length; index++) {
+    if (Number.isFinite(values[index]) && values[index] > -1_000) {
+      nearestValid[index] = index;
+      queue[tail++] = index;
+    }
+  }
+  if (!tail) {
+    values.fill(fallbackHeight);
+    return;
+  }
+
+  while (head < tail) {
+    const index = queue[head++];
+    const row = Math.floor(index / width);
+    const column = index - row * width;
+    const source = nearestValid[index];
+    if (column > 0 && nearestValid[index - 1] === -1) {
+      nearestValid[index - 1] = source;
+      queue[tail++] = index - 1;
+    }
+    if (column + 1 < width && nearestValid[index + 1] === -1) {
+      nearestValid[index + 1] = source;
+      queue[tail++] = index + 1;
+    }
+    if (row > 0 && nearestValid[index - width] === -1) {
+      nearestValid[index - width] = source;
+      queue[tail++] = index - width;
+    }
+    if (row + 1 < height && nearestValid[index + width] === -1) {
+      nearestValid[index + width] = source;
+      queue[tail++] = index + width;
+    }
+  }
+
+  for (let index = 0; index < values.length; index++) {
+    if (nearestValid[index] !== index) values[index] = values[nearestValid[index]] ?? fallbackHeight;
+  }
 }
 
 async function checkedText(url){

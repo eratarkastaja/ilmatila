@@ -92,7 +92,7 @@ export function createFighter({ enemy = false, friendly = false, aircraftAsset =
 
   if (!enemy && !aircraftAsset) {
     plane.userData.hitZones = F35_HIT_ZONES;
-    plane.userData.trailOffsets = [[-5.12, 0.03, -2.05], [5.12, 0.03, -2.05], [0, -0.02, -6.62]];
+    plane.userData.trailOffsets = [[-5.12, 0.03, -2.05], [5.12, 0.03, -2.05], [0, -0.42, -5.58]];
     return plane;
   }
 
@@ -107,7 +107,7 @@ export function createFighter({ enemy = false, friendly = false, aircraftAsset =
   if (aircraftAsset) {
     buildF35Asset(plane, aircraftAsset, friendly);
     plane.userData.hitZones = F35_HIT_ZONES;
-    plane.userData.trailOffsets = [[-5.12, 0.03, -2.05], [5.12, 0.03, -2.05], [0, -0.02, -6.62]];
+    plane.userData.trailOffsets = [[-5.12, 0.03, -2.05], [5.12, 0.03, -2.05], [0, -0.42, -5.58]];
   }
   return plane;
 }

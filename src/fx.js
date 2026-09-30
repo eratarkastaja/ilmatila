@@ -3,6 +3,8 @@ import * as THREE from 'three';
 const MISSILE_SMOKE_FRESH = new THREE.Color('#929b9f');
 const MISSILE_SMOKE_AGED = new THREE.Color('#c1c8ca');
 const DAMAGE_SMOKE_COLOR = new THREE.Color('#747878');
+const WATER_SPRAY_LIGHT = new THREE.Color('#d8f2f1');
+const WATER_SPRAY_COOL = new THREE.Color('#87c7d0');
 const WING_VAPOR_COLOR = [0.88, 0.94, 0.97];
 
 export class FlightFX {
@@ -251,6 +253,12 @@ export class FlightFX {
     this._missileColor = new THREE.Color();
     this._tracerHead = new THREE.Vector3();
     this._tracerTail = new THREE.Vector3();
+    this._tracerClipStart = new THREE.Vector3();
+    this._tracerClipEnd = new THREE.Vector3();
+    this._tracerClippedStart = new THREE.Vector3();
+    this._tracerClippedEnd = new THREE.Vector3();
+    this._tracerWorldToAircraft = new THREE.Matrix4();
+    this._waterImpactVelocity = new THREE.Vector3();
     this._activeAircraft = new Set();
     this._activeMissiles = new Set();
   }
@@ -259,16 +267,44 @@ export class FlightFX {
     if (this.tracers.length >= this.tracerCapacity) this.releaseTracer(this.tracers.shift());
     const tracer=this.acquireTracer();
     tracer.start.copy(start);tracer.end.copy(end);tracer.isMoving=false;tracer.color.set(color);
+    tracer.ownerAircraft = null;
     tracer.life=.085;tracer.maxLife=.085;tracer.age=0;tracer.trailTime=0;tracer.gravity=0;
     this.tracers.push(tracer);
   }
 
-  addMovingTracer(start, velocity, color = '#ffd282', { life = 0.14, trailTime = 0.06, gravity = 0 } = {}) {
+  addMovingTracer(start, velocity, color = '#ffd282', {
+    life = 0.14, trailTime = 0.06, gravity = 0, ownerAircraft = null, aircraftForwardClearance = 9.5,
+  } = {}) {
     if (this.tracers.length >= this.tracerCapacity) this.releaseTracer(this.tracers.shift());
     const tracer=this.acquireTracer();
     tracer.start.copy(start);tracer.end.set(0,0,0);tracer.velocity.copy(velocity);tracer.color.set(color);
+    tracer.ownerAircraft = ownerAircraft;
+    tracer.aircraftForwardClearance = aircraftForwardClearance;
     tracer.life=life;tracer.maxLife=life;tracer.age=0;tracer.trailTime=trailTime;tracer.gravity=gravity;tracer.isMoving=true;
     this.tracers.push(tracer);
+  }
+
+  addWaterImpact(position) {
+    // A short fan of cool spray reads as a surface splash at range; it shares
+    // the existing particle pool and avoids spawning per-hit scene objects.
+    this.emitParticle(position, this._waterImpactVelocity.set(0, 5, 0), WATER_SPRAY_COOL, .34, 5.5, .38);
+    for (let i = 0; i < 10; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 7 + Math.random() * 17;
+      this._waterImpactVelocity.set(
+        Math.cos(angle) * speed,
+        9 + Math.random() * 19,
+        Math.sin(angle) * speed,
+      );
+      this.emitParticle(
+        position,
+        this._waterImpactVelocity,
+        i < 4 ? WATER_SPRAY_LIGHT : WATER_SPRAY_COOL,
+        .24 + Math.random() * .22,
+        2.8 + Math.random() * 2.4,
+        .68,
+      );
+    }
   }
 
   acquireTracer(){
@@ -277,6 +313,7 @@ export class FlightFX {
 
   releaseTracer(tracer){
     tracer.isMoving=false;
+    tracer.ownerAircraft=null;
     this.freeTracers.push(tracer);
   }
 
@@ -814,11 +851,17 @@ export class FlightFX {
 
   updateTracers(dt) {
     let count = 0;
+    let ownerAircraft = null;
     for (let i = this.tracers.length - 1; i >= 0; i--) {
       const tracer = this.tracers[i];
       tracer.life -= dt;
       if (tracer.isMoving) tracer.age += dt;
       if (tracer.life <= 0){this.tracers.splice(i, 1);this.releaseTracer(tracer);}
+      else if (!ownerAircraft && tracer.ownerAircraft) ownerAircraft = tracer.ownerAircraft;
+    }
+    if (ownerAircraft) {
+      ownerAircraft.updateWorldMatrix(true, false);
+      this._tracerWorldToAircraft.copy(ownerAircraft.matrixWorld).invert();
     }
     for (const tracer of this.tracers) {
       if (count >= this.tracerCapacity) break;
@@ -832,6 +875,19 @@ export class FlightFX {
         end.y -= 0.5 * tracer.gravity * headAge * headAge;
         start = this._tracerTail.copy(tracer.start).addScaledVector(tracer.velocity, tailAge);
         start.y -= 0.5 * tracer.gravity * tailAge * tailAge;
+      }
+      if (tracer.ownerAircraft === ownerAircraft && ownerAircraft) {
+        const startZ = this._tracerClipStart.copy(start).applyMatrix4(this._tracerWorldToAircraft).z;
+        const endZ = this._tracerClipEnd.copy(end).applyMatrix4(this._tracerWorldToAircraft).z;
+        const clearance = tracer.aircraftForwardClearance;
+        if (startZ < clearance && endZ < clearance) continue;
+        if (startZ < clearance) {
+          const fraction = (clearance - startZ) / (endZ - startZ);
+          start = this._tracerClippedStart.copy(start).lerp(end, fraction);
+        } else if (endZ < clearance) {
+          const fraction = (clearance - startZ) / (endZ - startZ);
+          end = this._tracerClippedEnd.copy(start).lerp(end, fraction);
+        }
       }
       this.tracerPositions[offset] = start.x;
       this.tracerPositions[offset + 1] = start.y;

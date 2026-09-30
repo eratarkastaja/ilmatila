@@ -77,35 +77,76 @@ export function buildF35Asset(plane, aircraftAsset, friendly) {
     }
   }
 
-  // The source airframe ends at z ≈ -6.2; place the custom F135 exhaust exit
-  // there so its lip meets the fuselage instead of hanging behind the tail.
-  const exhaustExitZ = -6.18;
-  const nozzleLength = 0.78;
-  const nozzleMaterial = material('#343d43', 0.38, 0.68);
-  const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.56, nozzleLength, 16, 1, true), nozzleMaterial);
+  // The imported model has an unclosed aft-fuselage opening. Center the nozzle
+  // over that opening, then slightly compress its vertical profile to follow
+  // the narrower underside instead of protruding below the airframe.
+  const exhaustCenterY = -0.15;
+  const exhaustExitZ = -5.47;
+  const exhaustAssembly = new THREE.Group();
+  exhaustAssembly.name = 'F135 exhaust assembly';
+  exhaustAssembly.position.set(0, exhaustCenterY, exhaustExitZ);
+  exhaustAssembly.scale.y = 0.9;
+  plane.add(exhaustAssembly);
+
+  const nozzleLength = 0.72;
+  const nozzleMaterial = material('#343d43', 0.42, 0.62);
+  const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.57, 0.65, nozzleLength, 28, 1, true), nozzleMaterial);
   nozzle.rotation.x = Math.PI / 2;
-  nozzle.position.set(0, -0.02, exhaustExitZ + nozzleLength * 0.5);
-  plane.add(nozzle);
-  const nozzleLip = new THREE.Mesh(new THREE.TorusGeometry(0.51, 0.075, 8, 20), material('#59636a', 0.34, 0.72));
-  nozzleLip.position.set(0, -0.02, exhaustExitZ);
-  plane.add(nozzleLip);
+  nozzle.position.z = nozzleLength * 0.5;
+  exhaustAssembly.add(nozzle);
+  const nozzleLip = new THREE.Mesh(new THREE.TorusGeometry(0.61, 0.05, 8, 28), material('#59636a', 0.38, 0.66));
+  exhaustAssembly.add(nozzleLip);
+  // The source GLB leaves the rear of the fuselage open. A recessed backing
+  // disk seals the nozzle throat while the smaller outer lip stays within the
+  // airframe silhouette.
+  const nozzleLinerLength = 0.58;
   const nozzleLiner = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.39, 0.43, 0.46, 20, 1, true),
-    material('#3a4246', 0.54, 0.48),
+    new THREE.CylinderGeometry(0.55, 0.63, nozzleLinerLength, 28, 1, true),
+    material('#3a4246', 0.58, 0.42),
   );
   nozzleLiner.rotation.x = Math.PI / 2;
-  nozzleLiner.position.set(0, -0.02, exhaustExitZ + 0.23);
-  plane.add(nozzleLiner);
-  const nozzleInterior = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.39, 0.07, 20), material('#20272b', 0.62, 0.38));
-  nozzleInterior.rotation.x = Math.PI / 2;
-  nozzleInterior.position.set(0, -0.02, exhaustExitZ + 0.3);
-  plane.add(nozzleInterior);
+  nozzleLiner.position.z = nozzleLinerLength * 0.5;
+  exhaustAssembly.add(nozzleLiner);
+  const nozzleFace = new THREE.Mesh(
+    new THREE.CircleGeometry(0.67, 36),
+    material('#30373a', 0.82, 0.24),
+  );
+  nozzleFace.position.z = 0.035;
+  exhaustAssembly.add(nozzleFace);
 
-  const afterburner = createAfterburnerFlame({ radius: 0.53, length: 3.2 });
-  afterburner.position.set(0, -0.02, exhaustExitZ + 0.04);
+  // A restrained petal ring gives the F135 outlet a machined nozzle face
+  // instead of a featureless black hole, with one draw call for all 16 seams.
+  const petalGeometry = new THREE.BoxGeometry(0.018, 0.2, 0.008);
+  const petalMaterial = material('#535b5e', 0.62, 0.38);
+  const petals = new THREE.InstancedMesh(petalGeometry, petalMaterial, 16);
+  const petalTransform = new THREE.Object3D();
+  for (let index = 0; index < 16; index++) {
+    const angle = index / 16 * Math.PI * 2;
+    petalTransform.position.set(
+      Math.cos(angle) * 0.52,
+      Math.sin(angle) * 0.52,
+      0.005,
+    );
+    petalTransform.rotation.set(0, 0, angle - Math.PI / 2);
+    petalTransform.updateMatrix();
+    petals.setMatrixAt(index, petalTransform.matrix);
+  }
+  petals.instanceMatrix.needsUpdate = true;
+  exhaustAssembly.add(petals);
+
+  const nozzleHub = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.13, 0.17, 0.045, 20),
+    material('#45494a', 0.68, 0.32),
+  );
+  nozzleHub.rotation.x = Math.PI / 2;
+  nozzleHub.position.z = 0.01;
+  exhaustAssembly.add(nozzleHub);
+
+  const afterburner = createAfterburnerFlame({ radius: 0.5, length: 3.2 });
+  afterburner.position.z = -0.065;
   afterburner.visible = false;
   afterburner.userData.keepSeparate = true;
-  plane.add(afterburner);
+  exhaustAssembly.add(afterburner);
   plane.userData.afterburner = afterburner;
 }
 

@@ -89,7 +89,7 @@ function createExplosionEffect(position,intensity){
 }
 export class CombatWorld {
   constructor(scene, player, terrain, fx, aircraftAsset = null, mission = {}, audio = null, onMissionEnd = () => {}, difficultyId = 'standard', inputTarget = null) {
-    this.scene=scene; this.player=player; this.effects=[]; this.destroyed=false;
+    this.scene=scene; this.player=player; this.effects=[]; this.destroyed=false; this.missionAborted=false;
     this.fx=fx; this.audio=audio;
     this.onMissionEnd=onMissionEnd;
     this.difficulty=getDifficultyPreset(difficultyId);
@@ -137,6 +137,7 @@ export class CombatWorld {
       player, terrain, colliders: this.groundBattle.colliders, enemies: this.enemies, allies: this.allies,
       redUnits: this.redUnits, lastCollisionPosition: player.position.clone(),
       onPlayerDestroyed: (reason, params) => this.destroyPlayer(reason, params),
+      onPlayerBoundaryAbort: () => this.abortMission(),
     });
     this.projectileSystem = new ProjectileSystem({
       scene, player,
@@ -154,6 +155,7 @@ export class CombatWorld {
       onJetDestroyed: (enemy, credited) => this.killJet(enemy, credited),
       onUnitDestroyed: (unit, credited) => this.destroyUnit(unit, credited),
       addSpark: position => this.addSpark(position),
+      addWaterImpact: position => this.fx?.addWaterImpact(position),
       addExplosion: (position, intensity) => this.addExplosion(position, intensity),
     });
     this.countermeasureSystem = new CountermeasureSystem({
@@ -260,7 +262,10 @@ export class CombatWorld {
         this.statusText.textContent=t(statusKey);
       }
       if(this.deathReason&&this.destroyed)this.deathReason.textContent=t(this.deathReasonKey,this.deathReasonParams);
-      if(this.status&&this.destroyed)this.status.replaceChildren(document.createElement('i'),document.createTextNode(` ${t('combat.destroyed')}`));
+      if(this.status&&this.destroyed){
+        const statusKey=this.missionAborted?'combat.missionAborted':'combat.destroyed';
+        this.status.replaceChildren(document.createElement('i'),document.createTextNode(` ${t(statusKey)}`));
+      }
     };
     document.addEventListener('ilmatila:languagechange', this.onLanguageChange);
   }
@@ -379,6 +384,24 @@ export class CombatWorld {
     this.missionFlow.fail();
   }
 
+  abortMission(){
+    if(this.destroyed)return;
+    this.destroyed=true;
+    this.missionAborted=true;
+    if(this.boundaryWarning)this.boundaryWarning.hidden=true;
+    if(this.terrain.boundaryLine)this.terrain.boundaryLine.visible=false;
+    this.weaponSystem.stopGun();
+    this.audio?.stopEngine();
+    this.projectileSystem.stopMissileAudio();
+    if(this.status){
+      this.status.classList.remove('complete');
+      this.status.classList.add('destroyed');
+      this.status.replaceChildren(document.createElement('i'),document.createTextNode(` ${t('combat.missionAborted')}`));
+    }
+    this.missionSystem.finish(MISSION_OUTCOME.ABORTED);
+    this.missionFlow.abort();
+  }
+
   damagePlayer(amount,reasonKey){
     if(this.destroyed)return;
     const hullBefore=this.feedback.hull;
@@ -432,12 +455,13 @@ export class CombatWorld {
     if(!this.debriefData)return;
     const {outcome,elapsed}=this.debriefData;
     const successful=outcome===MISSION_OUTCOME.COMPLETE;
+    const aborted=outcome===MISSION_OUTCOME.ABORTED;
     const text=(node,key)=>{if(node)node.textContent=t(key);};
-    text(this.debriefNodes.title,successful?'mission.debrief.completeTitle':'mission.debrief.failedTitle');
+    text(this.debriefNodes.title,successful?'mission.debrief.completeTitle':aborted?'mission.debrief.abortedTitle':'mission.debrief.failedTitle');
     text(this.debriefNodes.mission,`mission.${this.missionSystem.mission.id}.title`);
     text(this.debriefNodes.difficulty,`difficulty.${this.debriefData.difficulty}`);
-    const outcomeText=t(successful?'mission.debrief.complete':'mission.debrief.failed');
-    const lossCause=!successful&&this.deathReasonKey?` · ${t(this.deathReasonKey,this.deathReasonParams)}`:'';
+    const outcomeText=t(successful?'mission.debrief.complete':aborted?'mission.debrief.aborted':'mission.debrief.failed');
+    const lossCause=!successful&&!aborted&&this.deathReasonKey?` · ${t(this.deathReasonKey,this.deathReasonParams)}`:'';
     if(this.debriefNodes.outcome)this.debriefNodes.outcome.textContent=`${outcomeText}${lossCause}`;
     const seconds=Math.max(0,Math.floor(elapsed));
     if(this.debriefNodes.duration)this.debriefNodes.duration.textContent=`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;
@@ -574,9 +598,18 @@ export class CombatWorld {
     if(this.boundaryWarning){
       const halfSize=this.terrain.worldSize*.5;
       const clearance=Math.max(0,Math.min(halfSize-Math.abs(this.player.position.x),halfSize-Math.abs(this.player.position.z)));
-      const critical=clearance<=900;
-      this.boundaryWarning.hidden=this.destroyed||clearance>2200;
+      const critical=clearance<=1_500;
+      this.boundaryWarning.hidden=this.destroyed||clearance>8_000;
       this.boundaryWarning.classList.toggle('critical',critical);
+      const boundaryLine=this.terrain.boundaryLine;
+      if(boundaryLine){
+        const lineVisible=!this.destroyed&&clearance<=14_000;
+        boundaryLine.visible=lineVisible;
+        boundaryLine.material.opacity=lineVisible
+          ? .12+.7*(1-THREE.MathUtils.smoothstep(clearance,2_500,14_000))
+          : 0;
+        boundaryLine.material.color.setHex(critical?0xff5148:0xff8056);
+      }
       if(!this.boundaryWarning.hidden&&this.boundaryWarningText){
         const warningText=t(critical?'hud.boundaryCritical':'hud.boundaryWarning');
         if(this.boundaryWarningText.textContent!==warningText)this.boundaryWarningText.textContent=warningText;

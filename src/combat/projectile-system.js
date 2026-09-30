@@ -33,7 +33,7 @@ export class ProjectileSystem {
   constructor({
     scene, player, playerShots = [], hostiles = [], decoys = [], collision, audio,
     playerVelocity = stationaryVelocity, onPlayerDestroyed, onPlayerDamaged, onPlayerHit, onJetDestroyed,
-    onUnitDestroyed, addSpark, addExplosion, incomingDamageMultiplier = 1,
+    onUnitDestroyed, addSpark, addWaterImpact, addExplosion, incomingDamageMultiplier = 1,
     hostileMissileTurnRate = HOSTILE_MISSILE_TURN_RATE,
   }) {
     this.scene = scene;
@@ -52,6 +52,7 @@ export class ProjectileSystem {
     this.incomingDamageMultiplier = incomingDamageMultiplier;
     this.hostileMissileTurnRate = hostileMissileTurnRate;
     this.addSpark = addSpark;
+    this.addWaterImpact = addWaterImpact;
     this.addExplosion = addExplosion;
     this.incomingMissile = false;
     this.missileThreat = null;
@@ -202,7 +203,11 @@ export class ProjectileSystem {
         const groundHeight = this.collision.groundHeight(shot.mesh.position.x, shot.mesh.position.z);
         if (shot.mesh.position.y <= groundHeight) {
           shot.mesh.position.y = groundHeight;
-          if (shot.tracer) this.addSpark(shot.mesh.position);
+          if (shot.tracer) {
+            const waterImpact = this.collision.isWater?.(shot.mesh.position.x, shot.mesh.position.z);
+            if (waterImpact) this.addWaterImpact?.(shot.mesh.position);
+            else this.addSpark(shot.mesh.position);
+          }
           shot.life = 0;
         }
       }
