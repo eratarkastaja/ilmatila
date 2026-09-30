@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 const MISSILE_SMOKE_FRESH = new THREE.Color('#929b9f');
 const MISSILE_SMOKE_AGED = new THREE.Color('#c1c8ca');
+const DAMAGE_SMOKE_COLOR = new THREE.Color('#747878');
 const WING_VAPOR_COLOR = [0.88, 0.94, 0.97];
 
 export class FlightFX {
@@ -232,6 +233,8 @@ export class FlightFX {
     this.wingVaporStates = new Map();
     this.missileTrailStates = new Map();
     this._world = new THREE.Vector3();
+    this._smokeForward = new THREE.Vector3();
+    this._smokeVelocity = new THREE.Vector3();
     this._wind = new THREE.Vector3();
     this._jitter = new THREE.Vector3();
     this._vaporTangent = new THREE.Vector3();
@@ -280,6 +283,7 @@ export class FlightFX {
   update(dt, aircraft, missiles, terrain, weather, camera) {
     this.updateWingVapor(dt, aircraft, terrain, weather, camera);
     this.updateContrails(dt, aircraft, terrain, weather);
+    this.emitDamageSmoke(dt, aircraft);
     this.emitMissileTrails(dt, missiles, camera);
     this.updateParticles(dt);
     this.updateTracers(dt);
@@ -309,6 +313,43 @@ export class FlightFX {
   forgetAircraft(mesh){
     this.contrailStates.delete(mesh);
     this.wingVaporStates.delete(mesh);
+  }
+
+  emitDamageSmoke(dt, aircraft) {
+    for (const mesh of aircraft) {
+      const severity = mesh?.userData?.damageSmokeSeverity ?? 0;
+      const offsets = mesh?.userData?.trailOffsets;
+      if (!mesh?.parent || mesh.userData.destroyed || severity <= 0 || !offsets?.length) {
+        if (mesh?.userData) mesh.userData.damageSmokeClock = 0;
+        continue;
+      }
+
+      mesh.userData.damageSmokeClock = Math.max(0, (mesh.userData.damageSmokeClock ?? 0) - dt);
+      if (mesh.userData.damageSmokeClock > 0) continue;
+      mesh.userData.damageSmokeClock = 0.22 - severity * 0.12 + Math.random() * 0.035;
+
+      // F-35's last trail anchor is its single engine; Flanker/Fulcrum anchors
+      // already correspond to their two engines.
+      const firstEngine = offsets.length > 2 ? offsets.length - 1 : 0;
+      this._smokeForward.set(0, 0, 1).applyQuaternion(mesh.quaternion).normalize();
+      for (let i = firstEngine; i < offsets.length; i++) {
+        const offset = offsets[i];
+        this._world.set(offset[0], offset[1], offset[2]);
+        mesh.localToWorld(this._world);
+        this._smokeVelocity.copy(this._smokeForward).multiplyScalar(-9 - Math.random() * 5);
+        this._smokeVelocity.x += (Math.random() - 0.5) * 3;
+        this._smokeVelocity.y += 1 + Math.random() * 2.5;
+        this._smokeVelocity.z += (Math.random() - 0.5) * 3;
+        this.emitParticle(
+          this._world,
+          this._smokeVelocity,
+          DAMAGE_SMOKE_COLOR,
+          2.4 + severity * 1.3,
+          5 + severity * 12,
+          0.02 + severity * 0.48,
+        );
+      }
+    }
   }
 
   updateWingVapor(dt, aircraft, terrain, weather, camera) {

@@ -33,7 +33,7 @@ jobs:
 
       - name: Download terrain data release
         env:
-          TERRAIN_DATA_RELEASE: terrain-data-v1.1.0
+          TERRAIN_DATA_RELEASE: terrain-data-v1.2.0
         run: |
           set -euo pipefail
           download_dir="$RUNNER_TEMP/ilmatila-terrain"

@@ -30,7 +30,7 @@ export class GroundBattle {
     let seed=54321; const rnd=()=>{seed=(seed*16807)%2147483647;return(seed-1)/2147483646;};
     const finnishTypes=['leopard2','cv9030','pasi'];
     const russianTypes=['t72','bmp2','btr80'];
-    const theaterHalf = (this.terrain?.worldSize ?? 16000) * .5;
+    const theaterHalf = (this.terrain?.worldSize ?? 32000) * .5;
     const frontSpan = Math.min(this.mission.groundFrontSpan || 9800, theaterHalf * 2 - 1800);
     for(let i=0;i<this.mission.groundPairs;i++){
       const lane = this.mission.groundPairs > 1 ? i / (this.mission.groundPairs - 1) - .5 : 0;
@@ -240,7 +240,7 @@ export class GroundBattle {
 }
 
 function nearestDryPoint(terrain, x, z) {
-  const half = (terrain?.worldSize ?? 16000) * .5 - 120;
+  const half = (terrain?.worldSize ?? 32000) * .5 - 120;
   x = THREE.MathUtils.clamp(x,-half,half);
   z = THREE.MathUtils.clamp(z,-half,half);
   if (!terrain.isWater(x, z)) return { x, z, y: terrain.sampleHeight(x, z) };

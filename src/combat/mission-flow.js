@@ -39,8 +39,10 @@ export class MissionFlowSystem {
     horizontal.y = 0;
     if (horizontal.lengthSq() < 1e-6) horizontal.set(0, 0, 1);
     else horizontal.normalize();
-    const halfTheater = (terrain?.worldSize ?? 16000) * 0.5;
-    const ingressDistance = Math.min(mission.navigationDistance ?? 3600, Math.max(900, halfTheater * 0.34));
+    const halfTheater = (terrain?.worldSize ?? 32000) * 0.5;
+    // Use more of the mapped theater for ingress and recovery routes while keeping
+    // the waypoint comfortably inside the terrain boundary.
+    const ingressDistance = Math.min(mission.navigationDistance ?? 4200, Math.max(900, halfTheater * 0.55));
     this.ingress = this.home.clone().addScaledVector(horizontal, ingressDistance);
     this.navigationRadius = mission.navigationRadius ?? 850;
     this.extractionRadius = mission.extractionRadius ?? 1250;

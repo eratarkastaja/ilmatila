@@ -15,7 +15,7 @@ import { MISSIONS } from './missions.js';
 import { CareerProgress } from './progression.js';
 import { CombatStressScenario } from './performance/stress-scenario.js';
 import { disposeMissilePool } from './combat/projectiles.js';
-import { getLanguage, initializeLanguagePicker, t } from './i18n.js';
+import { formatPercent, getLanguage, initializeLanguagePicker, t } from './i18n.js';
 import './style.css';
 import './hud.css';
 import './menu.css';
@@ -78,7 +78,7 @@ renderer.toneMappingExposure = 1.0;
 root.appendChild(renderer.domElement);
 
 scene.add(new THREE.HemisphereLight(0xc5e0eb, 0x343b36, 2.2));
-const sun = new THREE.DirectionalLight(0xffedcf, 3.2);
+const sun = new THREE.DirectionalLight(0xffedcf, 3.7);
 sun.position.copy(SUN_DIRECTION).multiplyScalar(1200);
 scene.add(sun);
 const sunEffects = new SunEffects(scene, camera);
@@ -91,7 +91,7 @@ scene.add(clouds);
 const player = createFighter();
 scene.add(player);
 const controls = new FlightControls(player, camera, renderer.domElement);
-controls.enabled = false;
+controls.setEnabled(false);
 const fx = new FlightFX(scene);
 const weather = {
   // Moist, cloudy air makes long contrails visible once aircraft climb above 5.2 km AGL.
@@ -183,7 +183,7 @@ function renderMissionProgress() {
     } else if (best) {
       state.textContent = t('menu.bestScore', {
         score: best.score.toLocaleString(getLanguage() === 'fi' ? 'fi-FI' : 'en-US'),
-        accuracy: `${Math.round(best.accuracy * 100)}%`,
+        accuracy: formatPercent(best.accuracy),
       });
       state.dataset.state = 'record';
     } else {
@@ -242,15 +242,26 @@ async function loadTerrainForMenu(requestedId) {
   if (!requestedArea || gameStarted) return;
   if (requestedId === loadedAreaId) {
     if (!launchInProgress && terrain.real) {
+      launchButton.disabled = false;
+      launchButton.setAttribute('aria-busy', 'false');
+      setLaunchProgress(0, 'menu.launchButton', 'menu.launchReadyStatus');
       setMenuStatus('menu.statusAreaReady', 'ready', { area: terrain.label.toUpperCase() });
     }
     return;
   }
   const controller = new AbortController();
   menuTerrainController = controller;
-  if (!launchInProgress) setMenuStatus('menu.statusAreaLoading', 'loading', { area: requestedArea.label.toUpperCase() });
+  if (!launchInProgress) {
+    launchButton.disabled = true;
+    launchButton.setAttribute('aria-busy', 'true');
+    setLaunchProgress(1, 'menu.loadingAreaTitle', 'terrain.fetchingArea');
+    setMenuStatus('menu.statusAreaLoading', 'loading', { area: requestedArea.label.toUpperCase() });
+  }
   try {
-    const replacement = await ensureTerrainLoaded(requestedId, null, controller.signal);
+    const replacement = await ensureTerrainLoaded(requestedId, (progress, detail = {}) => {
+      if (requestId !== terrainRequest || controller.signal.aborted || launchInProgress) return;
+      setLaunchProgress(progress * 100, 'menu.loadingAreaTitle', detail.key ?? 'terrain.fetchingArea', detail.params ?? {});
+    }, controller.signal);
     if (requestId !== terrainRequest || gameStarted) {
       if (replacement !== terrain) disposeTerrain(replacement);
       return;
@@ -259,11 +270,19 @@ async function loadTerrainForMenu(requestedId) {
     loadedAreaId = replacement.id;
     needsMenuRender = true;
     updateMenuArea(terrain);
-    if (!launchInProgress) setMenuStatus('menu.statusAreaReady', 'ready', { area: terrain.label.toUpperCase() });
+    if (!launchInProgress) {
+      launchButton.disabled = false;
+      launchButton.setAttribute('aria-busy', 'false');
+      setLaunchProgress(0, 'menu.launchButton', 'menu.launchReadyStatus');
+      setMenuStatus('menu.statusAreaReady', 'ready', { area: terrain.label.toUpperCase() });
+    }
   } catch (error) {
     if (controller.signal.aborted) return;
     console.error('Theater terrain failed to load.', error);
     if (requestId === terrainRequest && !gameStarted && !launchInProgress) {
+      launchButton.disabled = false;
+      launchButton.setAttribute('aria-busy', 'false');
+      setLaunchProgress(0, 'menu.launchButton', 'menu.launchReadyStatus');
       const preview = createPreviewTerrain();
       installTerrain(preview);
       loadedAreaId = preview.id;
@@ -304,8 +323,9 @@ creditsDialog.addEventListener('click', event => {
 function pauseFlight() {
   if (!gameStarted || gamePaused || !combat || combat.destroyed) return;
   gamePaused = true;
-  controls.enabled = false;
+  controls.setEnabled(false);
   controls.keys.clear();
+  controls.resetMouseAim();
   combat.clearInput();
   audio.setPaused(true);
   pauseDialog.showModal();
@@ -317,8 +337,9 @@ function resumeFlight() {
   gamePaused = false;
   if (pauseDialog.open) pauseDialog.close();
   controls.keys.clear();
+  controls.resetMouseAim();
   combat?.clearInput();
-  controls.enabled = true;
+  controls.setEnabled(true);
   audio.setPaused(false);
 }
 
@@ -336,8 +357,10 @@ function returnToMenu() {
   if (stressMode) delete window.__ilmatilaStress;
   combat = null;
   tacticalHud = null;
-  controls.enabled = false;
+  controls.setEnabled(false);
   controls.keys.clear();
+  controls.resetMouseAim();
+  controls.resetCameraZoom();
   controls.speed = 235;
   controls.pitch = 0;
   controls.roll = 0;
@@ -412,7 +435,6 @@ launchButton.addEventListener('click', async () => {
   let aircraftProgress = aircraftAsset ? 1 : assets.aircraftProgress;
   let terrainProgress = terrain.real && terrain.id === selectedAreaId ? 1 : 0;
   let terrainDetail = terrainProgress ? { key: 'terrain.ready' } : { key: 'launch.terrainWaiting' };
-  let usingPreviewTerrain = false;
   const updateProgress = () => {
     const percent = 5 + aircraftProgress * 27 + terrainProgress * 63;
     const aircraftText = aircraftProgress >= 1
@@ -438,17 +460,17 @@ launchButton.addEventListener('click', async () => {
     }, terrainLoadController.signal);
     const terrainPromise = withTimeout(
       terrainRequestPromise,
-      25000,
+      90000,
       'Terrain data load timed out',
       () => terrainLoadController.abort(),
     ).then(
       value => ({ status: 'ready', value }),
-      error => ({ status: 'fallback', error }),
+      error => ({ status: 'failed', error }),
     );
     // Register the launch as a subscriber before aborting a stale menu load.
     supersededMenuTerrain?.abort();
     void terrainRequestPromise.then(replacement => {
-      if (launchFailed || usingPreviewTerrain) {
+      if (launchFailed) {
         if (replacement !== terrain) disposeTerrain(replacement);
       } else {
         pendingTerrain = replacement;
@@ -465,30 +487,17 @@ launchButton.addEventListener('click', async () => {
     );
     const [terrainResult, asset] = await Promise.all([terrainPromise, aircraftPromise]);
 
-    if (terrainResult.status === 'ready') {
-      const replacement = terrainResult.value;
-      installTerrain(replacement);
-      pendingTerrain = null;
-      loadedAreaId = replacement.id;
-      updateMenuArea(replacement);
-      terrainProgress = 1;
-    } else {
-      terrainProgress = 1;
-      usingPreviewTerrain = true;
-      terrainDetail = { key: 'terrain.preview' };
-      console.warn('Selected terrain unavailable; launching with preview terrain.', terrainResult.error);
-      if (pendingTerrain && pendingTerrain !== terrain) disposeTerrain(pendingTerrain);
-      pendingTerrain = null;
-      installTerrain(createPreviewTerrain());
-      loadedAreaId = terrain.id;
-      updateMenuArea(terrain);
-      document.querySelector('#area-name').textContent = t('terrain.previewAreaName').toUpperCase();
-    }
+    if (terrainResult.status !== 'ready') throw terrainResult.error;
+    const replacement = terrainResult.value;
+    if (!replacement.real) throw new Error('Selected theater terrain is not a real map package');
+    installTerrain(replacement);
+    pendingTerrain = null;
+    loadedAreaId = replacement.id;
+    updateMenuArea(replacement);
+    terrainProgress = 1;
 
-    setLaunchProgress(96,
-      usingPreviewTerrain ? 'launch.terrainUnavailable' : 'launch.buildingMission',
-      usingPreviewTerrain ? 'launch.previewStarting' : 'launch.systemsStarting');
-    setMenuStatus(usingPreviewTerrain ? 'launch.previewFinishing' : 'launch.finalizingArea', usingPreviewTerrain ? 'warning' : 'loading');
+    setLaunchProgress(96, 'launch.buildingMission', 'launch.systemsStarting');
+    setMenuStatus('launch.finalizingArea', 'loading');
     await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
 
     const mission = stressMode
@@ -520,7 +529,7 @@ launchButton.addEventListener('click', async () => {
       note.textContent = messages.join(' · ');
       note.hidden = messages.length === 0;
       gamePaused = true;
-      controls.enabled = false;
+      controls.setEnabled(false);
       controls.keys.clear();
       combat?.clearInput();
       audio.setPaused(true);
@@ -528,7 +537,7 @@ launchButton.addEventListener('click', async () => {
       document.querySelector('#death-screen').hidden = true;
       if (!missionDebriefDialog.open) missionDebriefDialog.showModal();
       missionDebriefReturnButton.focus({ preventScroll: true });
-    }, careerProgress.difficulty);
+    }, careerProgress.difficulty, renderer.domElement);
     const nextHud = new TacticalHud();
     const nextUrl = new URL(location.href);
     nextUrl.searchParams.set('mission', selectedMissionId);
@@ -543,7 +552,8 @@ launchButton.addEventListener('click', async () => {
     tacticalHud = nextHud;
     gameStarted = true;
     launchInProgress = false;
-    controls.enabled = true;
+    controls.resetMouseAim();
+    controls.setEnabled(true);
     audio.startEngine();
     flightHud.hidden = false;
     setLaunchProgress(100, 'launch.flightReady', 'launch.enterCockpit');

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { createDetailStreamer } from './terrain/detail-streamer.js';
 
 const TERRAIN_PATH = `${import.meta.env.BASE_URL}terrain`;
-const FALLBACK_AREA_METERS = 16000;
+const FALLBACK_AREA_METERS = 32000;
 const ORTHO_TILE_METERS = 2000;
 const TILE_PIXELS = 320;
 const ORTHO_GRID = 8;
@@ -113,7 +113,7 @@ function validateTerrainMetadata(metadata) {
   }
   const grid = metadata.orthoGrid ?? ORTHO_GRID;
   const tilePixels = metadata.orthoTilePixels ?? TILE_PIXELS;
-  if (!Number.isInteger(grid) || grid < 1 || grid > 12 || !Number.isInteger(tilePixels) || tilePixels < 32 || tilePixels > 1024) {
+  if (!Number.isInteger(grid) || grid < 1 || grid > 16 || !Number.isInteger(tilePixels) || tilePixels < 32 || tilePixels > 1024) {
     throw new Error('terrain metadata has invalid imagery dimensions');
   }
   if (grid * tilePixels > 4096) throw new Error('terrain imagery atlas is too large');
@@ -132,9 +132,9 @@ function hasMovingDetailMetadata(metadata) {
   const pixels = metadata?.detailOrthoTilePixels;
   const extent = metadata?.detailOrthoAreaMeters;
   const tileSize = metadata?.detailOrthoTileSizeMeters;
-  return Number.isInteger(grid) && grid >= DETAIL_WINDOW_TILES && grid <= 12
+  return Number.isInteger(grid) && grid >= DETAIL_WINDOW_TILES && grid <= 16
     && Number.isInteger(pixels) && pixels >= 128 && pixels <= 2048
-    && Number.isFinite(extent) && extent > 0 && extent <= 24_000
+    && Number.isFinite(extent) && extent > 0 && extent <= 40_000
     && Number.isFinite(tileSize) && tileSize > 0 && tileSize <= 4_000
     && Math.abs(grid * tileSize - extent) < 1
     && extent === (metadata.orthoAreaMeters ?? (metadata.orthoGrid ?? ORTHO_GRID) * ORTHO_TILE_METERS);

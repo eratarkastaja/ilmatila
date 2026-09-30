@@ -19,7 +19,7 @@ Ground vehicles currently use project-authored procedural geometry. External can
 
 ## Mapping data
 
-Terrain packages use National Land Survey of Finland open data: Elevation Model 2 m and Colour Orthophotos, fetched from its WCS service. Each package includes `terrain.json` and `ATTRIBUTION.md` with provider, dataset, retrieval date, source, license, and modification details. The game derives a lower-resolution elevation grid, crops and resamples standard orthophotos into tiles, streams a moving 6 × 6 km higher-detail image window in 2 km steps, and derives water masks from the imagery. The same detail level follows the aircraft throughout each theater. The source data is licensed under [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/). The Pages build uses the [terrain data release v1.1.0](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.1.0). See the [terrain-tool guide](tools/terrain/README.md) for details.
+Terrain packages use National Land Survey of Finland open data: Elevation Model 2 m and Colour Orthophotos, fetched from its WCS service. The public [terrain data release v1.2.0](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.2.0) contains four 32 × 32 km areas, retrieved 2026-09-30. Each package includes `terrain.json` and `ATTRIBUTION.md` with provider, dataset, retrieval date, source, license, and modification details. The game derives a lower-resolution elevation grid, crops and resamples standard orthophotos into tiles, streams a moving 6 × 6 km higher-detail image window in 2 km steps across each theater, and derives water masks from the imagery. The source data is licensed under [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/). See the [terrain-tool guide](https://github.com/eratarkastaja/ilmatila/blob/master/tools/terrain/README.md) for details.
 
 ## Libraries and fonts
 
@@ -30,7 +30,7 @@ Terrain packages use National Land Survey of Finland open data: Elevation Model 
 
 ## Sound effects
 
-The game bundles four sound effects under `public/assets/audio/`. The cannon loop and explosion by **qubodup**, and the rocket launch by **gracenew**, are published on Freesound under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). The jet takeoff sound by **dklon** is published on OpenGameArt under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) and is credited here as required. Its original mono WAV was encoded to Ogg Vorbis for the game. Source links, filenames, and use are listed in the in-game **Assets & licenses** panel and [`public/assets/audio/ATTRIBUTION.md`](public/assets/audio/ATTRIBUTION.md).
+The game bundles five sound effects under `public/assets/audio/`. The cannon loop and explosion by **qubodup**, the rocket launch by **gracenew**, and the missile warning by **adh.dreaming** are published on Freesound under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). The warning uses a short, faded excerpt of two pulses from the source preview. The jet takeoff sound by **dklon** is published on OpenGameArt under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) and is credited here as required. Its original mono WAV was encoded to Ogg Vorbis for the game. Source links, filenames, and use are listed in the in-game **Assets & licenses** panel and [`public/assets/audio/ATTRIBUTION.md`](public/assets/audio/ATTRIBUTION.md).
 
 ## Original soundtrack
 

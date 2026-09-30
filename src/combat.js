@@ -12,10 +12,11 @@ import { MISSION_PHASE, MissionFlowSystem } from './combat/mission-flow.js';
 import { MISSION_OUTCOME } from './combat/mission-objective.js';
 import { WeaponSystem } from './combat/weapon-system.js';
 import { CombatFeedback } from './combat/combat-feedback.js';
+import { applyAirframeCondition } from './combat/airframe-condition.js';
 import { getDifficultyPreset } from './combat/difficulty.js';
 import { disposeAircraftVisual } from './plane.js';
 import { disposeGroundVehicleVisual } from './vehicles.js';
-import { formatNumber, t } from './i18n.js';
+import { formatNumber, formatPercent, t } from './i18n.js';
 
 const effectSphereGeo=new THREE.SphereGeometry(1,14,10);
 const shockwaveGeo=new THREE.RingGeometry(.94,1,48);
@@ -87,13 +88,13 @@ function createExplosionEffect(position,intensity){
   return effect;
 }
 export class CombatWorld {
-  constructor(scene, player, terrain, fx, aircraftAsset = null, mission = {}, audio = null, onMissionEnd = () => {}, difficultyId = 'standard') {
+  constructor(scene, player, terrain, fx, aircraftAsset = null, mission = {}, audio = null, onMissionEnd = () => {}, difficultyId = 'standard', inputTarget = null) {
     this.scene=scene; this.player=player; this.effects=[]; this.destroyed=false;
     this.fx=fx; this.audio=audio;
     this.onMissionEnd=onMissionEnd;
     this.difficulty=getDifficultyPreset(difficultyId);
     const missionConfig={hostiles:4,wingmen:2,groundBattle:true,groundPairs:6,groundTrucks:12,...mission};
-    this.input = new CombatInput();
+    this.input = new CombatInput(window, inputTarget);
     this.score=0;
     this.airKills=0;
     this.groundKills=0;
@@ -141,6 +142,7 @@ export class CombatWorld {
       scene, player,
       collision: this.collisionSystem, audio,
       incomingDamageMultiplier:this.difficulty.incomingDamage,
+      hostileMissileTurnRate:this.difficulty.hostileMissileTurnRate,
       onPlayerDestroyed: (reason, params) => this.destroyPlayer(reason, params),
       playerVelocity: this.playerVelocity,
       onPlayerDamaged: (amount, reason) => this.damagePlayer(amount, reason),
@@ -282,7 +284,7 @@ export class CombatWorld {
     const justPressed = this.input.consumeJustPressed();
     const radarModeRequested=justPressed.has('KeyR');
     const targetCycleRequested=justPressed.has('KeyT');
-    const missileRequested=justPressed.has('KeyM');
+    const missileRequested=justPressed.has('KeyM')||justPressed.has('MouseSecondary');
     const countermeasureRequested=justPressed.has('KeyC');
     const wingmanOrder=justPressed.has('Digit1')?'attack':justPressed.has('Digit2')?'defend':justPressed.has('Digit3')?'regroup':null;
     if(radarModeRequested)this.radar.toggleMode();
@@ -294,7 +296,7 @@ export class CombatWorld {
       this.audio?.playWingmanOrder(wingmanOrder);
       this.feedback.notify(`combat.wingmanOrder.${wingmanOrder}`,1.65,'friendly');
     }
-    const gunFiring=this.input.pressed.has('Space')&&!this.destroyed;
+    const gunFiring=(this.input.pressed.has('Space')||this.input.pressed.has('MousePrimary'))&&!this.destroyed;
     this.radar.updateContacts(dt, this.getPlayerHeading(), {
       airFriendly: this.allies, airHostile: this.enemies,
       groundFriendly: this.friends, groundHostile: this.redUnits,
@@ -382,6 +384,9 @@ export class CombatWorld {
     const hullBefore=this.feedback.hull;
     this.feedback.damage(amount);
     this.damageTaken+=hullBefore-this.feedback.hull;
+    const previousHealthRatio=this.player.userData.airframeHealthRatio??1;
+    const healthRatio=applyAirframeCondition(this.player,this.feedback.hull,this.feedback.maxHull);
+    if(previousHealthRatio>=.3&&healthRatio<.3)this.feedback.notify('combat.flightControlsDegraded',2.2,'damage');
     this.audio?.playAirframeDamage(amount);
     if(this.feedback.hull<=0)this.destroyPlayer(reasonKey);
   }
@@ -441,7 +446,7 @@ export class CombatWorld {
     if(this.debriefNodes.gunRounds)this.debriefNodes.gunRounds.textContent=formatNumber(this.debriefData.gunRounds);
     if(this.debriefNodes.missiles)this.debriefNodes.missiles.textContent=formatNumber(this.debriefData.missilesFired);
     if(this.debriefNodes.score)this.debriefNodes.score.textContent=formatNumber(this.debriefData.score);
-    if(this.debriefNodes.accuracy)this.debriefNodes.accuracy.textContent=this.debriefData.gunRounds>0?`${Math.round(this.debriefData.accuracy*100)}%`:'—';
+    if(this.debriefNodes.accuracy)this.debriefNodes.accuracy.textContent=this.debriefData.gunRounds>0?formatPercent(this.debriefData.accuracy):'—';
     if(this.debriefNodes.damage)this.debriefNodes.damage.textContent=formatNumber(Math.round(this.debriefData.damageTaken));
     if(this.debriefNodes.objectives)this.debriefNodes.objectives.textContent=`${this.debriefData.objectivesCompleted} / ${this.debriefData.objectiveCount}`;
   }

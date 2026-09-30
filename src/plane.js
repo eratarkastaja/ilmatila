@@ -84,6 +84,10 @@ export function createFighter({ enemy = false, friendly = false, aircraftAsset =
   if (friendly && !aircraftAsset) throw new Error('Wingman aircraft requires the loaded F-35 asset.');
   const plane = new THREE.Group();
   plane.userData.team = enemy ? 'hostile' : friendly ? 'friendly' : 'player';
+  plane.userData.airframeHealthRatio = 1;
+  plane.userData.damageSmokeSeverity = 0;
+  plane.userData.handlingFactor = 1;
+  plane.userData.damageSmokeClock = 0;
   if (!enemy && !friendly) plane.position.set(0, 70, 0);
 
   if (!enemy && !aircraftAsset) {

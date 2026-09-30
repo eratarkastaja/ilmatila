@@ -4,6 +4,7 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const AUDIO_FILES = {
   cannonLoop: 'cannon-loop.ogg',
   missileLaunch: 'missile-launch.ogg',
+  missileWarning: 'missile-warning.ogg',
   explosion: 'explosion.ogg',
   jetSurge: 'jet-takeoff.ogg',
 };
@@ -217,6 +218,14 @@ export class GameAudio {
     return { source, gain };
   }
 
+  playMissileWarningCue(volume, playbackRate) {
+    const sample = this.playSample('missileWarning', { volume, playbackRate, bus: this.ui });
+    if (sample) return;
+    // Keep the warning audible if the optional CC0 sample has not loaded yet.
+    this.playTone(620, 510, 0.16, volume * 0.34, 'triangle', 'ui');
+    this.playTone(520, 430, 0.16, volume * 0.34, 'triangle', 'ui', 0.21);
+  }
+
   getContext() {
     return this.context ?? this.unlock();
   }
@@ -263,50 +272,50 @@ export class GameAudio {
 
   playMenuButton(kind = 'button') {
     if (kind === 'confirm') {
-      this.playTone(480, 690, 0.085, 0.12, 'triangle');
-      this.playTone(690, 910, 0.1, 0.09, 'sine', 'ui', 0.075);
+      this.playNoise(0.045, 0.045, { low: 1900, high: 520, type: 'lowpass', bus: 'ui' });
+      this.playTone(205, 158, 0.075, 0.055, 'triangle', 'ui', 0.003);
       return;
     }
     if (kind === 'select') {
-      this.playTone(610, 740, 0.065, 0.075, 'sine');
+      this.playNoise(0.032, 0.027, { low: 2400, high: 900, type: 'bandpass', q: 0.8, bus: 'ui' });
       return;
     }
-    this.playTone(540, 430, 0.055, 0.08, 'triangle');
+    this.playNoise(0.034, 0.032, { low: 1750, high: 620, type: 'lowpass', bus: 'ui' });
+    this.playTone(340, 292, 0.045, 0.026, 'sine', 'ui', 0.002);
   }
 
   playRadarMode(mode) {
     const toGround = mode === 'ground';
-    this.playTone(toGround ? 720 : 490, toGround ? 450 : 790, 0.105, 0.13, 'sine', 'ui');
-    this.playTone(toGround ? 500 : 800, toGround ? 360 : 980, 0.075, 0.07, 'triangle', 'ui', 0.085);
+    this.playNoise(0.04, 0.025, { low: 1850, high: 780, type: 'bandpass', bus: 'ui' });
+    this.playTone(toGround ? 470 : 610, toGround ? 405 : 675, 0.085, 0.065, 'triangle', 'ui', 0.004);
   }
 
   playWingmanOrder(order) {
-    const base = order === 'attack' ? 660 : order === 'defend' ? 520 : 430;
-    this.playTone(base, base + 145, 0.065, 0.075, 'triangle', 'ui');
-    this.playTone(base + 145, base + 250, 0.07, 0.055, 'sine', 'ui', 0.085);
+    const pulses = order === 'attack' ? 3 : order === 'defend' ? 2 : 1;
+    for (let i = 0; i < pulses; i++) {
+      this.playNoise(0.035, 0.024, { low: 1700, high: 680, type: 'lowpass', bus: 'ui', delay: i * 0.075 });
+    }
   }
 
   playLockAcquire() {
-    this.playTone(650, 960, 0.085, 0.11, 'sine', 'ui');
+    this.playNoise(0.032, 0.03, { low: 2600, high: 1450, type: 'bandpass', q: 1.1, bus: 'ui' });
+    this.playTone(820, 760, 0.06, 0.055, 'sine', 'ui', 0.002);
   }
 
   playLockReady() {
-    this.playTone(940, 1180, 0.095, 0.13, 'sine', 'ui');
-    this.playTone(1080, 1360, 0.12, 0.12, 'sine', 'ui', 0.115);
+    this.playTone(880, 850, 0.065, 0.09, 'sine', 'ui');
+    this.playTone(880, 850, 0.065, 0.075, 'sine', 'ui', 0.125);
   }
 
   playLockLost() {
-    this.playTone(460, 300, 0.12, 0.085, 'triangle', 'ui');
+    this.playNoise(0.045, 0.03, { low: 1400, high: 430, type: 'lowpass', bus: 'ui' });
+    this.playTone(520, 390, 0.095, 0.06, 'triangle', 'ui', 0.003);
   }
 
   playWeaponNoLock() {
-    // Use a restrained, low cockpit reject cue instead of a bright arcade square beep.
-    this.playNoise(0.055, 0.055, { low: 1050, high: 250, type: 'lowpass', q: 0.65, bus: 'ui' });
-    this.playTone(220, 158, 0.115, 0.12, 'triangle', 'ui', 0.006);
-    this.playTone(328, 224, 0.085, 0.025, 'sine', 'ui', 0.006);
-    this.playNoise(0.06, 0.05, { low: 820, high: 190, type: 'lowpass', q: 0.6, bus: 'ui', delay: 0.15 });
-    this.playTone(184, 126, 0.125, 0.105, 'triangle', 'ui', 0.156);
-    this.playTone(274, 178, 0.09, 0.022, 'sine', 'ui', 0.156);
+    // One muted seeker reject pulse; repeated musical notes sounded arcade-like.
+    this.playNoise(0.075, 0.045, { low: 1500, high: 300, type: 'lowpass', q: 0.65, bus: 'ui' });
+    this.playTone(238, 166, 0.14, 0.085, 'triangle', 'ui', 0.004);
   }
 
   startEngine() {
@@ -428,7 +437,8 @@ export class GameAudio {
     if (active && !this.gunLoop) {
       const bus = ctx.createGain();
       bus.gain.setValueAtTime(0.0001, ctx.currentTime);
-      bus.gain.linearRampToValueAtTime(0.31, ctx.currentTime + 0.04);
+      // Give the cannon enough presence over the engine without changing its timbre.
+      bus.gain.linearRampToValueAtTime(0.55, ctx.currentTime + 0.04);
       bus.connect(this.effects);
       const sources = [];
       const cannonSample = this.sampleBuffers.cannonLoop;
@@ -546,20 +556,20 @@ export class GameAudio {
     this.playNoise(0.24, 0.09, { low: 2600, high: 700, type: 'highpass' });
   }
 
-  playIncomingMissile() {
+  playIncomingMissile(eta = 10) {
     const ctx = this.getContext();
-    if (!ctx || ctx.currentTime - this.lastIncomingWarning < 1.05) return;
+    const urgency = 1 - clamp(eta / 10, 0, 1);
+    const repeatInterval = 1.28 - urgency * 0.44;
+    if (!ctx || ctx.currentTime - this.lastIncomingWarning < repeatInterval) return;
     this.lastIncomingWarning = ctx.currentTime;
-    this.playTone(920, 680, 0.11, 0.12, 'square', 'ui');
-    this.playTone(760, 510, 0.12, 0.11, 'square', 'ui', 0.16);
+    this.playMissileWarningCue(0.48 + urgency * 0.22, 0.92 + urgency * 0.06);
   }
 
   playMissileLaunchWarning() {
     const ctx = this.getContext();
     if (!ctx || ctx.currentTime - this.lastIncomingWarning < 0.38) return;
     this.lastIncomingWarning = ctx.currentTime;
-    this.playTone(1040, 810, 0.09, 0.12, 'square', 'ui');
-    this.playTone(920, 700, 0.11, 0.11, 'square', 'ui', 0.13);
+    this.playMissileWarningCue(0.54, 0.92);
   }
 
   playGunHit() {
@@ -579,8 +589,8 @@ export class GameAudio {
   }
 
   playCountermeasureUnavailable() {
-    this.playTone(245, 172, 0.085, 0.075, 'triangle', 'ui');
-    this.playTone(178, 132, 0.075, 0.06, 'triangle', 'ui', 0.11);
+    this.playNoise(0.035, 0.028, { low: 1250, high: 520, type: 'lowpass', bus: 'ui' });
+    this.playTone(265, 218, 0.07, 0.045, 'sine', 'ui', 0.003);
   }
 
   playCountermeasure() {

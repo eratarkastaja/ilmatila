@@ -1,6 +1,6 @@
 # ILMATILA
 
-**ILMATILA 0.1.0-alpha.6** is an independent browser-based air-combat game by **ERÄGAMES**, built with Three.js. It remains in **alpha**: the sortie loop and progression are playable, but combat balance and mission pacing still need broader player testing. Aircraft handling, radar, weapons, opponents, and ground battles are game simulations and are not intended for real-world training or operational use.
+**ILMATILA 0.1.0-alpha.7** is an independent browser-based air-combat game by **ERÄGAMES**, built with Three.js. It remains in **alpha**: the sortie loop and progression are playable, but combat balance and mission pacing still need broader player testing. Aircraft handling, radar, weapons, opponents, and ground battles are game simulations and are not intended for real-world training or operational use.
 
 The interface defaults to English and also supports Finnish. See the [changelog](CHANGELOG.md) for this alpha's updates.
 
@@ -19,7 +19,7 @@ Open the local URL printed by Vite. Run the automated checks with `npm test` and
 
 After GitHub Pages is enabled with **Settings → Pages → Build and deployment → Source → GitHub Actions**, the site is built and deployed automatically when changes are pushed to `master`. The workflow can also be started manually from the repository's Actions tab. The project URL is <https://eratarkastaja.github.io/ilmatila/>.
 
-Generated MML terrain packages stay out of Git history. The Pages workflow downloads the four versioned area archives from the [terrain data release](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.1.0), verifies their SHA-256 checksums, and includes them in the deployed site. The in-game terrain viewer needs no API key; the key is only required to fetch updated source data.
+Generated MML terrain packages stay out of Git history. The Pages workflow downloads the four versioned area archives from the [terrain data release](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.2.0), verifies their SHA-256 checksums, and includes them in the deployed site. The published Päijänne, Virolahti, Ilomantsi, and Kuusamo maps now each cover 32 × 32 km. The in-game terrain viewer needs no API key; a key is only required to fetch updated source data.
 
 ## Missions and progression
 
@@ -45,6 +45,9 @@ The mission flow is departure, navigation, contact, engagement, objective, retur
 | R | Switch radar between air and ground modes |
 | C | Deploy flares and chaff |
 | 1 / 2 / 3 | Order wingmen: attack / defend / regroup |
+| V, then move mouse | Toggle hidden-cursor mouse steering |
+| Left / right mouse button | Fire cannon / launch a missile |
+| Mouse wheel or + / − | Zoom the chase camera in / out |
 | Esc | Pause the sortie |
 
 ## Weapons and radar
@@ -53,13 +56,13 @@ The heading-up radar keeps the aircraft's nose at the top of the display. Press 
 
 ## Audio
 
-Combat audio includes bundled CC0 samples for cannon fire, missile launch, and explosions, plus a CC BY 3.0 jet-engine accent. Their sources and attribution are listed in the in-game **Assets & licenses** panel and [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). Procedural audio remains available if a sample fails to load.
+Combat audio includes bundled CC0 samples for cannon fire, missile launch, incoming-missile warnings, and explosions, plus a CC BY 3.0 jet-engine accent. Their sources and attribution are listed in the in-game **Assets & licenses** panel and [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). Procedural audio remains available if a sample fails to load.
 
 The optional soundtrack contains two original tracks by Erätarkastaja. They are encoded as stereo Ogg Vorbis and total about 4.6 MB; the WAV masters remain outside the repository. Music is loaded only after the player enables it from the menu or pause dialog, and the preference persists between visits. Copyright and use details are in [`public/assets/audio/ATTRIBUTION.md`](public/assets/audio/ATTRIBUTION.md); the soundtrack is not covered by the project GPL license.
 
 ## Terrain data
 
-The repository contains the terrain-area index and downloader, while generated map packages are published as [versioned terrain archives](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.1.0). The Pages deployment downloads all four areas (Päijänne, Virolahti, Ilomantsi, and Kuusamo) and includes them in the site. Local source-data updates require an MML API key; see [the terrain-tool guide](tools/terrain/README.md). The game itself needs no API key.
+The repository contains the terrain-area index and downloader, while generated map packages are published as [versioned terrain archives](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.2.0). The Pages deployment downloads all four 32 × 32 km areas (Päijänne, Virolahti, Ilomantsi, and Kuusamo) and includes them in the site. Local source-data updates require an MML API key; see [the terrain-tool guide](tools/terrain/README.md). The game itself needs no API key.
 
 ## Aircraft and project structure
 

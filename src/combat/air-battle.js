@@ -10,6 +10,11 @@ const forward = new THREE.Vector3(0, 0, 1);
 const zeroVelocity=new THREE.Vector3();
 const eventLeadPoint=new THREE.Vector3();
 const eventLeadOffset=new THREE.Vector3();
+const ENEMY_ATTACK_RUNS = [
+  { trail: -850, lateral: 260, altitude: 0, passRange: 1450 },
+  { trail: -1350, lateral: 540, altitude: 320, passRange: 1650 },
+  { trail: -1750, lateral: 430, altitude: -100, passRange: 1850 },
+];
 
 const wrapAngle = angle => THREE.MathUtils.euclideanModulo(angle + Math.PI, Math.PI * 2) - Math.PI;
 
@@ -162,20 +167,24 @@ export class AirBattle {
       const ground = this.terrain?.sampleHeight(jet.position.x, jet.position.z) ?? -Infinity;
       jet.position.y = Math.max(this.player.position.y + altitudeOffsets[i % altitudeOffsets.length], ground + 360);
       const stagingOffset = jet.position.clone().sub(this.player.position);
-      // Keep the first contact in a loose, non-threatening transit formation.
-      // The intercept pass begins after the mission-specific setup interval.
-      const initialHeading = heading;
+      // Hold a loose inbound formation through the setup window while closing
+      // on the player; the selected difficulty controls when they open fire.
+      // Contact aircraft should arrive nose-on instead of coasting away in the
+      // player's direction before turning back for their first pass.
+      const initialHeading = wrapAngle(heading + Math.PI);
       const initialPitch = 0;
       jet.rotation.order = 'YXZ';
       jet.rotation.y = initialHeading;
       jet.rotation.x = -initialPitch;
       jet.scale.setScalar(.82);
       this.scene.add(jet);
+      const maxHp = 4 * (this.difficulty.enemyHealth ?? 1);
 
       this.enemies.push({
         mesh: jet,
         label: jet.userData.platformName,
-        hp: 4 * (this.difficulty.enemyHealth ?? 1),
+        hp: maxHp,
+        maxHp,
         heading: initialHeading,
         pitch: initialPitch,
         speed: 285,
@@ -185,12 +194,12 @@ export class AirBattle {
         phase: 'staging',
         phaseClock: 0,
         stagingLane: lane,
-        stagingForward: stagingOffset.dot(playerForward),
         stagingLateral: stagingOffset.dot(playerRight),
-        gunCooldown: 2.4 + i * .55,
+        attackPattern: Math.floor(Math.random() * ENEMY_ATTACK_RUNS.length),
+        gunCooldown: (this.difficulty.enemyGunCooldown ?? 2.2) + i * .45,
         burstClock: 0,
         burstShots: 0,
-        missileClock: 7 + i * 1.1,
+        missileClock: (this.difficulty.enemyMissileInitialDelay ?? 7) + i * 1.1,
         missilesFired: 0,
         effectClock: 0,
         countermeasures: 2,
@@ -199,11 +208,14 @@ export class AirBattle {
         lockResponseLost: 0,
         lockResponseDone: false,
         lockResponseWillDeploy: false,
+        lockResponseWillEvade: false,
         lastDefendedMissile: null,
         evasiveTimer: 0,
         evasiveDirection: Math.random() < 0.5 ? -1 : 1,
         boosting: false,
         dead: false,
+        attackForward: playerForward.clone(),
+        attackRight: playerRight.clone(),
         waypoint:new THREE.Vector3(),steeringOffset:new THREE.Vector3(),direction:new THREE.Vector3(),
         away:new THREE.Vector3(),separation:new THREE.Vector3(),lead:new THREE.Vector3(),leadOffset:new THREE.Vector3(),nose:new THREE.Vector3(),
       });
@@ -251,7 +263,8 @@ export class AirBattle {
         if (enemy.lockResponseTimer === null) {
           enemy.lockResponseTimer = 0.8 + Math.random() * 0.65;
           enemy.lockResponseDone = false;
-          enemy.lockResponseWillDeploy = Math.random() < 0.68;
+          enemy.lockResponseWillDeploy = Math.random() < (this.difficulty.enemyLockCountermeasureChance ?? .68);
+          enemy.lockResponseWillEvade = Math.random() < (this.difficulty.enemyLockEvasionChance ?? .38);
         }
         if (!enemy.lockResponseDone) {
           enemy.lockResponseTimer -= dt;
@@ -259,6 +272,13 @@ export class AirBattle {
             enemy.lockResponseDone = true;
             if (enemy.lockResponseWillDeploy && range > 1300 && range < 6200) {
               this.deployHostileCountermeasures?.(enemy);
+            }
+            if (enemy.lockResponseWillEvade) {
+              this.beginEvasiveManeuver(
+                enemy,
+                playerPosition,
+                this.difficulty.enemyLockEvasionDuration ?? 3,
+              );
             }
           }
         }
@@ -268,6 +288,7 @@ export class AirBattle {
           enemy.lockResponseTimer = null;
           enemy.lockResponseDone = false;
           enemy.lockResponseWillDeploy = false;
+          enemy.lockResponseWillEvade = false;
         }
       }
 
@@ -282,44 +303,47 @@ export class AirBattle {
         incomingMissile &&
         enemy.lastDefendedMissile !== incomingMissile.mesh.id
       ) {
-        if (this.deployHostileCountermeasures?.(enemy, incomingMissile.seeker ?? 'ir')) {
-          enemy.lastDefendedMissile = incomingMissile.mesh.id;
-          enemy.evasiveTimer = Math.max(enemy.evasiveTimer, 3.1);
-          const missileOffset = enemy.separation.subVectors(enemy.mesh.position, incomingMissile.mesh.position);
-          const right = rightOfHeading(enemy.heading, enemy.away);
-          const side = missileOffset.dot(right);
-          enemy.evasiveDirection = Math.abs(side) > 40 ? Math.sign(side) : (Math.random() < .5 ? -1 : 1);
-        }
+        this.deployHostileCountermeasures?.(enemy, incomingMissile.seeker ?? 'ir');
+        enemy.lastDefendedMissile = incomingMissile.mesh.id;
+        this.beginEvasiveManeuver(
+          enemy,
+          incomingMissile.mesh.position,
+          this.difficulty.enemyMissileEvasionDuration ?? 3.6,
+        );
       }
 
       const waypoint=enemy.waypoint;
 
-      if (enemy.phase === 'staging' && enemy.phaseClock >= (this.mission.openingDelay ?? 14)) {
+      const openingDelay = (this.mission.openingDelay ?? 14) * (this.difficulty.enemyOpeningDelayScale ?? 1);
+      if (enemy.phase === 'staging' && enemy.phaseClock >= openingDelay) {
         enemy.phase = 'inbound';
         enemy.phaseClock = 0;
+        enemy.attackForward.copy(playerForward);
+        enemy.attackRight.copy(playerRight);
       }
 
       if (enemy.phase === 'staging') {
         const laneDrift = Math.sin(enemy.phaseClock * .22 + enemy.stagingLane) * 70;
         waypoint.copy(playerPosition)
           .addScaledVector(this.playerVelocity, .7)
-          .addScaledVector(playerForward, enemy.stagingForward)
-          .addScaledVector(playerRight, enemy.stagingLateral + laneDrift);
+          .addScaledVector(enemy.attackForward, 1650)
+          .addScaledVector(enemy.attackRight, enemy.stagingLateral * .32 + laneDrift);
       } else if (enemy.phase === 'inbound') {
+        const attackRun = ENEMY_ATTACK_RUNS[enemy.attackPattern];
         waypoint.copy(playerPosition)
           .addScaledVector(this.playerVelocity, .6)
-          .addScaledVector(playerForward, -1000)
-          .addScaledVector(playerRight, enemy.lane * 240);
+          .addScaledVector(enemy.attackForward, attackRun.trail)
+          .addScaledVector(enemy.attackRight, enemy.lane * attackRun.lateral);
         // Hold the attack line through cannon range, then extend after the pass.
-        if (range < 720) {
+        if (range < attackRun.passRange * (this.difficulty.enemyPassRangeScale ?? 1)) {
           enemy.phase = 'extend';
           enemy.phaseClock = 0;
         }
       } else if (enemy.phase === 'extend') {
         waypoint.copy(playerPosition)
           .addScaledVector(this.playerVelocity, .65)
-          .addScaledVector(playerForward, 4300)
-          .addScaledVector(playerRight, enemy.lane * 1750);
+          .addScaledVector(enemy.attackForward, 4300)
+          .addScaledVector(enemy.attackRight, enemy.lane * 1750);
         if (waypoint.distanceTo(enemy.mesh.position) < 850 || range > 6200) {
           enemy.phase = 'rejoin';
           enemy.phaseClock = 0;
@@ -329,24 +353,29 @@ export class AirBattle {
       if (enemy.phase === 'rejoin') {
         waypoint.copy(playerPosition)
           .addScaledVector(this.playerVelocity, .8)
-          .addScaledVector(playerForward, 7350)
-          .addScaledVector(playerRight, enemy.lane * 1650);
+          .addScaledVector(enemy.attackForward, 7350)
+          .addScaledVector(enemy.attackRight, enemy.lane * 1650);
         if (waypoint.distanceTo(enemy.mesh.position) < 1000) {
           enemy.phase = 'inbound';
           enemy.phaseClock = 0;
+          enemy.attackPattern = (enemy.attackPattern + 1 + Math.floor(Math.random() * 2)) % ENEMY_ATTACK_RUNS.length;
+          enemy.attackForward.copy(playerForward);
+          enemy.attackRight.copy(playerRight);
         }
       }
 
       // Give each hostile a slightly different run line while keeping the pass legible.
-      const runOffset = Math.sin(enemy.phaseClock * .24 + enemy.lane * 1.8) * 130;
-      waypoint.addScaledVector(playerRight, runOffset);
+      const runOffset = Math.sin(enemy.phaseClock * (.2 + enemy.attackPattern * .035) + enemy.lane * 1.8)
+        * (105 + enemy.attackPattern * 45);
+      waypoint.addScaledVector(enemy.attackRight, runOffset);
       if (enemy.evasiveTimer > 0) {
         const urgency = enemy.evasiveTimer / 2.4;
-        waypoint.addScaledVector(playerRight, enemy.evasiveDirection * (680 + urgency * 330));
+        waypoint.addScaledVector(enemy.attackRight, enemy.evasiveDirection * (680 + urgency * 330));
         waypoint.y += 150 + urgency * 170;
       }
       this.keepAircraftClear(enemy, waypoint, playerRight, false);
-      this.constrainWaypoint(waypoint, playerPosition.y + enemy.altitudeOffset);
+      const attackAltitude = enemy.phase === 'inbound' ? ENEMY_ATTACK_RUNS[enemy.attackPattern].altitude : 0;
+      this.constrainWaypoint(waypoint, playerPosition.y + enemy.altitudeOffset + attackAltitude);
 
       enemy.boosting = (enemy.phase === 'extend' && range > 2300) || enemy.evasiveTimer > 0;
       enemy.mesh.userData.boosting = enemy.boosting;
@@ -357,17 +386,35 @@ export class AirBattle {
       }
 
       const desiredSpeed = enemy.phase === 'staging'
-        ? THREE.MathUtils.clamp(this.playerVelocity.length(), 220, 300)
-        : enemy.phase === 'extend' ? 315 : enemy.phase === 'rejoin' ? 300 : 280;
+        ? THREE.MathUtils.clamp(Math.max(this.playerVelocity.length(), 285), 220, 320)
+        : enemy.phase === 'extend' ? 335 : enemy.phase === 'rejoin' ? 305 : 295;
       const defensiveBreak=enemy.evasiveTimer>0;
-      steerAircraft(enemy, waypoint, dt, defensiveBreak ? .58 : enemy.boosting ? .4 : .34, defensiveBreak ? .29 : .2, 23, desiredSpeed, 345);
+      const handlingFactor = enemy.mesh.userData.handlingFactor ?? 1;
+      const turnRate = defensiveBreak
+        ? (this.difficulty.enemyDefensiveTurnRate ?? .61)
+        : enemy.boosting
+          ? Math.max(this.difficulty.enemyAttackTurnRate ?? .36, .4)
+          : (this.difficulty.enemyAttackTurnRate ?? .36);
+      steerAircraft(
+        enemy,
+        waypoint,
+        dt,
+        turnRate * handlingFactor,
+        (defensiveBreak ? (this.difficulty.enemyDefensivePitchRate ?? .29) : .2) * handlingFactor,
+        23 * handlingFactor,
+        desiredSpeed,
+        365,
+      );
 
       const toPlayer = leadPoint(enemy.mesh.position, playerPosition, this.playerVelocity, 720, 3,enemy.lead,enemy.leadOffset)
         .sub(enemy.mesh.position)
         .normalize();
       const enemyNose = enemy.nose.copy(forward).applyQuaternion(enemy.mesh.quaternion).normalize();
-      const canEngage = enemy.phase === 'inbound' || enemy.phase === 'extend';
-      const gunSolution = canEngage && range > 650 && range < 1900 && enemyNose.dot(toPlayer) > .91;
+      const canEngage = enemy.phase !== 'staging';
+      const gunSolution = canEngage
+        && range > 550
+        && range < (this.difficulty.enemyGunMaxRange ?? 2200)
+        && enemyNose.dot(toPlayer) > (this.difficulty.enemyGunBoresight ?? .88);
 
       if (enemy.burstShots > 0) {
         enemy.burstClock -= dt;
@@ -375,26 +422,42 @@ export class AirBattle {
           if (gunSolution) {
             this.fireEnemy(enemy);
             enemy.burstShots--;
-            enemy.burstClock = .105;
+            enemy.burstClock = this.difficulty.enemyGunBurstInterval ?? .095;
           } else {
             enemy.burstShots = 0;
           }
         }
       } else if (gunSolution && enemy.gunCooldown <= 0) {
-        enemy.burstShots = 5 + Math.floor(Math.random() * 3);
+        const burstMin = this.difficulty.enemyGunBurstMin ?? 6;
+        const burstMax = this.difficulty.enemyGunBurstMax ?? 8;
+        enemy.burstShots = burstMin + Math.floor(Math.random() * (burstMax - burstMin + 1));
         enemy.burstClock = 0;
-        enemy.gunCooldown = 2 + Math.random() * 1.35;
+        enemy.gunCooldown = (this.difficulty.enemyGunCooldown ?? 1.65)
+          + Math.random() * (this.difficulty.enemyGunCooldownJitter ?? 1.2);
       }
 
+      const missileCapacity = this.difficulty.enemyMissileCapacity ?? 2;
+      const missileMinRange = this.difficulty.enemyMissileMinRange ?? 3000;
+      const missileMaxRange = this.difficulty.enemyMissileMaxRange ?? 6400;
+      const missileBoresight = this.difficulty.enemyMissileBoresight ?? .93;
       if (
-        enemy.missileClock <= 0 && enemy.missilesFired < 2 && enemy.phase === 'inbound' &&
-        range > 3000 && range < 6400 && enemyNose.dot(toPlayer) > .93
+        enemy.missileClock <= 0 && enemy.missilesFired < missileCapacity && enemy.phase !== 'staging' &&
+        range > missileMinRange && range < missileMaxRange && enemyNose.dot(toPlayer) > missileBoresight
       ) {
         this.launchEnemyMissile(enemy);
-        enemy.missileClock = 14 + Math.random() * 5;
+        enemy.missileClock = (this.difficulty.enemyMissileCooldown ?? 14)
+          + Math.random() * (this.difficulty.enemyMissileCooldownJitter ?? 5);
         enemy.missilesFired++;
       }
     }
+  }
+
+  beginEvasiveManeuver(enemy, threatPosition, duration) {
+    const offset = enemy.separation.subVectors(enemy.mesh.position, threatPosition);
+    const right = rightOfHeading(enemy.heading, enemy.away);
+    const side = offset.dot(right);
+    enemy.evasiveDirection = Math.abs(side) > 40 ? Math.sign(side) : (Math.random() < .5 ? -1 : 1);
+    enemy.evasiveTimer = Math.max(enemy.evasiveTimer, duration);
   }
 
   updateAllies(dt, playerForward, playerRight) {

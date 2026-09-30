@@ -76,11 +76,11 @@ def validate_area(area_id: str) -> tuple[Path, dict, list[Path]]:
     detail_extent = metadata.get("detailOrthoAreaMeters")
     detail_tile_size = metadata.get("detailOrthoTileSizeMeters")
     if any(value is not None for value in (detail_grid, detail_pixels, detail_extent, detail_tile_size)):
-        if not isinstance(detail_grid, int) or not 3 <= detail_grid <= 12:
+        if not isinstance(detail_grid, int) or not 3 <= detail_grid <= 16:
             raise ValueError(f"{area_id}: invalid moving detailed orthophoto grid")
         if not isinstance(detail_pixels, int) or not 128 <= detail_pixels <= 2048:
             raise ValueError(f"{area_id}: invalid moving detailed orthophoto tile size")
-        if not isinstance(detail_extent, (int, float)) or not 0 < detail_extent <= 24_000:
+        if not isinstance(detail_extent, (int, float)) or not 0 < detail_extent <= 40_000:
             raise ValueError(f"{area_id}: invalid moving detailed orthophoto extent")
         if not isinstance(detail_tile_size, (int, float)) or abs(detail_grid * detail_tile_size - detail_extent) >= 1:
             raise ValueError(f"{area_id}: moving detailed orthophoto tile grid does not cover its area")

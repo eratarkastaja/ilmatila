@@ -5,15 +5,35 @@ const LOCAL_FORWARD = new THREE.Vector3(0, 0, 1);
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 const GAME_KEY_CODES = new Set([
   'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE',
-  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+  'KeyV', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
   'ShiftLeft', 'ShiftRight', 'Space', 'KeyM', 'KeyR', 'KeyT', 'KeyC',
+  'Minus', 'NumpadAdd', 'NumpadSubtract',
 ]);
+const CAMERA_DISTANCE_DEFAULT = 22;
+const CAMERA_DISTANCE_MIN = 14;
+const CAMERA_DISTANCE_MAX = 70;
+
+function flightKeyCode(event) {
+  if (event.key === '+' || event.code === 'NumpadAdd' || (event.code === 'Equal' && event.shiftKey)) return 'ZoomIn';
+  if (event.key === '−'
+    || event.key === '-' || event.code === 'Minus' || event.code === 'NumpadSubtract') return 'ZoomOut';
+  return GAME_KEY_CODES.has(event.code) ? event.code : null;
+}
+
+function shapeMouseAxis(value) {
+  const magnitude = Math.abs(value);
+  const deadZone = .015;
+  if (magnitude <= deadZone) return 0;
+  const normalized = (magnitude - deadZone) / (1 - deadZone);
+  return Math.sign(value) * normalized ** 1.05;
+}
 
 export class FlightControls {
   constructor(plane, camera, canvas) {
     this.plane = plane;
     this.plane.rotation.order = 'YXZ';
     this.camera = camera;
+    this.canvas = canvas;
     this.speed = 235;
     this.heading = 0;
     this.pitch = 0;
@@ -30,18 +50,79 @@ export class FlightControls {
     this.pitchRotation = new THREE.Quaternion();
     this.rollRotation = new THREE.Quaternion();
     this.yawRotation = new THREE.Quaternion();
-    addEventListener('keydown', e => {
-      if (!GAME_KEY_CODES.has(e.code)) return;
-      if (e.ctrlKey || e.altKey || e.metaKey) {
-        e.preventDefault();
+    this.cameraDistance = CAMERA_DISTANCE_DEFAULT;
+    this.mouseDeltaX = 0;
+    this.mouseDeltaY = 0;
+    this.mouseRoll = 0;
+    this.mousePitch = 0;
+    this.mouseViewportWidth = canvas.clientWidth || innerWidth;
+    this.mouseViewportHeight = canvas.clientHeight || innerHeight;
+    this.pointerLockActive = false;
+    this.cameraOffset = new THREE.Vector3();
+    this.cameraTarget = new THREE.Vector3();
+    this.onKeyDown = event => {
+      const code = flightKeyCode(event);
+      if (!code) return;
+      if (event.ctrlKey || event.altKey || event.metaKey) {
+        event.preventDefault();
         return;
       }
       if (!this.enabled) return;
-      this.keys.add(e.code);
-      e.preventDefault();
-    });
-    addEventListener('keyup', e => this.keys.delete(e.code));
-    addEventListener('blur', () => this.keys.clear());
+      if (code === 'KeyV') {
+        event.preventDefault();
+        if (!event.repeat) this.toggleMouseSteering();
+        return;
+      }
+      if (code === 'ZoomIn' || code === 'ZoomOut') {
+        event.preventDefault();
+        if (code === 'ZoomIn') {
+          this.keys.delete('ShiftLeft');
+          this.keys.delete('ShiftRight');
+        }
+        const step = event.repeat ? 0.8 : 2.8;
+        this.adjustCameraZoom(code === 'ZoomIn' ? -step : step);
+        return;
+      }
+      this.keys.add(code);
+      event.preventDefault();
+    };
+    this.onKeyUp = event => {
+      const code = flightKeyCode(event);
+      if (code) this.keys.delete(code);
+    };
+    this.onBlur = () => {
+      this.keys.clear();
+      this.resetMouseAim();
+    };
+    this.onPointerMove = event => {
+      if (!this.enabled || !this.pointerLockActive || event.pointerType !== 'mouse') return;
+      const bounds = this.canvas.getBoundingClientRect();
+      if (!bounds.width || !bounds.height) return;
+      this.mouseViewportWidth = bounds.width;
+      this.mouseViewportHeight = bounds.height;
+      // Treat movement as a short steering command rather than a virtual stick
+      // that stays deflected. This prevents a small mouse offset from holding a
+      // steep bank indefinitely while using pointer lock's hidden cursor.
+      this.mouseDeltaX += event.movementX;
+      this.mouseDeltaY += event.movementY;
+    };
+    this.onPointerLockChange = () => {
+      this.pointerLockActive = document.pointerLockElement === this.canvas;
+      this.canvas.classList.toggle('mouse-locked', this.pointerLockActive);
+      this.resetMouseAim();
+    };
+    this.onWheel = event => {
+      if (!this.enabled || event.ctrlKey) return;
+      event.preventDefault();
+      const deltaUnit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? innerHeight : 1;
+      this.adjustCameraZoom(event.deltaY * deltaUnit * 0.025);
+    };
+    addEventListener('keydown', this.onKeyDown);
+    addEventListener('keyup', this.onKeyUp);
+    addEventListener('blur', this.onBlur);
+    canvas.addEventListener('pointermove', this.onPointerMove);
+    document.addEventListener('pointerlockchange', this.onPointerLockChange);
+    window.addEventListener('wheel', this.onWheel, { passive: false, capture: true });
     this.camera.position.set(0, 75, -22);
     this.camera.lookAt(0, 70, 30);
   }
@@ -64,26 +145,43 @@ export class FlightControls {
     // W/Up lowers the nose; S/Down raises it. Arrow keys mirror WASD.
     const noseDown = Math.max(key('KeyW'), key('ArrowUp'));
     const noseUp = Math.max(key('KeyS'), key('ArrowDown'));
-    const pitchInput = noseDown - noseUp;
-    this.pitchCommand = THREE.MathUtils.damp(this.pitchCommand, pitchInput, pitchInput ? 8 : 12, dt);
+    const mouseDt = Math.max(dt, 1 / 240);
+    const mouseXRate = this.pointerLockActive && this.mouseViewportWidth
+      ? this.mouseDeltaX * 2 / (this.mouseViewportWidth * mouseDt)
+      : 0;
+    const mouseYRate = this.pointerLockActive && this.mouseViewportHeight
+      ? this.mouseDeltaY * 2 / (this.mouseViewportHeight * mouseDt)
+      : 0;
+    this.mouseDeltaX = 0;
+    this.mouseDeltaY = 0;
+    // Scale cursor speed into bounded control input. Moderate motion remains
+    // precise; fast sweeps saturate instead of producing extreme corrections.
+    const targetMousePitch = shapeMouseAxis(THREE.MathUtils.clamp(mouseYRate * 0.8, -1, 1)) * 0.68;
+    const targetMouseRoll = shapeMouseAxis(THREE.MathUtils.clamp(mouseXRate * 0.8, -1, 1)) * 0.68;
+    this.mousePitch = THREE.MathUtils.damp(this.mousePitch, targetMousePitch, 18, dt);
+    this.mouseRoll = THREE.MathUtils.damp(this.mouseRoll, targetMouseRoll, 18, dt);
+    const pitchInput = THREE.MathUtils.clamp(noseDown - noseUp + this.mousePitch, -1, 1);
+    const pitchResponse = this.pointerLockActive ? 14 : 8;
+    this.pitchCommand = THREE.MathUtils.damp(this.pitchCommand, pitchInput, pitchInput ? pitchResponse : 12, dt);
     const left = Math.max(key('KeyA'), key('ArrowLeft'));
     const right = Math.max(key('KeyD'), key('ArrowRight'));
     const rollSpin = key('KeyE') - key('KeyQ');
     // In this aircraft's screen-space roll convention, negative bank is left.
-    const bankInput = right - left;
-    const turnRate = THREE.MathUtils.lerp(0.45, 1.55, Math.min(this.speed / 410, 1));
+    const bankInput = THREE.MathUtils.clamp(right - left + this.mouseRoll, -1, 1);
+    const handlingFactor = this.plane.userData.handlingFactor ?? 1;
+    const turnRate = THREE.MathUtils.lerp(0.45, 1.55, Math.min(this.speed / 410, 1)) * handlingFactor;
     this.updateAttitude();
     this.plane.userData.bankAngle = this.roll;
 
     // Pitch and Q/E roll are rotations around the aircraft's own axes. Keeping
     // them as incremental quaternion rotations avoids Euler-angle flips when
     // a loop and a barrel roll cross the inverted attitude together.
-    const pitchDelta = this.pitchCommand * 0.52 * dt;
+    const pitchDelta = this.pitchCommand * 0.52 * handlingFactor * dt;
     const rollDelta = rollSpin
-      ? rollSpin * 2.5 * dt + bankInput * 1.8 * dt
+      ? (rollSpin * 2.5 + bankInput * 1.8) * handlingFactor * dt
       : pitchInput
-        ? bankInput * 1.8 * dt
-        : this.levelBankDelta(bankInput, dt);
+        ? bankInput * 1.8 * handlingFactor * dt
+        : this.levelBankDelta(bankInput, dt) * handlingFactor;
 
     this.pitchRotation.setFromAxisAngle(LOCAL_RIGHT, pitchDelta);
     this.rollRotation.setFromAxisAngle(LOCAL_FORWARD, rollDelta);
@@ -102,9 +200,54 @@ export class FlightControls {
     // The enlarged envelope lets players climb into the thin, cold air where contrails form.
     this.plane.position.y = Math.min(this.plane.position.y, 8800);
     // Keep the chase view above the airframe instead of banking it sideways with the jet.
-    const cameraOffset = new THREE.Vector3(0, 6.2, 0).addScaledVector(this.forward, -22);
-    this.camera.position.lerp(this.plane.position.clone().add(cameraOffset), 1 - Math.exp(-3.2 * dt));
-    this.camera.lookAt(this.plane.position.clone().addScaledVector(this.forward, 44));
+    this.cameraOffset.set(0, 6.2 + (this.cameraDistance - CAMERA_DISTANCE_DEFAULT) * .08, 0)
+      .addScaledVector(this.forward, -this.cameraDistance);
+    this.cameraTarget.copy(this.plane.position).add(this.cameraOffset);
+    this.camera.position.lerp(this.cameraTarget, 1 - Math.exp(-3.2 * dt));
+    this.camera.lookAt(this.cameraTarget.copy(this.plane.position).addScaledVector(this.forward, 44));
+  }
+
+  resetMouseAim() {
+    this.mouseDeltaX = 0;
+    this.mouseDeltaY = 0;
+    this.mouseRoll = 0;
+    this.mousePitch = 0;
+  }
+
+  toggleMouseSteering() {
+    if (this.pointerLockActive) {
+      document.exitPointerLock?.();
+      return;
+    }
+    if (typeof this.canvas.requestPointerLock !== 'function') return;
+    this.resetMouseAim();
+    try {
+      const request = this.canvas.requestPointerLock();
+      request?.catch?.(() => {});
+    } catch {
+      this.resetMouseAim();
+    }
+  }
+
+  setEnabled(enabled) {
+    this.enabled = Boolean(enabled);
+    if (!this.enabled) {
+      this.keys.clear();
+      this.resetMouseAim();
+      if (this.pointerLockActive) document.exitPointerLock?.();
+    }
+  }
+
+  resetCameraZoom() {
+    this.cameraDistance = CAMERA_DISTANCE_DEFAULT;
+  }
+
+  adjustCameraZoom(delta) {
+    this.cameraDistance = THREE.MathUtils.clamp(
+      this.cameraDistance + delta,
+      CAMERA_DISTANCE_MIN,
+      CAMERA_DISTANCE_MAX,
+    );
   }
 
   updateAttitude() {

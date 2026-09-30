@@ -7,6 +7,9 @@ export class SunEffects {
   constructor(scene, camera) {
     this.camera = camera;
     this.sunDirection = SUN_DIRECTION.clone();
+    this._cameraForward = new THREE.Vector3();
+    this._cameraPosition = new THREE.Vector3();
+    this._sunScreenPosition = new THREE.Vector3();
 
     this.sky = new Sky();
     this.sky.scale.setScalar(18000);
@@ -36,19 +39,32 @@ export class SunEffects {
     this.sky.position.copy(camera.position);
     camera.updateMatrixWorld(true);
 
-    const source = camera.position.clone().addScaledVector(this.sunDirection, 10000);
-    source.project(camera);
-    const inFront = source.z > -1 && source.z < 1;
-    const edge = Math.max(Math.abs(source.x), Math.abs(source.y));
-    const visibility = inFront
-      ? 1 - THREE.MathUtils.smoothstep(edge, 0.72, 1.2)
-      : 0;
+    camera.getWorldPosition(this._cameraPosition);
+    camera.getWorldDirection(this._cameraForward);
+    const sunAlignment = this._cameraForward.dot(this.sunDirection);
+    const angularVisibility = THREE.MathUtils.smoothstep(
+      sunAlignment,
+      Math.cos(THREE.MathUtils.degToRad(22)),
+      Math.cos(THREE.MathUtils.degToRad(2.5)),
+    );
+
+    this._sunScreenPosition
+      .copy(this._cameraPosition)
+      .addScaledVector(this.sunDirection, 10000)
+      .project(camera);
+    const inFront = this._sunScreenPosition.z > -1 && this._sunScreenPosition.z < 1;
+    const edge = Math.max(
+      Math.abs(this._sunScreenPosition.x),
+      Math.abs(this._sunScreenPosition.y),
+    );
+    const screenVisibility = 1 - THREE.MathUtils.smoothstep(edge, 0.72, 1.2);
+    const visibility = inFront ? angularVisibility * screenVisibility : 0;
 
     const depth = 36;
     const halfHeight = Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5)) * depth;
     const halfWidth = halfHeight * camera.aspect;
-    const centerX = source.x * halfWidth;
-    const centerY = source.y * halfHeight;
+    const centerX = this._sunScreenPosition.x * halfWidth;
+    const centerY = this._sunScreenPosition.y * halfHeight;
 
     for (const flare of this.flareSprites) {
       flare.sprite.visible = visibility > 0.005;
@@ -57,7 +73,12 @@ export class SunEffects {
         THREE.MathUtils.lerp(centerY, 0, flare.axis),
         -depth,
       );
-      flare.sprite.scale.setScalar(flare.size * halfHeight * visibility);
+      const flareSize = flare.size * halfHeight * visibility;
+      if (flare.aspect) {
+        flare.sprite.scale.set(flareSize * flare.aspect, flareSize, 1);
+      } else {
+        flare.sprite.scale.setScalar(flareSize);
+      }
       flare.material.opacity = flare.opacity * visibility;
     }
   }
@@ -68,10 +89,12 @@ function createFlareSprites(parent) {
     halo: makeFlareTexture('halo'),
     star: makeFlareTexture('star'),
     ghost: makeFlareTexture('ghost'),
+    streak: makeFlareTexture('streak'),
   };
   const definitions = [
-    { type: 'halo', axis: 0, size: 0.22, opacity: 0.14, color: '#ffe7c0' },
-    { type: 'star', axis: 0, size: 0.075, opacity: 0.16, color: '#fff3d8' },
+    { type: 'halo', axis: 0, size: 0.22, opacity: 0.17, color: '#ffe7c0' },
+    { type: 'star', axis: 0, size: 0.075, opacity: 0.17, color: '#fff3d8' },
+    { type: 'streak', axis: 0, size: 0.12, aspect: 4.5, opacity: 0.075, color: '#ffe8c7' },
     { type: 'ghost', axis: 0.36, size: 0.12, opacity: 0.065, color: '#9ad8e7' },
     { type: 'ghost', axis: 0.72, size: 0.08, opacity: 0.055, color: '#f7cba0' },
     { type: 'ghost', axis: 1.08, size: 0.12, opacity: 0.045, color: '#b7d9df' },
@@ -136,6 +159,27 @@ function makeFlareTexture(type) {
       context.restore();
     }
     context.restore();
+  } else if (type === 'streak') {
+    const horizontal = context.createLinearGradient(0, 0, size, 0);
+    horizontal.addColorStop(0, 'rgba(255,238,205,0)');
+    horizontal.addColorStop(0.28, 'rgba(255,238,205,0.08)');
+    horizontal.addColorStop(0.46, 'rgba(255,248,229,0.32)');
+    horizontal.addColorStop(0.5, 'rgba(255,255,245,0.58)');
+    horizontal.addColorStop(0.54, 'rgba(255,248,229,0.32)');
+    horizontal.addColorStop(0.72, 'rgba(255,238,205,0.08)');
+    horizontal.addColorStop(1, 'rgba(255,238,205,0)');
+    context.fillStyle = horizontal;
+    context.fillRect(0, 0, size, size);
+
+    context.globalCompositeOperation = 'destination-in';
+    const vertical = context.createLinearGradient(0, 0, 0, size);
+    vertical.addColorStop(0, 'rgba(255,255,255,0)');
+    vertical.addColorStop(0.46, 'rgba(255,255,255,0.06)');
+    vertical.addColorStop(0.5, 'rgba(255,255,255,0.9)');
+    vertical.addColorStop(0.54, 'rgba(255,255,255,0.06)');
+    vertical.addColorStop(1, 'rgba(255,255,255,0)');
+    context.fillStyle = vertical;
+    context.fillRect(0, 0, size, size);
   } else {
     const glow = context.createRadialGradient(center, center, size * 0.08, center, center, center * 0.92);
     glow.addColorStop(0, 'rgba(255,255,255,0.4)');

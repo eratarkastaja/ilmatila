@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { applyAirframeCondition } from './airframe-condition.js';
 import { estimateInterceptTime } from './ballistics.js';
 import { releaseMissile, updateMissileMotor } from './projectiles.js';
 
@@ -33,6 +34,7 @@ export class ProjectileSystem {
     scene, player, playerShots = [], hostiles = [], decoys = [], collision, audio,
     playerVelocity = stationaryVelocity, onPlayerDestroyed, onPlayerDamaged, onPlayerHit, onJetDestroyed,
     onUnitDestroyed, addSpark, addExplosion, incomingDamageMultiplier = 1,
+    hostileMissileTurnRate = HOSTILE_MISSILE_TURN_RATE,
   }) {
     this.scene = scene;
     this.player = player;
@@ -48,6 +50,7 @@ export class ProjectileSystem {
     this.onJetDestroyed = onJetDestroyed;
     this.onUnitDestroyed = onUnitDestroyed;
     this.incomingDamageMultiplier = incomingDamageMultiplier;
+    this.hostileMissileTurnRate = hostileMissileTurnRate;
     this.addSpark = addSpark;
     this.addExplosion = addExplosion;
     this.incomingMissile = false;
@@ -175,6 +178,9 @@ export class ProjectileSystem {
         const { target, hitInfo } = impact;
         const damage = shot.damage * (hitInfo.damage ?? 1);
         target.hp -= damage;
+        if (target.mesh?.userData.airframeHealthRatio !== undefined) {
+          applyAirframeCondition(target.mesh, target.hp, target.maxHp);
+        }
         const impactPosition = this._impactPosition.copy(previous).lerp(shot.mesh.position, hitInfo.t);
         if (!shot.ally && shot.ballistic) {
           this.onPlayerHit?.(target, {
@@ -240,7 +246,7 @@ export class ProjectileSystem {
         if (this.missileThreat === shot && this.missileThreatEta < 10 && distanceToPlayer < 4300) {
           shot.warningClock -= dt;
           if (shot.warningClock <= 0) {
-            audio?.playIncomingMissile();
+            audio?.playIncomingMissile(this.missileThreatEta);
             shot.warningClock = 1.05;
           }
         }
@@ -260,7 +266,7 @@ export class ProjectileSystem {
           const aimTarget = shot.decoyTarget ? shot.decoyTarget.position : player.position;
           const missileSpeed = shot.velocity.length();
           const wanted = this._targetOffset.subVectors(aimTarget,shot.mesh.position).normalize();
-          const direction = turnDirection(shot.velocity, wanted, HOSTILE_MISSILE_TURN_RATE * dt, this._steeringDirection, this._steeringAxis);
+          const direction = turnDirection(shot.velocity, wanted, this.hostileMissileTurnRate * dt, this._steeringDirection, this._steeringAxis);
           shot.velocity.copy(direction).multiplyScalar(missileSpeed);
           if (shot.velocity.lengthSq() > 1) shot.mesh.quaternion.setFromUnitVectors(forward,this._tracerDirection.copy(shot.velocity).normalize());
         }

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.0-alpha.7 — 2026-09-30
+
+### English
+
+- Expanded all four Finnish theaters to 32 × 32 km and published refreshed MML terrain packages. The Pages workflow now downloads and verifies terrain data release v1.2.0.
+- Extended mission ingress, recovery, convoy fronts, and ground engagements to use more of the larger theaters.
+- Added precise mouse flight controls and adjustable camera zoom, with input reset behavior to prevent stale mouse aim from affecting a new sortie.
+- Reworked hostile attack runs, firing windows, missile timing, and defensive reactions across difficulty levels. Hard now applies more sustained pressure; Easy retains longer breathing room.
+- Added shared airframe damage effects: damaged aircraft begin trailing smoke below 50% health and lose some handling authority as health falls below 30%.
+- Improved theater-edge haze, incoming missile warning audio, and several cockpit and menu sound cues.
+- Added a brighter sun with a view-angle-sensitive lens flare, including a restrained anamorphic glint and optical ghosts.
+- Improved terrain downloading with retry handling and support for staged output directories; updated terrain package validation and attribution details.
+
+Alpha 7 remains an early playable prototype. Flight, radar, weapons, AI, and battlefield behavior are simplified game systems, not real-world training or operational tools.
+
 ## 0.1.0-alpha.6 — 2026-09-30
 
 ### English
