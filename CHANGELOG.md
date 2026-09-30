@@ -12,6 +12,7 @@
 - Improved theater-edge haze, incoming missile warning audio, and several cockpit and menu sound cues.
 - Added a brighter sun with a view-angle-sensitive lens flare, including a restrained anamorphic glint and optical ghosts.
 - Improved terrain downloading with retry handling and support for staged output directories; updated terrain package validation and attribution details.
+- Updated the Pages deployment workflow to current Node.js 24-compatible GitHub Actions.
 
 Alpha 7 remains an early playable prototype. Flight, radar, weapons, AI, and battlefield behavior are simplified game systems, not real-world training or operational tools.
 
