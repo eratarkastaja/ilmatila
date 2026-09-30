@@ -10,7 +10,7 @@ const GAME_KEY_CODES = new Set([
   'Minus', 'NumpadAdd', 'NumpadSubtract',
 ]);
 const CAMERA_DISTANCE_DEFAULT = 22;
-const CAMERA_DISTANCE_MIN = 14;
+const CAMERA_DISTANCE_MIN = 11;
 const CAMERA_DISTANCE_MAX = 70;
 
 function flightKeyCode(event) {
