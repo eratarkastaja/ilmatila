@@ -119,6 +119,7 @@ export class CombatWorld {
     this.radio.emit('mission.departure');
     this.missileLaunchTimer=0;
     this.missileLaunchSource=null;
+    this.missileLaunchAlertCooldown=0;
     this.terrain=terrain; this.playerHeading=0; this.previousPlayerPosition=player.position.clone();
     this.remainingMissionState={airRemaining:0,groundRemaining:0};
     this.incomingAircraftMissiles=[];
@@ -159,6 +160,8 @@ export class CombatWorld {
       collision: this.collisionSystem, audio,
       incomingDamageMultiplier:this.difficulty.incomingDamage,
       hostileMissileTurnRate:this.difficulty.hostileMissileTurnRate,
+      hostileMissileDamage:this.difficulty.hostileMissileDamage,
+      hostileMissileProximityRadius:this.difficulty.hostileMissileProximityRadius,
       onPlayerDestroyed: (reason, params) => this.destroyPlayer(reason, params),
       playerVelocity: this.playerVelocity,
       onPlayerDamaged: (amount, reason) => this.damagePlayer(amount, reason),
@@ -254,6 +257,7 @@ export class CombatWorld {
         routeReadout:document.querySelector('#mission-route-readout'),
         routeLabel:document.querySelector('#mission-route-label'),
         routeRange:document.querySelector('#mission-route-range'),
+        routeAltitude:document.querySelector('#mission-route-altitude'),
         waypointCue:document.querySelector('#mission-waypoint-cue'),
       },
       onIngress:()=>{
@@ -309,6 +313,7 @@ export class CombatWorld {
   update(dt){
     this.frameDelta=dt;
     this.missileLaunchTimer=Math.max(0,this.missileLaunchTimer-dt);
+    this.missileLaunchAlertCooldown=Math.max(0,this.missileLaunchAlertCooldown-dt);
     if(this.missileLaunchTimer<=0)this.missileLaunchSource=null;
     this.countermeasureSystem.tick(dt);
     if(dt>0){this.playerVelocity.copy(this.player.position).sub(this.previousPlayerPosition).multiplyScalar(1/dt);this.previousPlayerPosition.copy(this.player.position);}
@@ -444,9 +449,12 @@ export class CombatWorld {
 
   onMissileLaunch(enemy){
     this.missileLaunchSource=enemy;
-    this.missileLaunchTimer=2.8;
-    this.audio?.playMissileLaunchWarning();
-    this.feedback.notify('combat.missileLaunchDetected',1.8,'warning');
+    this.missileLaunchTimer=Math.max(this.missileLaunchTimer,2.2);
+    if(this.missileLaunchAlertCooldown<=0){
+      this.audio?.playMissileLaunchWarning();
+      this.feedback.notify('combat.missileLaunchDetected',2.1,'warning');
+      this.missileLaunchAlertCooldown=2.8;
+    }
     const reporter=this.airBattle.closestWingmanTo(enemy.mesh.position);
     if(reporter)this.radio.emit('wingman.missileInbound',{wingmanId:reporter.radioId,scope:'player'});
   }

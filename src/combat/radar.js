@@ -7,7 +7,10 @@ export class CombatRadar {
     this.player = player;
     this.audio = audio;
     this.mode = 'air';
-    this.airRange = 8500;
+    // F-35 sensor fusion gives an earlier search track; weapons retain their
+    // existing lock envelope so the extra awareness is not extra missile range.
+    this.airRange = 9500;
+    this.airLockRange = 8500;
     this.groundRange = 6000;
     this.range = this.airRange;
     this.groundLockRange = 5200;
@@ -120,7 +123,7 @@ export class CombatRadar {
     const groundMode = this.mode === 'ground';
     const forward = this._forward.set(0,0,1).applyQuaternion(this.player.quaternion);
     const candidates = groundMode ? groundHostiles : enemies;
-    const maxRange = groundMode ? this.groundLockRange : this.airRange;
+    const maxRange = groundMode ? this.groundLockRange : this.airLockRange;
     const boresight = groundMode ? 0.55 : 0.88;
     let candidate = this.target;
 

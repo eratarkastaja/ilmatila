@@ -104,6 +104,7 @@ export class AirBattle {
     this._playerRight=new THREE.Vector3();
     this._aft=new THREE.Vector3();
     this._gunMuzzle=new THREE.Vector3();
+    this._helicopterMissileStart=new THREE.Vector3();
     this.enemies = [];
     this.allies = [];
     this.groundUnits = [];
@@ -142,6 +143,8 @@ export class AirBattle {
         targetRefresh: 0,
         groundMissiles: 2,
         groundMissileCooldown: 2 + i * 1.2,
+        airMissiles: this.difficulty.wingmanAirMissileCapacity ?? 3,
+        airMissileCooldown: 2.5 + i * 1.8,
         threatTarget: null,
         threatTimer: 0,
         groundRoundCount: 0,
@@ -221,6 +224,7 @@ export class AirBattle {
         altitudeOffset: altitudeOffsets[i % altitudeOffsets.length],
         phase: 'staging',
         phaseClock: 0,
+        detectedPlayerTimer: 0,
         stagingLane: lane,
         stagingLateral: stagingOffset.dot(playerRight),
         attackPattern: Math.floor(Math.random() * ENEMY_ATTACK_RUNS.length),
@@ -270,12 +274,13 @@ export class AirBattle {
     for (let i = 0; i < count; i++) {
       const mesh = createMi24AttackHelicopter();
       const distance = Math.min(this.mission.hostileHelicopterSpawnDistance ?? 3600, theaterLimit);
+      const lateralSpacing = this.mission.hostileHelicopterLateralSpacing ?? 850;
       mesh.position.copy(this.player.position)
         .addScaledVector(playerForward, distance)
-        .addScaledVector(playerRight, (i - (count - 1) * 0.5) * 850);
+        .addScaledVector(playerRight, (i - (count - 1) * 0.5) * lateralSpacing);
       this.clampToTheater(mesh.position, edgeMargin);
       const ground = this.terrain?.sampleHeight(mesh.position.x, mesh.position.z) ?? 0;
-      mesh.position.y = ground + 300 + i * 45;
+      mesh.position.y = ground + (this.mission.hostileHelicopterSpawnAltitude ?? 320) + i * 35;
       mesh.rotation.order = 'YXZ';
       mesh.rotation.y = wrapAngle(heading + Math.PI);
       mesh.scale.setScalar(0.88);
@@ -296,7 +301,9 @@ export class AirBattle {
         orbitPhase: i * Math.PI,
         targetRefreshTimer: 0,
         groundTarget: null,
-        rocketCooldown: 8 + i * 6,
+        rocketCooldown: 4 + i * 3,
+        airToAirMissilesRemaining: 2,
+        airMissileCooldown: 1.8 + i * 1.8,
         waypoint: new THREE.Vector3(),
         steeringOffset: new THREE.Vector3(),
         direction: new THREE.Vector3(),
@@ -439,8 +446,15 @@ export class AirBattle {
 
       const waypoint=enemy.waypoint;
 
-      const openingDelay = (this.mission.openingDelay ?? 14) * (this.difficulty.enemyOpeningDelayScale ?? 1);
-      if (enemy.phase === 'staging' && enemy.phaseClock >= openingDelay) {
+      const detectionRange = this.difficulty.enemyDetectionRange ?? Infinity;
+      if (enemy.phase === 'staging') {
+        enemy.detectedPlayerTimer = range <= detectionRange
+          ? enemy.detectedPlayerTimer + dt
+          : 0;
+      }
+      const reactionDelay = this.difficulty.enemyDetectionReactionDelay
+        ?? (this.mission.openingDelay ?? 14) * (this.difficulty.enemyOpeningDelayScale ?? 1);
+      if (enemy.phase === 'staging' && enemy.detectedPlayerTimer >= reactionDelay) {
         enemy.phase = 'inbound';
         enemy.phaseClock = 0;
         enemy.attackForward.copy(playerForward);
@@ -552,8 +566,9 @@ export class AirBattle {
         ? this.playerVelocity
         : engagement.target?.velocity ?? zeroVelocity;
       const engagementRange = targetPosition ? enemy.mesh.position.distanceTo(targetPosition) : Infinity;
+      const gunLeadTime = this.difficulty.enemyGunLeadTime ?? 4.5;
       const targetLead = targetPosition
-        ? leadPoint(enemy.mesh.position, targetPosition, targetVelocity, 720, 3, enemy.lead, enemy.leadOffset)
+        ? leadPoint(enemy.mesh.position, targetPosition, targetVelocity, 720, gunLeadTime, enemy.lead, enemy.leadOffset)
           .sub(enemy.mesh.position).normalize()
         : enemy.lead.set(0, 0, 0);
       const gunSolution = canEngage && engagement.target
@@ -597,7 +612,14 @@ export class AirBattle {
       const missileMinRange = this.difficulty.enemyMissileMinRange ?? 3000;
       const missileMaxRange = this.difficulty.enemyMissileMaxRange ?? 6400;
       const missileBoresight = this.difficulty.enemyMissileBoresight ?? .93;
-      const toPlayer = leadPoint(enemy.mesh.position, playerPosition, this.playerVelocity, 720, 3)
+      const missileSpeed = this.difficulty.hostileMissileSpeed ?? MISSILE_PROFILES.hostile.speed;
+      const toPlayer = leadPoint(
+        enemy.mesh.position,
+        playerPosition,
+        this.playerVelocity,
+        missileSpeed,
+        this.difficulty.enemyMissileLeadTime ?? 12,
+      )
         .sub(enemy.mesh.position).normalize();
       if (
         enemy.missileClock <= 0 && enemy.missilesFired < missileCapacity && enemy.phase !== 'staging' &&
@@ -616,6 +638,7 @@ export class AirBattle {
     enemy.orbitPhase += dt * 0.075;
     enemy.targetRefreshTimer -= dt;
     enemy.rocketCooldown -= dt;
+    enemy.airMissileCooldown = Math.max(0, enemy.airMissileCooldown - dt);
     const playerPosition = this.player.position;
     if (enemy.targetRefreshTimer <= 0 || !enemy.groundTarget || enemy.groundTarget.dead) {
       let nearest = 10500;
@@ -648,13 +671,78 @@ export class AirBattle {
     enemy.mesh.userData.tailRotor.rotation.z += dt * 17;
     enemy.mesh.rotation.z = THREE.MathUtils.clamp(enemy.mesh.rotation.z, -0.4, 0.4);
 
+    const playerRange = enemy.mesh.position.distanceTo(playerPosition);
+    if (enemy.airToAirMissilesRemaining > 0 && enemy.airMissileCooldown <= 0
+      && playerRange > 1600 && playerRange < 4700) {
+      const missileSpeed = 455;
+      const playerLead = leadPoint(
+        enemy.mesh.position, playerPosition, this.playerVelocity, missileSpeed, 8,
+        enemy.lead, enemy.leadOffset,
+      ).sub(enemy.mesh.position).normalize();
+      const nose = enemy.direction.set(0, 0, 1).applyQuaternion(enemy.mesh.quaternion).normalize();
+      if (nose.dot(playerLead) > .68) {
+        this.fireHelicopterAirMissile(enemy);
+        enemy.airToAirMissilesRemaining--;
+        enemy.airMissileCooldown = 10 + Math.random() * 4;
+      }
+    }
+
     if (!target || enemy.rocketCooldown > 0) return;
     const range = enemy.mesh.position.distanceTo(target.mesh.position);
     const toTarget = enemy.lead.subVectors(target.mesh.position, enemy.mesh.position).normalize();
     const nose = enemy.direction.set(0, 0, 1).applyQuaternion(enemy.mesh.quaternion).normalize();
     if (range < 800 || range > 4700 || nose.dot(toTarget) < 0.45) return;
     this.fireHelicopterRocketSalvo(enemy, target, range);
-    enemy.rocketCooldown = 19 + Math.random() * 8;
+    enemy.rocketCooldown = 13 + Math.random() * 5;
+  }
+
+  fireHelicopterAirMissile(enemy) {
+    const stores = enemy.mesh.userData.airToAirStores ?? [];
+    const start = this._helicopterMissileStart;
+    let foundStore = false;
+    for (const store of stores) {
+      if (!store.visible) continue;
+      store.visible = false;
+      store.getWorldPosition(start);
+      foundStore = true;
+      break;
+    }
+    if (!foundStore) enemy.mesh.localToWorld(start.set(0, -0.2, -0.7));
+    const speed = 455;
+    const predicted = leadPoint(start, this.player.position, this.playerVelocity, speed, 8,
+      enemy.lead, enemy.leadOffset);
+    const aim = predicted.sub(start).normalize();
+    const mesh = createMissile('#c5c5bc');
+    mesh.scale.setScalar(.72);
+    mesh.position.copy(start);
+    mesh.quaternion.setFromUnitVectors(forward, aim);
+    if (mesh.userData.engineFlame) mesh.userData.engineFlame.visible = true;
+    this.scene.add(mesh);
+    this.addHostileProjectile({
+      projectile: true,
+      missile: true,
+      homing: true,
+      seeker: 'ir',
+      mesh,
+      velocity: aim.multiplyScalar(speed),
+      speed,
+      burnRemaining: 4.2,
+      coastDrag: .12,
+      motorBurning: true,
+      guidanceActive: true,
+      guidanceAfterBurnout: true,
+      interceptLeadTime: 8,
+      turnRate: 2.2,
+      coastTurnScale: .62,
+      life: 10,
+      damage: 37,
+      proximityRadius: 25,
+      warningClock: 0,
+      decoyTarget: null,
+    });
+    this.onMissileLaunch?.(enemy, mesh);
+    this.audio?.playMissileLaunch();
+    this.audio?.startMissileFlight(mesh.id);
   }
 
   fireHelicopterRocketSalvo(enemy, target, range) {
@@ -742,6 +830,7 @@ export class AirBattle {
       if (ally.dead) continue;
       ally.defensiveTimer = Math.max(0, ally.defensiveTimer - dt);
       ally.groundMissileCooldown = Math.max(0, ally.groundMissileCooldown - dt);
+      ally.airMissileCooldown = Math.max(0, ally.airMissileCooldown - dt);
       ally.threatTimer = Math.max(0, ally.threatTimer - dt);
       if (ally.threatTimer <= 0) ally.threatTarget = null;
       if (ally.target?.dead) ally.target = null;
@@ -790,7 +879,8 @@ export class AirBattle {
       }
 
       const target = ally.target ?? ally.groundTarget;
-      const groundTarget = !ally.target && Boolean(ally.groundTarget);
+      const groundTarget = Boolean(ally.groundTarget && !ally.target)
+        || Boolean(target && !this.enemies.includes(target));
       const targetVelocity = target?.velocity ?? zeroVelocity;
       const targetRange = target ? target.mesh.position.distanceTo(ally.mesh.position) : Infinity;
       const waypoint=ally.waypoint;
@@ -842,7 +932,7 @@ export class AirBattle {
       ally.mesh.userData.boosting = Boolean(this.player.userData.boosting) || ally.defensiveTimer > 0 || (target && targetRange > 3600);
       if (ally.mesh.userData.afterburner) ally.mesh.userData.afterburner.visible = ally.mesh.userData.boosting;
 
-      if (ally.defensiveTimer > 0 || !target || ally.phase === 'extend') {
+      if (ally.defensiveTimer > 0 || !target) {
         if (ally.burstShots > 0) ally.burstShots = 0;
         continue;
       }
@@ -850,8 +940,19 @@ export class AirBattle {
       const aim = leadPoint(ally.mesh.position, target.mesh.position, targetVelocity, groundTarget ? 880 : 680, 3,ally.lead,ally.leadOffset)
         .sub(ally.mesh.position)
         .normalize();
-      const aligned = nose.dot(aim) > (groundTarget ? .94 : .91);
-      const gunSolution = targetRange > (groundTarget ? 380 : 650) && targetRange < (groundTarget ? 1800 : 1950) && aligned;
+      const alignment = nose.dot(aim);
+      const aligned = alignment > (groundTarget ? .92 : .86);
+      const gunSolution = targetRange > (groundTarget ? 380 : 520) && targetRange < (groundTarget ? 1800 : 2550) && aligned;
+
+      if (!groundTarget && ally.airMissiles > 0 && ally.airMissileCooldown <= 0
+        && targetRange > (this.difficulty.wingmanAirMissileMinRange ?? 2300)
+        && targetRange < (this.difficulty.wingmanAirMissileMaxRange ?? 7800)
+        && alignment > .84) {
+        this.fireAllyAirMissile(ally, target);
+        ally.airMissiles--;
+        ally.airMissileCooldown = (this.difficulty.wingmanAirMissileCooldown ?? 5.2)
+          + Math.random() * 2.4;
+      }
 
       if (groundTarget && ally.groundMissiles > 0 && ally.groundMissileCooldown <= 0
         && targetRange > 1550 && targetRange < 4400 && nose.dot(aim) > .955) {
@@ -873,9 +974,9 @@ export class AirBattle {
           }
         }
       } else if (gunSolution && ally.fireCooldown <= 0) {
-        ally.burstShots = groundTarget ? 7 + Math.floor(Math.random() * 4) : 5 + Math.floor(Math.random() * 3);
+        ally.burstShots = groundTarget ? 7 + Math.floor(Math.random() * 4) : 8 + Math.floor(Math.random() * 5);
         ally.burstClock = 0;
-        ally.fireCooldown = groundTarget ? 1.9 + Math.random() * 1.1 : 1.45 + Math.random() * 1.25;
+        ally.fireCooldown = groundTarget ? 1.9 + Math.random() * 1.1 : .9 + Math.random() * .8;
       }
     }
   }
@@ -1058,6 +1159,31 @@ export class AirBattle {
     this.addPlayerProjectile({ mesh: shot, velocity, life: 4, damage: .42 * (this.difficulty.wingmanDamage ?? 1), ally: true, sourceUnit: ally });
   }
 
+  fireAllyAirMissile(ally, target) {
+    const profile = MISSILE_PROFILES.playerAir;
+    const start = ally.mesh.position.clone().add(
+      new THREE.Vector3(0, -.08, 3.8).applyQuaternion(ally.mesh.quaternion),
+    );
+    const predicted = leadPoint(start, target.mesh.position, target.velocity ?? zeroVelocity, profile.speed, 10);
+    const aim = predicted.sub(start).normalize();
+    const mesh = createMissile('#c8cbc0');
+    mesh.position.copy(start);
+    mesh.quaternion.setFromUnitVectors(forward, aim);
+    this.scene.add(mesh);
+    if (mesh.userData.engineFlame) mesh.userData.engineFlame.visible = true;
+    this.audio?.playMissileLaunch();
+    this.audio?.startMissileFlight(mesh.id);
+    this.addPlayerProjectile({
+      projectile: true, missile: true, homing: true, seeker: profile.seeker, mesh,
+      velocity: aim.multiplyScalar(profile.speed), speed: profile.speed, life: profile.life,
+      burnRemaining: profile.burnTime, coastDrag: profile.coastDrag, motorBurning: true,
+      guidanceActive: true, damage: 3.8, proximityRadius: profile.proximityRadius,
+      proximityDamage: profile.proximityDamage, target, targetDomain: 'air', decoyTarget: null,
+      decoyAttempts: new Set(), trail: 0, ally: true, sourceUnit: ally,
+    });
+    this.onWingmanRadio?.('rifle', ally, { scope: String(target.mesh.id), target });
+  }
+
   fireAllyGround(ally, target) {
     const start = new THREE.Vector3(-.78, .38, 2.65)
       .applyQuaternion(ally.mesh.quaternion)
@@ -1118,7 +1244,7 @@ export class AirBattle {
     const start = enemy.mesh.localToWorld(this._gunMuzzle.set(.42, -.16, Math.max(2.8, clearance * .62)));
     const targetPosition = target === this.player ? this.player.position : targetMesh.position;
     const targetVelocity = target === this.player ? this.playerVelocity : target.velocity ?? zeroVelocity;
-    const predicted = leadPoint(start, targetPosition, targetVelocity, 720, 3);
+    const predicted = leadPoint(start, targetPosition, targetVelocity, 720, this.difficulty.enemyGunLeadTime ?? 4.5);
     const aim = predicted.sub(start).normalize();
     const spread=this.difficulty.enemyAimSpread ?? 1;
     aim.add(new THREE.Vector3((Math.random() - .5) * .018 * spread, (Math.random() - .5) * .012 * spread, (Math.random() - .5) * .018 * spread)).normalize();
@@ -1152,7 +1278,13 @@ export class AirBattle {
     const start = enemy.mesh.position.clone().addScaledVector(direction, 5);
     const missileProfile = MISSILE_PROFILES.hostile;
     const missileSpeed = this.difficulty.hostileMissileSpeed ?? missileProfile.speed;
-    const predicted = leadPoint(start, this.player.position, this.playerVelocity, missileSpeed, 5);
+    const predicted = leadPoint(
+      start,
+      this.player.position,
+      this.playerVelocity,
+      missileSpeed,
+      this.difficulty.enemyMissileLeadTime ?? 12,
+    );
     const aim = predicted.sub(start).normalize();
     const mesh = createMissile('#c5c5bc');
     mesh.position.copy(start);
@@ -1168,11 +1300,17 @@ export class AirBattle {
       mesh,
       velocity: aim.multiplyScalar(missileSpeed),
       speed: missileSpeed,
-      burnRemaining: missileProfile.burnTime,
-      coastDrag: missileProfile.coastDrag,
+      burnRemaining: this.difficulty.hostileMissileBurnTime ?? missileProfile.burnTime,
+      coastDrag: this.difficulty.hostileMissileCoastDrag ?? missileProfile.coastDrag,
       motorBurning: true,
       guidanceActive: true,
-      life: missileProfile.life,
+      guidanceAfterBurnout: true,
+      interceptLeadTime: 14,
+      turnRate: this.difficulty.hostileMissileTurnRate ?? 1.45,
+      coastTurnScale: .72,
+      life: this.difficulty.hostileMissileLife ?? missileProfile.life,
+      damage: this.difficulty.hostileMissileDamage ?? 62,
+      proximityRadius: this.difficulty.hostileMissileProximityRadius ?? 20,
       warningClock: 0,
       decoyTarget: null,
     });

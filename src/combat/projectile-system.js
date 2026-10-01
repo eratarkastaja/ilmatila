@@ -34,7 +34,8 @@ export class ProjectileSystem {
     scene, player, playerShots = [], hostiles = [], decoys = [], collision, audio,
     playerVelocity = stationaryVelocity, onPlayerDestroyed, onPlayerDamaged, onPlayerHit, onJetDestroyed,
     onUnitDestroyed, onFriendlyAircraftHit, addSpark, addWaterImpact, addExplosion, incomingDamageMultiplier = 1,
-    hostileMissileTurnRate = HOSTILE_MISSILE_TURN_RATE,
+    hostileMissileTurnRate = HOSTILE_MISSILE_TURN_RATE, hostileMissileDamage = 62,
+    hostileMissileProximityRadius = 20,
   }) {
     this.scene = scene;
     this.player = player;
@@ -52,6 +53,8 @@ export class ProjectileSystem {
     this.onUnitDestroyed = onUnitDestroyed;
     this.incomingDamageMultiplier = incomingDamageMultiplier;
     this.hostileMissileTurnRate = hostileMissileTurnRate;
+    this.hostileMissileDamage = hostileMissileDamage;
+    this.hostileMissileProximityRadius = hostileMissileProximityRadius;
     this.addSpark = addSpark;
     this.addWaterImpact = addWaterImpact;
     this.addExplosion = addExplosion;
@@ -59,6 +62,7 @@ export class ProjectileSystem {
     this.missileThreat = null;
     this.missileThreatDistance = Infinity;
     this.missileThreatEta = Infinity;
+    this.missileThreatGrace = 0;
     this._previousPosition=new THREE.Vector3();
     this._aimPoint=new THREE.Vector3();
     this._targetOffset=new THREE.Vector3();
@@ -222,6 +226,11 @@ export class ProjectileSystem {
     }
 
     this.incomingMissile = false;
+    const previousThreat = this.missileThreat;
+    let previousThreatEta = this.missileThreatEta;
+    let previousThreatDistance = Infinity;
+    let previousThreatStillViable = false;
+    this.missileThreatGrace = Math.max(0, this.missileThreatGrace - dt);
     this.missileThreat = null;
     this.missileThreatDistance = Infinity;
     this.missileThreatEta = Infinity;
@@ -245,10 +254,15 @@ export class ProjectileSystem {
             ? THREE.MathUtils.clamp(-separation.dot(relativeVelocity) / relativeSpeedSquared, 0, 20)
             : 0;
           const missDistance = separation.addScaledVector(relativeVelocity, closestApproachTime).length();
-          if (closingSpeed > 8 && eta < 24 && missDistance < 420 && eta < this.missileThreatEta) {
+          if (closingSpeed > 8 && eta < 28 && missDistance < 620 && eta < this.missileThreatEta) {
             this.missileThreat = shot;
             this.missileThreatDistance = distanceToPlayer;
             this.missileThreatEta = eta;
+          }
+          if (shot === previousThreat && closingSpeed > 8 && eta < 28 && missDistance < 620) {
+            previousThreatStillViable = true;
+            previousThreatEta = eta;
+            previousThreatDistance = distanceToPlayer;
           }
         }
         if (this.missileThreat === shot && this.missileThreatEta < 10 && distanceToPlayer < 4300) {
@@ -275,10 +289,12 @@ export class ProjectileSystem {
           const targetVelocity = shot.decoyTarget?.velocity ?? this.playerVelocity ?? stationaryVelocity;
           const missileSpeed = Math.max(1, shot.velocity.length());
           const targetOffset = this._targetOffset.subVectors(aimTarget, shot.mesh.position);
-          const leadTime = estimateInterceptTime(targetOffset, targetVelocity, missileSpeed, 6);
+          const leadTime = estimateInterceptTime(targetOffset, targetVelocity, missileSpeed, shot.interceptLeadTime ?? 14);
           const aimPoint = this._aimPoint.copy(aimTarget).addScaledVector(targetVelocity, leadTime);
           const wanted = this._targetOffset.subVectors(aimPoint, shot.mesh.position).normalize();
-          const direction = turnDirection(shot.velocity, wanted, this.hostileMissileTurnRate * dt, this._steeringDirection, this._steeringAxis);
+          const turnRate = shot.turnRate ?? this.hostileMissileTurnRate;
+          const energyFactor = shot.motorBurning ? 1 : (shot.coastTurnScale ?? .72);
+          const direction = turnDirection(shot.velocity, wanted, turnRate * energyFactor * dt, this._steeringDirection, this._steeringAxis);
           shot.velocity.copy(direction).multiplyScalar(missileSpeed);
           if (shot.velocity.lengthSq() > 1) shot.mesh.quaternion.setFromUnitVectors(forward,this._tracerDirection.copy(shot.velocity).normalize());
         }
@@ -287,8 +303,13 @@ export class ProjectileSystem {
         if (shot.decoyTarget && this.collision.sweptDistanceSquared(previous, shot.mesh.position, shot.decoyTarget.previousPosition, shot.decoyTarget.position) < 12 ** 2) {
           this.addSpark(shot.mesh.position);
           shot.life = 0;
-        } else if (!shot.decoyTarget && this.collision.sweptDistanceSquared(previous, shot.mesh.position, this.collision.lastCollisionPosition, player.position) < 13 ** 2) {
-          this.damagePlayer(62, 'combat.hostileMissile');
+        } else if (!shot.decoyTarget && this.collision.sweptDistanceSquared(
+          previous,
+          shot.mesh.position,
+          this.collision.lastCollisionPosition,
+          player.position,
+        ) < (shot.proximityRadius ?? this.hostileMissileProximityRadius) ** 2) {
+          this.damagePlayer(shot.damage ?? this.hostileMissileDamage, 'combat.hostileMissile');
           this.addExplosion(shot.mesh.position, .48);
           shot.life = 0;
         }
@@ -367,10 +388,38 @@ export class ProjectileSystem {
         hostiles.splice(i, 1);
       }
     }
+    if (previousThreatStillViable && this.missileThreat && this.missileThreat !== previousThreat
+      && this.missileThreatEta > previousThreatEta - 1.4) {
+      // Do not make the HUD marker jump between nearly simultaneous missiles.
+      this.missileThreat = previousThreat;
+      this.missileThreatDistance = previousThreatDistance;
+      this.missileThreatEta = previousThreatEta;
+    }
+    if (this.missileThreat) {
+      this.missileThreatGrace = .7;
+    } else if (
+      previousThreat
+      && hostiles.includes(previousThreat)
+      && previousThreat.life > 0
+      && this.missileThreatGrace > 0
+      && !(previousThreat.decoyTarget?.active
+        && previousThreat.decoyTarget.position.distanceToSquared(player.position)
+          > previousThreat.mesh.position.distanceToSquared(player.position))
+    ) {
+      // Keep the cue steady across brief frame-to-frame changes in the
+      // projected intercept. Drop it immediately when a flare pulls the
+      // missile safely away or the missile is removed.
+      this.missileThreat = previousThreat;
+      this.missileThreatDistance = previousThreat.mesh.position.distanceTo(player.position);
+      this.missileThreatEta = Math.max(0, previousThreatEta - dt);
+    } else {
+      this.missileThreatGrace = 0;
+    }
     if (this.missileThreat && (!hostiles.includes(this.missileThreat) || this.missileThreat.life <= 0)) {
       this.missileThreat = null;
       this.missileThreatDistance = Infinity;
       this.missileThreatEta = Infinity;
+      this.missileThreatGrace = 0;
     }
     this.incomingMissile = Boolean(this.missileThreat && this.missileThreatEta <= 8.5);
   }

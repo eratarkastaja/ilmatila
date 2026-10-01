@@ -3,7 +3,7 @@ import { createGroundVehicle, getGroundVehicleSpec, disposeGroundVehicleVisual }
 import { createMissile } from './projectiles.js';
 
 const groundShotGeo = new THREE.SphereGeometry(.75, 5, 4);
-const antiAirShotGeo = new THREE.CylinderGeometry(.065, .05, .95, 6, 1);
+const antiAirShotGeo = new THREE.CylinderGeometry(.075, .055, 1.35, 6, 1);
 const blueGroundShotMaterial = new THREE.MeshBasicMaterial({ color: '#ffd889' });
 const redGroundShotMaterial = new THREE.MeshBasicMaterial({ color: '#ff785d' });
 const antiAirShotMaterial = new THREE.MeshBasicMaterial({ color: '#ffc47a', toneMapped: false });
@@ -87,22 +87,27 @@ export class GroundBattle {
     );
     // CAS uses a broad frontage, while other missions keep a tighter, legible
     // engagement. The usable terrain footprint remains the final authority.
-    const missionFrontage = this.mission.id === 'support' ? 26000 : 10500;
+    const supportMission = this.mission.id === 'support';
+    const missionFrontage = supportMission ? 26000 : 10500;
     const frontSpan = Math.min(requestedFrontSpan, missionFrontage, frontRoom);
     const heading = Math.atan2(this.routeForward.x,this.routeForward.z);
     const approachRoom = distanceToTheaterEdge(this.battleCenter,this.routeForward.clone().negate(),theaterHalf-300);
     const defenseRoom = distanceToTheaterEdge(this.battleCenter,this.routeForward,theaterHalf-300);
     const approachDepthRoom = Math.max(0, approachRoom - 500);
     const defenseDepthRoom = Math.max(0, defenseRoom - 500);
-    const russianDepth = Math.min(3200, approachDepthRoom);
-    const finnishDepth = Math.min(900, defenseDepthRoom);
-    const russianStagger = Math.min(300, Math.max(0, (approachDepthRoom - russianDepth) / 2));
-    const finnishStagger = Math.min(90, Math.max(0, (defenseDepthRoom - finnishDepth) / 2));
+    const russianSideRoom = supportMission ? defenseDepthRoom : approachDepthRoom;
+    const finnishSideRoom = supportMission ? approachDepthRoom : defenseDepthRoom;
+    const russianDepth = Math.min(3200, russianSideRoom);
+    const finnishDepth = Math.min(900, finnishSideRoom);
+    const russianStagger = Math.min(300, Math.max(0, (russianSideRoom - russianDepth) / 2));
+    const finnishStagger = Math.min(90, Math.max(0, (finnishSideRoom - finnishDepth) / 2));
     for(let i=0;i<this.mission.groundPairs;i++){
       const lane = this.mission.groundPairs > 1 ? i / (this.mission.groundPairs - 1) - .5 : 0;
       const alongFront = lane * frontSpan + (rnd() - .5) * 100;
-      const blueDepth = finnishDepth + ((i % 3) - 1) * finnishStagger;
-      const redDepth = -russianDepth - (i % 3) * russianStagger;
+      const blueDirection = supportMission ? -1 : 1;
+      const redDirection = -blueDirection;
+      const blueDepth = blueDirection * finnishDepth + ((i % 3) - 1) * finnishStagger;
+      const redDepth = redDirection * (russianDepth + (i % 3) * russianStagger);
       const blueType=finnishTypes[i%finnishTypes.length],redType=russianTypes[i%russianTypes.length];
       const blue= createGroundVehicle(blueType,'finnish'), red=createGroundVehicle(redType,'russian');
       const blueSpec=getGroundVehicleSpec(blueType),redSpec=getGroundVehicleSpec(redType);
@@ -118,18 +123,21 @@ export class GroundBattle {
         this.battleCenter.z+this.routeRight.z*redAlongFront+this.routeForward.z*redDepth,
       );
       if(!bluePos||!redPos)continue;
-      blue.position.set(bluePos.x,bluePos.y,bluePos.z); blue.rotation.y=heading+Math.PI;
-      red.position.set(redPos.x,redPos.y,redPos.z); red.rotation.y=heading;
+      blue.position.set(bluePos.x,bluePos.y,bluePos.z); blue.rotation.y=heading+(supportMission?0:Math.PI);
+      red.position.set(redPos.x,redPos.y,redPos.z); red.rotation.y=heading+(supportMission?Math.PI:0);
       this.scene.add(blue,red);
       const blueUnit={mesh:blue,hp:blueSpec.hp,maxHp:blueSpec.hp,team:'blue',role:'defender',cool:1+i*.33,phase:i*.8,armed:true,airAaCooldown:2+rnd()*5,airAaBurstClock:0,airAaBurstRemaining:0,speed:blueSpec.kind==='tracked'?10.5+rnd()*2:14+rnd()*2.5,flank:i%2===0?1:-1,velocity:new THREE.Vector3(),travel:new THREE.Vector3(),toTarget:new THREE.Vector3(),tangent:new THREE.Vector3(),waypoint:new THREE.Vector3(),separation:new THREE.Vector3(),facing:new THREE.Vector3(),pathDirection:new THREE.Vector3()};
-      const redUnit={mesh:red,hp:redSpec.hp,maxHp:redSpec.hp,team:'red',role:'assault',cool:2+i*.25,phase:i*.8+1,armed:true,speed:redSpec.kind==='tracked'?10+rnd()*2:13.5+rnd()*2.5,flank:i%2===0?-1:1,velocity:new THREE.Vector3(),aaCooldown:(this.difficulty.enemyAaInitialDelay ?? 2)+rnd()*(this.difficulty.enemyAaInitialJitter ?? 5),aaBurstClock:0,aaBurstRemaining:0,aaTarget:null,aaThreatTimer:0,assaultTarget:blue.position,travel:new THREE.Vector3(),toTarget:new THREE.Vector3(),tangent:new THREE.Vector3(),waypoint:new THREE.Vector3(),separation:new THREE.Vector3(),facing:new THREE.Vector3(),pathDirection:new THREE.Vector3()};
+      const redUnit={mesh:red,hp:redSpec.hp,maxHp:redSpec.hp,team:'red',role:'assault',cool:2+i*.25,phase:i*.8+1,armed:true,speed:redSpec.kind==='tracked'?10+rnd()*2:13.5+rnd()*2.5,flank:i%2===0?-1:1,velocity:new THREE.Vector3(),aaCooldown:(this.difficulty.enemyAaInitialDelay ?? 2)+rnd()*(this.difficulty.enemyAaInitialJitter ?? 5),aaBurstClock:0,aaBurstRemaining:0,aaTarget:null,aaThreatTimer:0,aaFiringPause:0,assaultTarget:blue.position,travel:new THREE.Vector3(),toTarget:new THREE.Vector3(),tangent:new THREE.Vector3(),waypoint:new THREE.Vector3(),separation:new THREE.Vector3(),facing:new THREE.Vector3(),pathDirection:new THREE.Vector3()};
       this.friends.push(blueUnit);this.redUnits.push(redUnit);
       blueUnit.collider={type:'vehicle',mesh:blue,x:bluePos.x,y:bluePos.y,z:bluePos.z,radius:blueSpec.radius,height:blueSpec.totalHeight,velocity:blueUnit.velocity,collisionKey:'combat.collisionFriendlyVehicle',vehicle:blueSpec.name};
       redUnit.collider={type:'vehicle',mesh:red,x:redPos.x,y:redPos.y,z:redPos.z,radius:redSpec.radius,height:redSpec.totalHeight,velocity:redUnit.velocity,collisionKey:'combat.collisionHostileVehicle',vehicle:redSpec.name};
       this.colliders.push(blueUnit.collider,redUnit.collider);
     }
-    const convoyOffset=Math.min(2200,Math.max(0,approachDepthRoom-russianDepth-700));
-    const convoyCenter=this.battleCenter.clone().addScaledVector(this.routeForward,-russianDepth-convoyOffset);
+    const convoyOffset=Math.min(2200,Math.max(0,russianSideRoom-russianDepth-700));
+    const convoyCenter=this.battleCenter.clone().addScaledVector(
+      this.routeForward,
+      (supportMission ? 1 : -1) * (russianDepth + convoyOffset),
+    );
     const convoySpan=Math.min(
       this.mission.convoyArea || 8200,
       Math.max(1800,frontSpan*.8),
@@ -144,7 +152,7 @@ export class GroundBattle {
       const spec=getGroundVehicleSpec('ural4320');
       const dryPoint=nearestDryPoint(this.terrain,x,z);
       if(!dryPoint)continue;
-      truck.position.set(dryPoint.x,dryPoint.y,dryPoint.z); truck.rotation.y=heading; this.scene.add(truck);
+      truck.position.set(dryPoint.x,dryPoint.y,dryPoint.z); truck.rotation.y=heading+(supportMission?Math.PI:0); this.scene.add(truck);
       const convoy={mesh:truck,hp:spec.hp,maxHp:spec.hp,team:'red',role:'logistics',cool:0,phase:rnd()*Math.PI*2,armed:false,speed:12+rnd()*3,flank:1,velocity:new THREE.Vector3(),routeOrigin:truck.position.clone(),routeHeading:this.routeForward.clone(),routeTravel:0,routeLimit:1800,routeSign:1,travel:new THREE.Vector3(),toTarget:new THREE.Vector3(),tangent:new THREE.Vector3(),waypoint:new THREE.Vector3(),separation:new THREE.Vector3(),facing:new THREE.Vector3(),pathDirection:new THREE.Vector3()};
       this.redUnits.push(convoy);
       convoy.collider={type:'vehicle',mesh:truck,x:truck.position.x,z:truck.position.z,y:truck.position.y,radius:spec.radius,height:spec.totalHeight,velocity:convoy.velocity,collisionKey:'combat.collisionHostileVehicle',vehicle:spec.name};
@@ -154,7 +162,10 @@ export class GroundBattle {
     // Finnish Masi (Sisu SA-150) 4x4 supply trucks operate behind the defence
     // line. They are scenery/logistics, not objective targets or combatants.
     const friendlyTruckCount = this.mission.groundFriendlyTrucks ?? 0;
-    const supplyCenter = this.battleCenter.clone().addScaledVector(this.routeForward, finnishDepth + 1050);
+    const supplyCenter = this.battleCenter.clone().addScaledVector(
+      this.routeForward,
+      (supportMission ? -1 : 1) * (finnishDepth + 1050),
+    );
     const supplySpan = Math.min(frontSpan * .78, safeRouteAlignedSquareSpan(
       supplyCenter, this.routeForward, this.routeRight, theaterHalf, 900,
     ));
@@ -171,7 +182,7 @@ export class GroundBattle {
       if (!dryPoint) continue;
       const spec = getGroundVehicleSpec('sisuSa150');
       truck.position.set(dryPoint.x, dryPoint.y, dryPoint.z);
-      truck.rotation.y = heading + Math.PI;
+      truck.rotation.y = heading + (supportMission ? 0 : Math.PI);
       this.scene.add(truck);
       const supply = {
         mesh: truck, hp: spec.hp, maxHp: spec.hp, team: 'blue', role: 'logistics',
@@ -202,7 +213,7 @@ export class GroundBattle {
       if (!position) return;
       const mesh = createGroundVehicle(platform, team === 'blue' ? 'finnish' : 'russian');
       mesh.position.set(position.x, position.y, position.z);
-      mesh.rotation.y = heading + (team === 'blue' ? Math.PI : 0);
+      mesh.rotation.y = heading + ((team === 'blue') !== supportMission ? Math.PI : 0);
       this.scene.add(mesh);
       const unit = {
         mesh, hp: spec.hp, maxHp: spec.hp, team,
@@ -229,16 +240,19 @@ export class GroundBattle {
       this.colliders.push(unit.collider);
     };
     for (let i = 0; i < (this.mission.groundIto90Count ?? 0); i++) {
-      addAirDefenseVehicle('ito90', 'blue', i, this.mission.groundIto90Count, finnishDepth + 720, 1);
+      const depth = supportMission ? -finnishDepth - 720 : finnishDepth + 720;
+      addAirDefenseVehicle('ito90', 'blue', i, this.mission.groundIto90Count, depth, 1);
     }
     for (let i = 0; i < (this.mission.groundShilkaCount ?? 0); i++) {
-      addAirDefenseVehicle('zsu23-4', 'red', i, this.mission.groundShilkaCount, -russianDepth - 760, -1);
+      const depth = supportMission ? russianDepth + 760 : -russianDepth - 760;
+      addAirDefenseVehicle('zsu23-4', 'red', i, this.mission.groundShilkaCount, depth, -1);
     }
   }
   update(dt){
     for(let listIndex=0;listIndex<2;listIndex++){
       const list=listIndex===0?this.friends:this.redUnits;
       for(const unit of list){if(unit.dead)continue;
+      unit.aaFiringPause=Math.max(0,(unit.aaFiringPause??0)-dt);
       unit.aaThreatTimer = Math.max(0, (unit.aaThreatTimer ?? 0) - dt);
       if (unit.aaThreatTimer <= 0) unit.aaTarget = null;
       if(unit.team==='red')this.updateAntiAir(unit,dt);
@@ -335,6 +349,11 @@ export class GroundBattle {
         unit.cool=Math.max(0,unit.cool-dt);
       }
 
+      // Assault vehicles keep advancing through most AA bursts, but some
+      // pause briefly to steady their roof-mounted weapons and make their
+      // firing posture readable to the player.
+      if(unit.team==='red'&&unit.role==='assault'&&unit.aaFiringPause>0)speed=0;
+
       const healthFactor=THREE.MathUtils.clamp(.58+.42*unit.hp/unit.maxHp,.58,1);
       this.driveGroundUnit(unit,travel,speed*healthFactor,dt);
       }
@@ -347,8 +366,8 @@ export class GroundBattle {
       return;
     }
     const profile={
-      cv9030:{speed:930,maxRange:3300,spread:.0065,damage:.18,rounds:5,interval:.12,cooldown:7.5,jitter:4.5,muzzle:2.45},
-      pasi:{speed:820,maxRange:2200,spread:.011,damage:.085,rounds:5,interval:.105,cooldown:10,jitter:5.5,muzzle:1.65},
+      cv9030:{speed:930,maxRange:3300,maxAltitude:2200,spread:.0085,damage:.18,rounds:5,interval:.12,cooldown:7.5,jitter:4.5,muzzle:2.45},
+      pasi:{speed:820,maxRange:2200,maxAltitude:1500,spread:.014,damage:.085,rounds:5,interval:.105,cooldown:10,jitter:5.5,muzzle:1.65},
     }[unit.mesh.userData.platform];
     if(!profile)return;
     unit.airAaCooldown=Math.max(0,unit.airAaCooldown-dt);
@@ -364,7 +383,7 @@ export class GroundBattle {
         const distance=Math.hypot(dx,dy,dz);
         if(distance>=nearest)continue;
         const agl=enemy.mesh.position.y-this.terrain.sampleHeight(enemy.mesh.position.x,enemy.mesh.position.z);
-        if(agl<25||agl>3200)continue;
+        if(agl<25||agl>profile.maxAltitude)continue;
         nearest=distance;
         target=enemy;
       }
@@ -506,10 +525,10 @@ export class GroundBattle {
     if(!this.airDefenseActive)return;
     const platform=unit.mesh.userData.platform;
     const aa = {
-      btr80: { speed: 850, maxRange: 1800, spread: .009, damage: 17, near: 8, rounds: 1, interval: .1, maxAltitude: 980 },
-      t72: { speed: 860, maxRange: 1450, spread: .023, damage: 11, near: 5.5, rounds: -1, interval: .16 },
-      bmp2: { speed: 900, maxRange: 1950, spread: .011, damage: 23, near: 10, rounds: 1, interval: .09 },
-      'zsu23-4': { speed: 980, maxRange: 3200, spread: .0062, damage: 24, near: 13, rounds: 7, interval: .105, maxAltitude: 2600 },
+      btr80: { speed: 850, maxRange: 2700, spread: .011, damage: 17, near: 9, rounds: 6, interval: .085, maxAltitude: 1100 },
+      t72: { speed: 860, maxRange: 1750, spread: .022, damage: 12, near: 7, rounds: 7, interval: .12, maxAltitude: 900 },
+      bmp2: { speed: 900, maxRange: 2900, spread: .012, damage: 23, near: 11, rounds: 7, interval: .075, maxAltitude: 1450 },
+      'zsu23-4': { speed: 980, maxRange: 3600, spread: .0075, damage: 24, near: 15, rounds: 13, interval: .075, maxAltitude: 2050 },
     }[platform];
     if(!aa)return;
     unit.aaCooldown=Math.max(0,unit.aaCooldown-dt);
@@ -518,15 +537,25 @@ export class GroundBattle {
     const agl=this.player.position.y-this.terrain.sampleHeight(this.player.position.x,this.player.position.z);
     const difficultyRange = this.difficulty.enemyAaMaxRange ?? 1850;
     const rangeLimit = platform === 'zsu23-4'
-      ? Math.min(aa.maxRange, difficultyRange * 1.34)
+      ? Math.min(aa.maxRange, difficultyRange * 1.3)
       : Math.min(difficultyRange, aa.maxRange);
-    const inEnvelope=range>190&&range<rangeLimit&&agl>20&&agl<(aa.maxAltitude ?? 980);
+    const altitudeLimit = aa.maxAltitude * (this.difficulty.enemyAaAltitudeScale ?? 1);
+    const inEnvelope=range>190&&range<rangeLimit&&agl>20&&agl<altitudeLimit;
     if(!inEnvelope){unit.aaBurstRemaining=0;return;}
     if(unit.aaBurstRemaining<=0&&unit.aaCooldown<=0){
-      unit.aaBurstRemaining=Math.max(2, (this.difficulty.enemyAaBurstRounds ?? 3) + aa.rounds);
+      const burstSize = (this.difficulty.enemyAaBurstRounds ?? 3) + aa.rounds;
+      unit.aaBurstRemaining=Math.max(2, Math.round(burstSize * (this.difficulty.enemyAaBurstScale ?? 1)));
       unit.aaBurstClock=0;
       unit.aaCooldown=(platform === 'zsu23-4' ? (this.difficulty.enemyAaCooldown ?? 8) * .8 : (this.difficulty.enemyAaCooldown ?? 8))
         +Math.random()*(this.difficulty.enemyAaCooldownJitter ?? 5);
+      if(unit.role==='assault'){
+        const stopChance=platform==='t72'
+          ? (this.difficulty.enemyAaT72StopToFireChance ?? .68)
+          : (this.difficulty.enemyAaStopToFireChance ?? .44);
+        if(Math.random()<stopChance){
+          unit.aaFiringPause=unit.aaBurstRemaining*aa.interval+.35;
+        }
+      }
     }
     unit.aaBurstClock-=dt;
     while(unit.aaBurstRemaining>0&&unit.aaBurstClock<=0){
@@ -566,7 +595,7 @@ export class GroundBattle {
     const start=this.aaStart;
     const flightTime=range/profile.speed;
     const aim=this.player.position.clone().addScaledVector(this.playerVelocity??new THREE.Vector3(),flightTime);
-    const spread=12+range*profile.spread;
+    const spread=(12+range*profile.spread)*(this.difficulty.enemyAaDispersionScale??1);
     aim.x+=(Math.random()-.5)*spread*2;
     aim.y+=(Math.random()-.5)*spread;
     aim.z+=(Math.random()-.5)*spread*2;
@@ -577,23 +606,27 @@ export class GroundBattle {
     this.scene.add(line);
     // Brief pooled glow at the muzzle adds a readable firing cue without
     // creating a PointLight or a per-shot mesh/material.
+    const shilka = platform === 'zsu23-4';
     this.fx?.emitParticle(
       start,
       muzzleFlashVelocity,
-      platform === 'zsu23-4' ? shilkaMuzzleGlow : antiAirMuzzleGlow,
-      platform === 'zsu23-4' ? 0.045 : 0.032,
-      platform === 'zsu23-4' ? 1.05 : 0.62,
-      0.88,
-      1.25,
+      shilka ? shilkaMuzzleGlow : antiAirMuzzleGlow,
+      shilka ? 0.075 : 0.06,
+      shilka ? 1.7 : 1.15,
+      0.92,
+      shilka ? 1.6 : 1.35,
     );
     const velocity=direction.multiplyScalar(profile.speed);
-    this.fx?.addMovingTracer(start,velocity,'#ffc47a',{life:.13,trailTime:.05});
+    const tracerColor = shilka ? '#fff0b7' : platform === 't72' ? '#ffb46b' : '#ffd18a';
+    this.fx?.addMovingTracer(start,velocity,tracerColor,{life:.34,trailTime:.22});
     this.audio?.playDistantGun(range,'ground');
     unit.aaTarget=this.player;
     unit.aaThreatTimer=3.5;
     this.addProjectile({
       projectile:true,flak:true,mesh:line,velocity,life:flightTime+.35,
-      directDamage:profile.damage,nearMissDamage:profile.near,nearMissDamageMin:profile.near*.45,
+      directDamage:profile.damage*(this.difficulty.enemyAaDamageMultiplier??1),
+      nearMissDamage:profile.near*(this.difficulty.enemyAaDamageMultiplier??1),
+      nearMissDamageMin:profile.near*.45*(this.difficulty.enemyAaDamageMultiplier??1),
       sourceUnit:unit,
     });
   }

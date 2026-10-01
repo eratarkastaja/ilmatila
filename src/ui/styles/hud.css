@@ -369,6 +369,13 @@
   transform: rotate(45deg);
 }
 
+.weapon-icon.countermeasure-icon {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  transform: none;
+}
+
 .gun-icon:before,.gun-icon:after {
   content: "";
   position: absolute;
@@ -1495,10 +1502,12 @@
 .missile-approach-cue.urgent {
   color: #ff5b50;
   filter: drop-shadow(0 0 4px #ff4c3d88) drop-shadow(0 1px 2px #07100f);
+  animation: none;
 }
 
 .missile-approach-cue.launch-detected {
   color: #ffc878;
+  animation: none;
 }
 
 .combat-feedback {
@@ -1732,9 +1741,11 @@
 }
 
 .mission-route-readout {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 2px 12px;
   padding: 4px 0 1px;
   border-top: 1px solid #91b4a52b;
   color: #b7d9c3;
@@ -1750,6 +1761,13 @@
   color: #e2eee5;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.mission-route-readout small {
+  grid-column: 1 / -1;
+  color: #96c9a9;
+  font: 600 9px Rajdhani,sans-serif;
+  letter-spacing: .1em;
 }
 
 .mission-objective-task {
@@ -2098,7 +2116,7 @@
   color: #d6ffe2;
 }
 
-.countermeasure-row.dispensed .countermeasure-icon:after {
+.countermeasure-row.dispensed .countermeasure-icon svg {
   filter: drop-shadow(0 0 5px #ffc276);
 }
 

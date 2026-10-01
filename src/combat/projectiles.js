@@ -24,7 +24,10 @@ export function updateMissileMotor(missile, dt) {
     missile.burnRemaining = Math.max(0, missile.burnRemaining - dt);
     if (missile.burnRemaining > 0) return;
     missile.motorBurning = false;
-    missile.guidanceActive = false;
+    // Active-radar/IR missiles can still steer on stored energy after motor
+    // burnout. Player missiles retain the finite-burn gameplay rule; hostile
+    // missiles keep guidance only for their separately limited lifetime.
+    if (!missile.guidanceAfterBurnout) missile.guidanceActive = false;
     if (missile.mesh?.userData.engineFlame) missile.mesh.userData.engineFlame.visible = false;
   }
   missile.velocity.multiplyScalar(Math.exp(-missile.coastDrag * dt));

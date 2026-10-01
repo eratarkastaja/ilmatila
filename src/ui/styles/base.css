@@ -79,28 +79,33 @@ html,body,#game {
 }
 
 .missile-icon {
-  width: 8px;
-  height: 21px;
-  border-radius: 5px 5px 2px 2px;
-  background: #77908255;
+  color: #b4d2c2;
 }
 
-.missile-icon:before,.missile-icon:after {
-  content: "";
+.missile-icon svg {
   position: absolute;
-  bottom: 0;
-  width: 8px;
-  height: 7px;
-  background: #779082;
-  clip-path: polygon(50% 0,100% 100%,0 100%);
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  overflow: visible;
+  transform: translate(-50%,-50%);
 }
 
-.missile-icon:before {
-  left: -6px;
+.missile-body {
+  fill: currentColor;
 }
 
-.missile-icon:after {
-  right: -6px;
+.missile-fin {
+  fill: #85a997;
+}
+
+.missile-detail {
+  fill: none;
+  stroke: #eff8ef;
+  stroke-linecap: round;
+  stroke-width: .8;
+  opacity: .75;
 }
 
 .score-row {
@@ -162,29 +167,18 @@ html,body,#game {
   height: 18px;
   border: 0;
   transform: none;
+  color: #e8bd73;
 }
 
-.countermeasure-icon:before,.countermeasure-icon:after {
-  content: "";
+.countermeasure-icon svg {
   position: absolute;
-  border: 1px solid #c2d0bf;
-  transform: rotate(45deg);
-}
-
-.countermeasure-icon:before {
-  width: 5px;
-  height: 5px;
-  top: 2px;
-  left: 5px;
-}
-
-.countermeasure-icon:after {
-  width: 2px;
-  height: 2px;
-  bottom: 1px;
-  left: 7px;
-  background: #ffad69;
-  box-shadow: 4px -2px #ffad69,-4px -2px #ffad69;
+  left: 50%;
+  top: 50%;
+  width: 17px;
+  height: 17px;
+  overflow: visible;
+  fill: currentColor;
+  transform: translate(-50%,-50%);
 }
 
 .score-row {

@@ -22,6 +22,7 @@ import './ui/styles/hud.css';
 import './ui/styles/menu.css';
 
 const root = document.querySelector('#game');
+const PLAYER_START_AGL = 450;
 const startMenu = document.querySelector('#start-menu');
 document.querySelector('#menu-version').textContent = packageMetadata.version;
 const flightHud = document.querySelector('#flight-hud');
@@ -560,6 +561,8 @@ launchButton.addEventListener('click', async () => {
     pendingTerrain = null;
     loadedAreaId = replacement.id;
     updateMenuArea(replacement);
+    player.position.y = replacement.sampleHeight(player.position.x, player.position.z) + PLAYER_START_AGL;
+    previousAltitude = player.position.y;
     terrainProgress = 1;
 
     setLaunchProgress(96, 'launch.buildingMission', 'launch.systemsStarting');

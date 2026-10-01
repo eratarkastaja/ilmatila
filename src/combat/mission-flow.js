@@ -20,6 +20,7 @@ export class MissionFlowSystem {
   constructor({ mission, player, terrain, nodes = {}, onIngress = () => {}, onObjectiveActive = () => {}, onObjectiveComplete = () => {}, onRtb = () => {}, onPhaseChange = () => {}, onEnd = () => {} }) {
     this.mission = mission;
     this.player = player;
+    this.terrain = terrain;
     this.nodes = nodes;
     this.onIngress = onIngress;
     this.onObjectiveActive = onObjectiveActive;
@@ -45,6 +46,11 @@ export class MissionFlowSystem {
     // the waypoint comfortably inside the terrain boundary.
     const ingressDistance = Math.min(mission.navigationDistance ?? 4200, Math.max(900, halfTheater * 0.55));
     this.ingress = this.home.clone().addScaledVector(horizontal, ingressDistance);
+    this.ingressAltitudeAgl = Math.max(0, mission.ingressAltitudeAgl ?? 0);
+    if (this.ingressAltitudeAgl > 0) {
+      const ingressGround = terrain?.sampleHeight?.(this.ingress.x, this.ingress.z) ?? 0;
+      this.ingress.y = ingressGround + this.ingressAltitudeAgl;
+    }
     this.navigationRadius = mission.navigationRadius ?? 850;
     this.extractionRadius = mission.extractionRadius ?? 1250;
     this.phase = MISSION_PHASE.DEPARTURE;
@@ -80,7 +86,12 @@ export class MissionFlowSystem {
     }
 
     if (this.phase === MISSION_PHASE.NAVIGATION) {
-      if (this.horizontalDistanceTo(this.ingress) <= this.navigationRadius) this.enterIngress();
+      const groundHeight = this.terrain?.sampleHeight?.(this.player.position.x, this.player.position.z);
+      const altitudeAgl = Number.isFinite(groundHeight)
+        ? this.player.position.y - groundHeight
+        : this.ingressAltitudeAgl;
+      const altitudeReady = this.ingressAltitudeAgl <= 0 || altitudeAgl >= this.ingressAltitudeAgl;
+      if (altitudeReady && this.horizontalDistanceTo(this.ingress) <= this.navigationRadius) this.enterIngress();
     } else if (this.phase === MISSION_PHASE.CONTACT) {
       this.contactDetected ||= detectedHostiles > 0;
       if (this.contactDetected || hostileEngaged) this.contactSeen = true;
@@ -179,5 +190,15 @@ export class MissionFlowSystem {
     const range = `${bearingText}° · ${distanceText}`;
     if (this.nodes.routeLabel && this.nodes.routeLabel.textContent !== label) this.nodes.routeLabel.textContent = label;
     if (this.nodes.routeRange && this.nodes.routeRange.textContent !== range) this.nodes.routeRange.textContent = range;
+    const altitudeNode = this.nodes.routeAltitude;
+    if (altitudeNode) {
+      const showAltitude = this.phase === MISSION_PHASE.NAVIGATION && this.ingressAltitudeAgl > 0;
+      altitudeNode.hidden = !showAltitude;
+      if (showAltitude) {
+        const altitude = formatNumber(Math.round(this.ingressAltitudeAgl * 3.28084));
+        const requirement = t('mission.route.altitudeRequirement', { altitude });
+        if (altitudeNode.textContent !== requirement) altitudeNode.textContent = requirement;
+      }
+    }
   }
 }
