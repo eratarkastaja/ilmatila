@@ -9,7 +9,9 @@ export class CombatRadar {
     this.mode = 'air';
     // F-35 sensor fusion gives an earlier search track; weapons retain their
     // existing lock envelope so the extra awareness is not extra missile range.
-    this.airRange = 9500;
+    // Air picture acquisition reaches well beyond the enemy's visual/sensor
+    // reaction envelope; weapon lock range remains deliberately shorter.
+    this.airRange = 14000;
     this.airLockRange = 8500;
     this.groundRange = 6000;
     this.range = this.airRange;

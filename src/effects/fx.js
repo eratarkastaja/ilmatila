@@ -147,7 +147,7 @@ export class FlightFX {
     this.missileTrailCapacity = 192;
     this.maxMissileTrails = 24;
     this.missileTrailCrossSection = 9;
-    this.missileTrailLifetime = 4.8;
+    this.missileTrailLifetime = 5.8;
     this.maxMissileTrailVertices = this.missileTrailCapacity * this.missileTrailCrossSection * this.maxMissileTrails;
     this.missileTrailPositions = new Float32Array(this.maxMissileTrailVertices * 3);
     this.missileTrailColors = new Float32Array(this.maxMissileTrailVertices * 3);
@@ -860,10 +860,10 @@ export class FlightFX {
     active.clear();
     const wind = this._wind.set(5, 0.15, -3);
     for (const missile of missiles) {
-      if (missile.homing && missile.mesh?.parent) active.add(missile.mesh);
+      if (missile.homing && missile.mesh?.parent) active.add(missile);
     }
 
-    for (const [mesh, trail] of this.missileTrailStates) {
+    for (const [missile, trail] of this.missileTrailStates) {
       for (let i = 0; i < trail.count; i++) {
         const point = (trail.head - trail.count + i + this.missileTrailCapacity) % this.missileTrailCapacity;
         trail.ages[point] += dt;
@@ -877,22 +877,26 @@ export class FlightFX {
         if (trail.ages[oldest] < this.missileTrailLifetime) break;
         trail.count--;
       }
-      if (!active.has(mesh) && trail.count === 0) this.missileTrailStates.delete(mesh);
+      if (!active.has(missile) && trail.count === 0) this.missileTrailStates.delete(missile);
     }
 
     for (const missile of missiles) {
       const mesh = missile.mesh;
-      if (!missile.homing || !missile.motorBurning || !mesh?.parent) continue;
-      let trail = this.missileTrailStates.get(mesh);
+      if (!missile.homing || !mesh?.parent) continue;
+      // Key trails by the projectile instance, not its pooled mesh. Otherwise
+      // a newly launched missile can inherit and bend the previous missile's
+      // still-fading trail when the renderer reuses that mesh.
+      let trail = this.missileTrailStates.get(missile);
       if (!trail) {
         trail = {
           positions: new Float32Array(this.missileTrailCapacity * 3),
           ages: new Float32Array(this.missileTrailCapacity),
+          strengths: new Float32Array(this.missileTrailCapacity),
           head: 0,
           count: 0,
           timer: 0,
         };
-        this.missileTrailStates.set(mesh, trail);
+        this.missileTrailStates.set(missile, trail);
       }
       trail.timer -= dt;
       if (trail.timer > 0) continue;
@@ -904,9 +908,11 @@ export class FlightFX {
       trail.positions[offset + 1] = rear.y;
       trail.positions[offset + 2] = rear.z;
       trail.ages[point] = 0;
+      const strength = missile.motorBurning ? 1 : .68;
+      trail.strengths[point] = strength;
       trail.head = (point + 1) % this.missileTrailCapacity;
       trail.count = Math.min(trail.count + 1, this.missileTrailCapacity);
-      trail.timer = 0.025;
+      trail.timer = missile.motorBurning ? 0.025 : 0.038;
     }
 
     this.missileTrailMaterial.uniforms.time.value += dt;
@@ -953,14 +959,15 @@ export class FlightFX {
           const positionOffset = vertex * 3;
           const colorOffset = positionOffset;
           const uvOffset = vertex * 2;
-          const spread = widths[edge] * expandingWidth * 0.5;
+          const strength = trail.strengths[point] || 1;
+          const spread = widths[edge] * expandingWidth * (0.72 + strength * 0.28) * 0.5;
           this.missileTrailPositions[positionOffset] = center.x + this._missileSide.x * spread;
           this.missileTrailPositions[positionOffset + 1] = center.y + this._missileSide.y * spread;
           this.missileTrailPositions[positionOffset + 2] = center.z + this._missileSide.z * spread;
           this.missileTrailColors[colorOffset] = this._missileColor.r;
           this.missileTrailColors[colorOffset + 1] = this._missileColor.g;
           this.missileTrailColors[colorOffset + 2] = this._missileColor.b;
-          this.missileTrailAlphas[vertex] = fade * opacity[edge] * 0.62;
+          this.missileTrailAlphas[vertex] = fade * opacity[edge] * 0.62 * strength;
           this.missileTrailUvs[uvOffset] = ageRatio;
           this.missileTrailUvs[uvOffset + 1] = edge / (crossSection - 1);
         }

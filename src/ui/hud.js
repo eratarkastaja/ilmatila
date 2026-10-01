@@ -23,7 +23,6 @@ export class TacticalHud {
     this.selectedTrackRange = document.querySelector('#selected-track-range');
     this.targetWorldPosition = new THREE.Vector3();
     this.missileApproachCue = document.querySelector('#missile-approach-cue');
-    this.missileUrgent = false;
     this.gunAimCue = document.querySelector('#gun-aim-cue');
     this.missionWaypointCue = document.querySelector('#mission-waypoint-cue');
     this.verticalSpeed = document.querySelector('#vertical-speed');
@@ -91,13 +90,10 @@ export class TacticalHud {
     if (this.missileApproachCue && threatPosition && !combat.destroyed) {
       this.placeWorldMarker(this.missileApproachCue, this.missileMarkerPosition.copy(threatPosition), camera);
       const eta = combat.projectileSystem.missileThreatEta;
-      if (missileThreat && (this.missileUrgent ? eta > 5.4 : eta < 4.2)) this.missileUrgent = !this.missileUrgent;
-      if (!missileThreat) this.missileUrgent = false;
-      this.missileApproachCue.classList.toggle('urgent', Boolean(missileThreat && this.missileUrgent));
+      this.missileApproachCue.classList.toggle('urgent', Boolean(missileThreat && eta < 5.4));
       this.missileApproachCue.classList.toggle('launch-detected', !missileThreat);
     } else if (this.missileApproachCue) {
       this.missileApproachCue.hidden = true;
-      this.missileUrgent = false;
       this.missileApproachCue.classList.remove('urgent', 'launch-detected');
     }
 

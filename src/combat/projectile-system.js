@@ -341,8 +341,9 @@ export class ProjectileSystem {
           this.damagePlayer(shot.directDamage ?? 22, 'combat.hostileFire');
           this.addExplosion(shot.mesh.position, .38);
           shot.life = 0;
-        } else if (!shot.burst && distanceSquared < 42 ** 2) {
-          const nearMissDamage = Math.max(shot.nearMissDamageMin ?? 2, (shot.nearMissDamage ?? 12) * (1 - Math.sqrt(distanceSquared) / 42));
+        } else if (!shot.burst && distanceSquared < (shot.nearMissRadius ?? 42) ** 2) {
+          const nearMissRadius = shot.nearMissRadius ?? 42;
+          const nearMissDamage = Math.max(shot.nearMissDamageMin ?? 2, (shot.nearMissDamage ?? 12) * (1 - Math.sqrt(distanceSquared) / nearMissRadius));
           this.damagePlayer(nearMissDamage, 'combat.hostileFire');
           this.addExplosion(shot.mesh.position, .28);
           shot.burst = true;
@@ -396,7 +397,7 @@ export class ProjectileSystem {
       this.missileThreatEta = previousThreatEta;
     }
     if (this.missileThreat) {
-      this.missileThreatGrace = .7;
+      this.missileThreatGrace = 1.15;
     } else if (
       previousThreat
       && hostiles.includes(previousThreat)

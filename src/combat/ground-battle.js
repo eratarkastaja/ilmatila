@@ -536,17 +536,24 @@ export class GroundBattle {
     const range=Math.hypot(dx,dz);
     const agl=this.player.position.y-this.terrain.sampleHeight(this.player.position.x,this.player.position.z);
     const difficultyRange = this.difficulty.enemyAaMaxRange ?? 1850;
-    const rangeLimit = platform === 'zsu23-4'
+    const isShilka = platform === 'zsu23-4';
+    const rangeLimit = (platform === 'zsu23-4'
       ? Math.min(aa.maxRange, difficultyRange * 1.3)
-      : Math.min(difficultyRange, aa.maxRange);
-    const altitudeLimit = aa.maxAltitude * (this.difficulty.enemyAaAltitudeScale ?? 1);
+      : Math.min(difficultyRange, aa.maxRange))
+      * (isShilka ? (this.difficulty.enemyShilkaRangeScale ?? 1) : 1);
+    const altitudeLimit = aa.maxAltitude
+      * (this.difficulty.enemyAaAltitudeScale ?? 1)
+      * (isShilka ? (this.difficulty.enemyShilkaAltitudeScale ?? 1) : 1);
     const inEnvelope=range>190&&range<rangeLimit&&agl>20&&agl<altitudeLimit;
     if(!inEnvelope){unit.aaBurstRemaining=0;return;}
     if(unit.aaBurstRemaining<=0&&unit.aaCooldown<=0){
       const burstSize = (this.difficulty.enemyAaBurstRounds ?? 3) + aa.rounds;
-      unit.aaBurstRemaining=Math.max(2, Math.round(burstSize * (this.difficulty.enemyAaBurstScale ?? 1)));
+      const shilkaBurstScale = platform === 'zsu23-4' ? (this.difficulty.enemyShilkaBurstScale ?? 1) : 1;
+      unit.aaBurstRemaining=Math.max(2, Math.round(burstSize * (this.difficulty.enemyAaBurstScale ?? 1) * shilkaBurstScale));
       unit.aaBurstClock=0;
-      unit.aaCooldown=(platform === 'zsu23-4' ? (this.difficulty.enemyAaCooldown ?? 8) * .8 : (this.difficulty.enemyAaCooldown ?? 8))
+      unit.aaCooldown=(platform === 'zsu23-4'
+        ? (this.difficulty.enemyAaCooldown ?? 8) * .8 * (this.difficulty.enemyShilkaCooldownScale ?? 1)
+        : (this.difficulty.enemyAaCooldown ?? 8))
         +Math.random()*(this.difficulty.enemyAaCooldownJitter ?? 5);
       if(unit.role==='assault'){
         const stopChance=platform==='t72'
@@ -595,18 +602,22 @@ export class GroundBattle {
     const start=this.aaStart;
     const flightTime=range/profile.speed;
     const aim=this.player.position.clone().addScaledVector(this.playerVelocity??new THREE.Vector3(),flightTime);
-    const spread=(12+range*profile.spread)*(this.difficulty.enemyAaDispersionScale??1);
+    const isShilka = platform === 'zsu23-4';
+    const dispersionScale = (this.difficulty.enemyAaDispersionScale ?? 1)
+      * (isShilka ? (this.difficulty.enemyShilkaDispersionScale ?? 1) : 1);
+    const spread=(12+range*profile.spread)*dispersionScale;
     aim.x+=(Math.random()-.5)*spread*2;
     aim.y+=(Math.random()-.5)*spread;
     aim.z+=(Math.random()-.5)*spread*2;
     const direction=aim.sub(start).normalize();
+    const shilka = platform === 'zsu23-4';
     const line=new THREE.Mesh(antiAirShotGeo,antiAirShotMaterial);
-    line.position.copy(start);
+    line.position.copy(start).addScaledVector(direction, shilka ? .9 : .675);
+    if (shilka) line.scale.set(1.28, 1.55, 1.28);
     line.quaternion.setFromUnitVectors(antiAirRoundAxis,direction);
     this.scene.add(line);
     // Brief pooled glow at the muzzle adds a readable firing cue without
     // creating a PointLight or a per-shot mesh/material.
-    const shilka = platform === 'zsu23-4';
     this.fx?.emitParticle(
       start,
       muzzleFlashVelocity,
@@ -618,15 +629,16 @@ export class GroundBattle {
     );
     const velocity=direction.multiplyScalar(profile.speed);
     const tracerColor = shilka ? '#fff0b7' : platform === 't72' ? '#ffb46b' : '#ffd18a';
-    this.fx?.addMovingTracer(start,velocity,tracerColor,{life:.34,trailTime:.22});
+    this.fx?.addMovingTracer(line.position,velocity,tracerColor,shilka ? {life:.68,trailTime:.48} : {life:.34,trailTime:.22});
     this.audio?.playDistantGun(range,'ground');
     unit.aaTarget=this.player;
     unit.aaThreatTimer=3.5;
     this.addProjectile({
       projectile:true,flak:true,mesh:line,velocity,life:flightTime+.35,
-      directDamage:profile.damage*(this.difficulty.enemyAaDamageMultiplier??1),
-      nearMissDamage:profile.near*(this.difficulty.enemyAaDamageMultiplier??1),
-      nearMissDamageMin:profile.near*.45*(this.difficulty.enemyAaDamageMultiplier??1),
+      directDamage:profile.damage*(this.difficulty.enemyAaDamageMultiplier??1)*(shilka ? (this.difficulty.enemyShilkaDamageScale ?? 1) : 1),
+      nearMissDamage:profile.near*(this.difficulty.enemyAaDamageMultiplier??1)*(shilka ? (this.difficulty.enemyShilkaDamageScale ?? 1) : 1),
+      nearMissDamageMin:profile.near*(shilka ? .12 : .45)*(this.difficulty.enemyAaDamageMultiplier??1)*(shilka ? (this.difficulty.enemyShilkaDamageScale ?? 1) : 1),
+      nearMissRadius:shilka ? 18 : 42,
       sourceUnit:unit,
     });
   }

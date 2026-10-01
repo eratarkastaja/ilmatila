@@ -17,6 +17,7 @@ const zeroVelocity=new THREE.Vector3();
 const eventLeadPoint=new THREE.Vector3();
 const eventLeadOffset=new THREE.Vector3();
 const contactOffset=new THREE.Vector3();
+const AIR_SPAWN_BEARINGS = [0, 10, -10, 20, -20, 30, -30, 40, -40, 50, -50, 60, -60, 70, -70, 80, -80, 90, -90];
 const ENEMY_ATTACK_RUNS = [
   { trail: -850, lateral: 260, altitude: 0, passRange: 1450 },
   { trail: -1350, lateral: 540, altitude: 320, passRange: 1650 },
@@ -81,6 +82,38 @@ function rightOfHeading(heading,target=new THREE.Vector3()) {
 
 function forwardOfHeading(heading,target=new THREE.Vector3()) {
   return target.set(Math.sin(heading), 0, Math.cos(heading));
+}
+
+function chooseAirSpawnLayout(origin, forward, right, terrain, requestedDistance, minimumDistance, lateralHalfSpan, forwardExtra, margin) {
+  const bounds = terrain?.operationBounds;
+  const half = (terrain?.worldSize ?? 32000) * 0.5;
+  const minX = (bounds?.minX ?? -half) + margin;
+  const maxX = (bounds?.maxX ?? half) - margin;
+  const minZ = (bounds?.minZ ?? -half) + margin;
+  const maxZ = (bounds?.maxZ ?? half) - margin;
+  const direction = new THREE.Vector3();
+  const lowerBound = Math.min(requestedDistance, minimumDistance);
+
+  // Preserve the requested stand-off first, then fan to either side when the
+  // theater edge would otherwise clamp the formation close to the player.
+  for (let distance = requestedDistance; distance >= lowerBound; distance -= 250) {
+    for (const degrees of AIR_SPAWN_BEARINGS) {
+      const angle = THREE.MathUtils.degToRad(degrees);
+      direction.copy(forward).multiplyScalar(Math.cos(angle)).addScaledVector(right, Math.sin(angle)).normalize();
+      const centerX = origin.x + direction.x * (distance + forwardExtra);
+      const centerZ = origin.z + direction.z * (distance + forwardExtra);
+      const spreadX = Math.abs(right.x) * lateralHalfSpan;
+      const spreadZ = Math.abs(right.z) * lateralHalfSpan;
+      if (centerX - spreadX >= minX && centerX + spreadX <= maxX
+        && centerZ - spreadZ >= minZ && centerZ + spreadZ <= maxZ) {
+        return { direction: direction.clone(), distance };
+      }
+    }
+  }
+
+  // A normal sortie has ample theater room for the minimum separation. Keep a
+  // stable forward fallback for unusually narrow custom/stress scenarios.
+  return { direction: forward.clone(), distance: lowerBound };
 }
 
 /** Handles intercept passes, wingman support, and air-to-air weapons. */
@@ -175,10 +208,20 @@ export class AirBattle {
     const hostileCount = this.mission.hostiles;
     const altitudeOffsets = [-110, 95, -45, 145, -160, 65];
     const edgeMargin = this.getAircraftEdgeMargin();
-    const theaterLimit = this.getTheaterLimit(edgeMargin);
-    const requestedDistance = this.mission.hostileSpawnDistance ?? 7200;
-    const distance = Math.min(requestedDistance, theaterLimit);
+    const spawnMargin = Math.min(edgeMargin, 1200);
     const lateralSpacing = this.mission.hostileLateralSpacing ?? 560;
+    const maxLane = (hostileCount - 1) * 0.5;
+    const formation = chooseAirSpawnLayout(
+      this.player.position,
+      playerForward,
+      playerRight,
+      this.terrain,
+      this.mission.hostileSpawnDistance ?? 12000,
+      this.mission.hostileMinimumSpawnDistance ?? 10000,
+      maxLane * lateralSpacing,
+      maxLane * 90,
+      spawnMargin,
+    );
 
     for (let i = 0; i < hostileCount; i++) {
       const aircraftVariant = i % 2 === 0 ? 'su27' : 'mig29';
@@ -191,9 +234,9 @@ export class AirBattle {
       const laneCoordinate = lane / Math.max(.5, (hostileCount - 1) * .5);
       const lateral = lane * lateralSpacing;
       jet.position.copy(this.player.position)
-        .addScaledVector(playerForward, distance + Math.abs(lane) * 90)
+        .addScaledVector(formation.direction, formation.distance + Math.abs(lane) * 90)
         .addScaledVector(playerRight, lateral);
-      this.clampToTheater(jet.position, edgeMargin);
+      this.clampToTheater(jet.position, spawnMargin);
 
       const ground = this.terrain?.sampleHeight(jet.position.x, jet.position.z) ?? -Infinity;
       jet.position.y = Math.max(this.player.position.y + altitudeOffsets[i % altitudeOffsets.length], ground + 360);
@@ -202,7 +245,7 @@ export class AirBattle {
       // on the player; the selected difficulty controls when they open fire.
       // Contact aircraft should arrive nose-on instead of coasting away in the
       // player's direction before turning back for their first pass.
-      const initialHeading = wrapAngle(heading + Math.PI);
+      const initialHeading = wrapAngle(Math.atan2(-formation.direction.x, -formation.direction.z));
       const initialPitch = 0;
       jet.rotation.order = 'YXZ';
       jet.rotation.y = initialHeading;
@@ -266,25 +309,36 @@ export class AirBattle {
         away:new THREE.Vector3(),separation:new THREE.Vector3(),lead:new THREE.Vector3(),leadOffset:new THREE.Vector3(),nose:new THREE.Vector3(),
       });
     }
-    this.spawnAttackHelicopters(heading, playerForward, playerRight, edgeMargin, theaterLimit);
+    this.spawnAttackHelicopters(playerForward, playerRight, spawnMargin);
     this.mission.deferredHostiles = false;
     return this.enemies.length > 0;
   }
 
-  spawnAttackHelicopters(heading, playerForward, playerRight, edgeMargin, theaterLimit) {
+  spawnAttackHelicopters(playerForward, playerRight, spawnMargin) {
     const count = this.mission.hostileHelicopters ?? 0;
+    if (!count) return;
+    const lateralSpacing = this.mission.hostileHelicopterLateralSpacing ?? 850;
+    const formation = chooseAirSpawnLayout(
+      this.player.position,
+      playerForward,
+      playerRight,
+      this.terrain,
+      this.mission.hostileHelicopterSpawnDistance ?? 9500,
+      this.mission.hostileHelicopterMinimumSpawnDistance ?? 8500,
+      (count - 1) * 0.5 * lateralSpacing,
+      0,
+      spawnMargin,
+    );
     for (let i = 0; i < count; i++) {
       const mesh = createMi24AttackHelicopter();
-      const distance = Math.min(this.mission.hostileHelicopterSpawnDistance ?? 3600, theaterLimit);
-      const lateralSpacing = this.mission.hostileHelicopterLateralSpacing ?? 850;
       mesh.position.copy(this.player.position)
-        .addScaledVector(playerForward, distance)
+        .addScaledVector(formation.direction, formation.distance)
         .addScaledVector(playerRight, (i - (count - 1) * 0.5) * lateralSpacing);
-      this.clampToTheater(mesh.position, edgeMargin);
+      this.clampToTheater(mesh.position, spawnMargin);
       const ground = this.terrain?.sampleHeight(mesh.position.x, mesh.position.z) ?? 0;
       mesh.position.y = ground + (this.mission.hostileHelicopterSpawnAltitude ?? 320) + i * 35;
       mesh.rotation.order = 'YXZ';
-      mesh.rotation.y = wrapAngle(heading + Math.PI);
+      mesh.rotation.y = wrapAngle(Math.atan2(-formation.direction.x, -formation.direction.z));
       mesh.scale.setScalar(0.88);
       this.scene.add(mesh);
       const health = 3.7 * (this.difficulty.enemyHealth ?? 1);
@@ -1309,7 +1363,7 @@ export class AirBattle {
       guidanceAfterBurnout: true,
       interceptLeadTime: 14,
       turnRate: this.difficulty.hostileMissileTurnRate ?? 1.45,
-      coastTurnScale: .72,
+      coastTurnScale: .58,
       life: this.difficulty.hostileMissileLife ?? missileProfile.life,
       damage: this.difficulty.hostileMissileDamage ?? 62,
       proximityRadius: this.difficulty.hostileMissileProximityRadius ?? 20,
