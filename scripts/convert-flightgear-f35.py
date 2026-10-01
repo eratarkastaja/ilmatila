@@ -238,11 +238,12 @@ def build_glb(root, materials):
         "pylons", "fan", "intake", "arch", "box", "case",
         "fuel top", "fuel box", "fuel intake", "fuel lever",
     }
-    # These fuselage quads overlap the lift-fan warning graphic in the source
-    # livery. Keep their geometry and sample the surrounding plain paint.
+    # These additional fuselage quads overlap the lift-fan warning graphic
+    # outside the main dorsal-skin region. Keep their geometry and sample the
+    # surrounding plain paint.
     plain_paint_fuselage_surfaces = {
-        409, 410, 827, 1151, 1152, 1153, 1154, 1941, 1942,
-        2314, 2315, 2724, 3048, 3049, 3050, 3051, 3837, 3838,
+        827, 1151, 1152, 1153, 1154, 1941, 1942,
+        2724, 3048, 3049, 3050, 3051, 3837, 3838,
     }
     # Keep only the exterior skin faces of these closed doors. Their source
     # meshes exactly cover the airframe openings, so they make a better skin
