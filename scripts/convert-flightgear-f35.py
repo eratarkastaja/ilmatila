@@ -189,8 +189,18 @@ def build_glb(root, materials):
     # The fuel parts on this source airframe are the F-35B probe assembly at
     # the nose. ILMATILA depicts the F-35A, which has no deployable probe.
     excluded = {
-        "pylons", "fan", "arch", "box", "case",
+        "pylons", "fan", "intake", "arch", "box", "case",
         "fuel top", "fuel box", "fuel intake", "fuel lever",
+    }
+    # Keep only the exterior skin faces of these closed doors. Their source
+    # meshes exactly cover the airframe openings, so they make a better skin
+    # cap than a separately inferred patch. Their hatch UVs are flattened.
+    door_skin_normals = {
+        "door fan": 1,
+        "door fanL": -1,
+        "door fanR": -1,
+        "door topL": 1,
+        "door topR": 1,
     }
     for node, loc, rotation in traverse(root):
         if node["type"] != "poly" or not node["vertices"] or node["name"] in excluded:
@@ -215,13 +225,25 @@ def build_glb(root, materials):
                 p0, p1, p2 = (verts[ref[0]] for ref in triangle)
                 normal = normalize(cross(tuple(p1[k] - p0[k] for k in range(3)), tuple(p2[k] - p0[k] for k in range(3))))
                 smooth = bool(surface["flags"] & 0x10)
+                center = tuple((p0[axis] + p1[axis] + p2[axis]) / 3 for axis in range(3))
+                dorsal_lift_fan_skin = (
+                    node["name"] == "fuselage"
+                    and normal[1] > 0.45
+                    and -3.95 <= center[0] <= -1.8
+                    and abs(center[2]) <= 0.92
+                    and center[1] > 0.9
+                )
+                skin_direction = door_skin_normals.get(node["name"])
+                door_skin = skin_direction is not None and normal[1] * skin_direction > 0.45
+                if skin_direction is not None and not door_skin:
+                    continue
                 if smooth:
                     for ref in triangle:
                         previous = smooth_normals[ref[0]]
                         smooth_normals[ref[0]] = tuple(previous[k] + normal[k] for k in range(3))
-                triangles.append((mat_id, triangle, normal, smooth))
+                triangles.append((mat_id, triangle, normal, smooth, dorsal_lift_fan_skin or door_skin))
 
-        for mat_id, triangle, face_normal, smooth in triangles:
+        for mat_id, triangle, face_normal, smooth, dorsal_lift_fan_skin in triangles:
             target = mesh_data.setdefault(mat_id, {"positions": [], "normals": [], "uvs": [], "indices": [],
                                                       "min": [float("inf")] * 3, "max": [float("-inf")] * 3})
             for ref in triangle:
@@ -230,7 +252,13 @@ def build_glb(root, materials):
                 new_index = len(target["positions"]) // 3
                 target["positions"].extend(vertex)
                 target["normals"].extend(normal)
-                target["uvs"].extend((ref[1], 1 - ref[2]))
+                if dorsal_lift_fan_skin:
+                    # The source atlas paints the B-model lift-fan hatch onto
+                    # the fuselage UVs too. Sample its plain paint field so
+                    # those baked panel lines do not survive on the new skin.
+                    target["uvs"].extend((0.41015625, 1 - 0.70703125))
+                else:
+                    target["uvs"].extend((ref[1], 1 - ref[2]))
                 target["indices"].append(new_index)
                 for axis in range(3):
                     target["min"][axis] = min(target["min"][axis], vertex[axis])
