@@ -186,7 +186,12 @@ def build_glb(root, materials):
         "doubleSided": True,
     })
 
-    excluded = {"pylons", "fan", "arch", "box", "case"}
+    # The fuel parts on this source airframe are the F-35B probe assembly at
+    # the nose. ILMATILA depicts the F-35A, which has no deployable probe.
+    excluded = {
+        "pylons", "fan", "arch", "box", "case",
+        "fuel top", "fuel box", "fuel intake", "fuel lever",
+    }
     for node, loc, rotation in traverse(root):
         if node["type"] != "poly" or not node["vertices"] or node["name"] in excluded:
             continue

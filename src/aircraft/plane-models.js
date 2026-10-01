@@ -4,6 +4,56 @@ const roundelWhite = new THREE.MeshBasicMaterial({ color: '#e3e6df' });
 const roundelBlue = new THREE.MeshBasicMaterial({ color: '#174577' });
 const roundelRaycaster = new THREE.Raycaster();
 
+// Shared by the F-35A visual gun port and the player's/wingmen's ballistic muzzle.
+export const F35_GUN_MUZZLE_OFFSET = Object.freeze({ x: 1.15, y: 0.44, z: 2.65 });
+export const F35_GUN_TRACER_CLEARANCE = F35_GUN_MUZZLE_OFFSET.z + 0.05;
+
+function roundedPanel(width, length, radius) {
+  const x = width * 0.5, y = length * 0.5, r = Math.min(radius, x, y);
+  const shape = new THREE.Shape();
+  shape.moveTo(-x + r, -y);
+  shape.lineTo(x - r, -y);
+  shape.quadraticCurveTo(x, -y, x, -y + r);
+  shape.lineTo(x, y - r);
+  shape.quadraticCurveTo(x, y, x - r, y);
+  shape.lineTo(-x + r, y);
+  shape.quadraticCurveTo(-x, y, -x, y - r);
+  shape.lineTo(-x, -y + r);
+  shape.quadraticCurveTo(-x, -y, -x + r, -y);
+  return shape;
+}
+
+function addF35GunPort(plane, friendly) {
+  const port = new THREE.Group();
+  port.name = 'F-35A left wing-root GAU-22/A port';
+  port.position.set(F35_GUN_MUZZLE_OFFSET.x, F35_GUN_MUZZLE_OFFSET.y, F35_GUN_MUZZLE_OFFSET.z);
+
+  // The top-left shoulder above the intake slopes outward. Fit the flush port
+  // to that local tangent so it reads as a door, not an external gun pod.
+  const normal = new THREE.Vector3(0.48, 0.85, 0.22).normalize();
+  const forward = new THREE.Vector3(0, 0, 1);
+  forward.addScaledVector(normal, -forward.dot(normal)).normalize();
+  const across = new THREE.Vector3().crossVectors(forward, normal).normalize();
+  port.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(across, forward, normal));
+
+  const panel = new THREE.Mesh(
+    new THREE.ShapeGeometry(roundedPanel(0.14, 0.38, 0.035)),
+    material(friendly ? '#829194' : '#6c7b80', 0.74, 0.18),
+  );
+  panel.position.z = 0.009;
+  panel.renderOrder = 3;
+  port.add(panel);
+
+  const aperture = new THREE.Mesh(
+    new THREE.ShapeGeometry(roundedPanel(0.036, 0.15, 0.012)),
+    material('#1e282c', 0.56, 0.22),
+  );
+  aperture.position.set(0, 0.035, 0.012);
+  aperture.renderOrder = 4;
+  port.add(aperture);
+  plane.add(port);
+}
+
 export function buildF35Asset(plane, aircraftAsset, friendly) {
   const airframe = aircraftAsset.clone(true);
   airframe.userData.sharedAircraftModel=true;
@@ -58,6 +108,7 @@ export function buildF35Asset(plane, aircraftAsset, friendly) {
     }
   });
   plane.add(airframe);
+  addF35GunPort(plane, friendly);
 
   // Centers match the two native upper-wing decals in the source texture.
   // The overlay follows the wing surface so neither original decals nor

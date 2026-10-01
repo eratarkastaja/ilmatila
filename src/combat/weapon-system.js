@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { F35_GUN_MUZZLE_OFFSET, F35_GUN_TRACER_CLEARANCE } from '../aircraft/plane-models.js';
 import { createMissile, MISSILE_PROFILES } from './projectiles.js';
 import {
   GUN_PROJECTILE_GRAVITY,
@@ -84,7 +85,11 @@ export class WeaponSystem {
       .addScaledVector(right, (Math.random() - .5) * .0009)
       .addScaledVector(up, (Math.random() - .5) * .0009)
       .normalize();
-    const muzzleOffset = this._muzzleOffset.set(-.78, .38, 2.65).applyQuaternion(attitude);
+    const muzzleOffset = this._muzzleOffset.set(
+      F35_GUN_MUZZLE_OFFSET.x,
+      F35_GUN_MUZZLE_OFFSET.y,
+      F35_GUN_MUZZLE_OFFSET.z,
+    ).applyQuaternion(attitude);
     const start = this._start.copy(this.player.position).add(muzzleOffset);
     const tracer = this.gunRoundCount++ % 4 === 0;
     const pool=tracer?this.freeTracerRounds:this.freeGunRounds;
@@ -105,16 +110,15 @@ export class WeaponSystem {
       const shotDirection=tracerDirection.copy(velocity).normalize();
       shot.mesh.quaternion.setFromUnitVectors(localBulletAxis,shotDirection);
       this.scene.add(shot.mesh);
-      // FlightFX clips the visible streak against the aircraft's current nose
-      // plane. The projectile and hit testing still start at the real muzzle.
+      // Keep the visible streak at the barrel opening while clipping any part
+      // that has not yet cleared the airframe. Projectile physics still start
+      // at the exact muzzle position.
       this.fx?.addMovingTracer(start, velocity, '#ffd282', {
         life: .14,
         trailTime: .06,
         gravity: GUN_PROJECTILE_GRAVITY,
         ownerAircraft: this.player,
-        // Keep the streak close to the gun port while allowing the tracer to
-        // clear the F-35's forward fuselage before it becomes visible.
-        aircraftForwardClearance: 7.2,
+        aircraftForwardClearance: F35_GUN_TRACER_CLEARANCE,
       });
     }
     this.addProjectile(shot);

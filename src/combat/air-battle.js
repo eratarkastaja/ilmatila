@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { F35_GUN_MUZZLE_OFFSET, F35_GUN_TRACER_CLEARANCE } from '../aircraft/plane-models.js';
 import { createFighter, disposeAircraftVisual } from '../aircraft/plane.js';
 import { createMi24AttackHelicopter } from '../aircraft/rotorcraft.js';
 import { createMissile, MISSILE_PROFILES } from './projectiles.js';
@@ -104,6 +105,7 @@ export class AirBattle {
     this._playerRight=new THREE.Vector3();
     this._aft=new THREE.Vector3();
     this._gunMuzzle=new THREE.Vector3();
+    this._allyGunMuzzle=new THREE.Vector3();
     this._helicopterMissileStart=new THREE.Vector3();
     this.enemies = [];
     this.allies = [];
@@ -1136,10 +1138,10 @@ export class AirBattle {
 
   fireAlly(ally, target) {
     this.audio?.playDistantGun(ally.mesh.position.distanceTo(this.player.position), 'air');
-    // Match the player's M61 gun port in the F-35's local coordinates. The
-    // gun round starts at the muzzle; its visible tracer is clipped to the
-    // aircraft's forward plane by FlightFX so it cannot draw through the body.
-    const start = new THREE.Vector3(-.78, .38, 2.65)
+    // Match the player's GAU-22/A gun port in the F-35A's local coordinates. The
+    // gun round starts at the muzzle; FlightFX clips the visible tracer at the
+    // barrel opening so it does not draw through the airframe.
+    const start = this._allyGunMuzzle.copy(F35_GUN_MUZZLE_OFFSET)
       .applyQuaternion(ally.mesh.quaternion)
       .add(ally.mesh.position);
     const predicted = leadPoint(start, target.mesh.position, target.velocity, 680, 3);
@@ -1151,7 +1153,7 @@ export class AirBattle {
       life: .14,
       trailTime: .06,
       ownerAircraft: ally.mesh,
-      aircraftForwardClearance: 7.2,
+      aircraftForwardClearance: F35_GUN_TRACER_CLEARANCE,
     });
     const shot = new THREE.Mesh(allyShotGeo, allyShotMaterial);
     shot.position.copy(start);

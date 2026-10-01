@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { F35_GUN_MUZZLE_OFFSET } from '../aircraft/plane-models.js';
 import {
   estimateInterceptTime,
   GUN_PROJECTILE_GRAVITY,
@@ -182,7 +183,11 @@ export class TacticalHud {
     }
 
     this.gunMuzzlePosition.copy(player.position).add(
-      this.gunMuzzleOffset.set(-0.78, 0.38, 2.65).applyQuaternion(player.quaternion),
+      this.gunMuzzleOffset.set(
+        F35_GUN_MUZZLE_OFFSET.x,
+        F35_GUN_MUZZLE_OFFSET.y,
+        F35_GUN_MUZZLE_OFFSET.z,
+      ).applyQuaternion(player.quaternion),
     );
     this.gunAimPoint.copy(target.mesh.position);
     if (groundTarget) this.gunAimPoint.y += (target.mesh.userData.vehicleSpec?.totalHeight ?? 2.5) * 0.55;
