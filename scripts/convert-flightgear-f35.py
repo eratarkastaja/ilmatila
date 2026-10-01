@@ -144,6 +144,35 @@ def normalize(v):
     return tuple(value / length for value in v) if length > 1e-12 else (0, 1, 0)
 
 
+def dorsal_skin_normal_samples(root):
+    for node, loc, rotation in traverse(root):
+        if node["name"] != "fuselage":
+            continue
+        vertices = [transform_point(vertex, {"rot": rotation, "loc": loc}) for vertex in node["vertices"]]
+        accumulated = [(0.0, 0.0, 0.0) for _ in vertices]
+        for surface in node["surfaces"]:
+            refs = surface["refs"]
+            if len(refs) < 3 or surface["flags"] & 0x3:
+                continue
+            for triangle_index in range(1, len(refs) - 1):
+                triangle = [refs[0], refs[triangle_index], refs[triangle_index + 1]]
+                points = [vertices[ref[0]] for ref in triangle]
+                normal = normalize(cross(tuple(points[1][axis] - points[0][axis] for axis in range(3)),
+                                         tuple(points[2][axis] - points[0][axis] for axis in range(3))))
+                if normal[1] <= 0.05:
+                    continue
+                for ref in triangle:
+                    previous = accumulated[ref[0]]
+                    accumulated[ref[0]] = tuple(previous[axis] + normal[axis] for axis in range(3))
+        return [
+            (point, normalize(normal))
+            for point, normal in zip(vertices, accumulated)
+            if -4.2 < point[0] < -1.5 and abs(point[2]) < 1.25
+            and point[1] > 0.85 and normal[1] > 0.15
+        ]
+    raise ValueError("F-35 fuselage was not found")
+
+
 def align4(data: bytearray):
     while len(data) % 4:
         data.append(0)
@@ -152,6 +181,23 @@ def align4(data: bytearray):
 def build_glb(root, materials):
     mesh_data = {}
     material_defs = []
+    dorsal_normals = dorsal_skin_normal_samples(root)
+
+    def blend_dorsal_normal(point, source_normal):
+        nearest = sorted(
+            (((point[0] - sample[0][0]) ** 2 + (point[2] - sample[0][2]) ** 2, sample[1])
+             for sample in dorsal_normals),
+            key=lambda item: item[0],
+        )[:8]
+        weighted = [0.0, 0.0, 0.0]
+        total_weight = 0.0
+        for distance_squared, normal in nearest:
+            weight = 1.0 / (distance_squared + 0.0025)
+            total_weight += weight
+            for axis in range(3):
+                weighted[axis] += normal[axis] * weight
+        body_normal = normalize(tuple(value / total_weight for value in weighted))
+        return normalize(tuple(body_normal[axis] * 0.88 + source_normal[axis] * 0.12 for axis in range(3)))
 
     for index, material in enumerate(materials):
         material_defs.append({
@@ -192,6 +238,12 @@ def build_glb(root, materials):
         "pylons", "fan", "intake", "arch", "box", "case",
         "fuel top", "fuel box", "fuel intake", "fuel lever",
     }
+    # These fuselage quads overlap the lift-fan warning graphic in the source
+    # livery. Keep their geometry and sample the surrounding plain paint.
+    plain_paint_fuselage_surfaces = {
+        409, 410, 827, 1151, 1152, 1153, 1154, 1941, 1942,
+        2314, 2315, 2724, 3048, 3049, 3050, 3051, 3837, 3838,
+    }
     # Keep only the exterior skin faces of these closed doors. Their source
     # meshes exactly cover the airframe openings, so they make a better skin
     # cap than a separately inferred patch. Their hatch UVs are flattened.
@@ -209,7 +261,7 @@ def build_glb(root, materials):
         verts = [transform_point(vertex, {"rot": rotation, "loc": loc}) for vertex in node["vertices"]]
         smooth_normals = [(0.0, 0.0, 0.0) for _ in verts]
         triangles = []
-        for surface in node["surfaces"]:
+        for surface_index, surface in enumerate(node["surfaces"]):
             refs = surface["refs"]
             if len(refs) < 3 or surface["flags"] & 0x3:
                 continue
@@ -233,6 +285,10 @@ def build_glb(root, materials):
                     and abs(center[2]) <= 0.92
                     and center[1] > 0.9
                 )
+                plain_paint_fuselage = (
+                    node["name"] == "fuselage"
+                    and surface_index in plain_paint_fuselage_surfaces
+                )
                 skin_direction = door_skin_normals.get(node["name"])
                 door_skin = skin_direction is not None and normal[1] * skin_direction > 0.45
                 if skin_direction is not None and not door_skin:
@@ -241,21 +297,25 @@ def build_glb(root, materials):
                     for ref in triangle:
                         previous = smooth_normals[ref[0]]
                         smooth_normals[ref[0]] = tuple(previous[k] + normal[k] for k in range(3))
-                triangles.append((mat_id, triangle, normal, smooth, dorsal_lift_fan_skin or door_skin))
+                match_dorsal_normals = node["name"] == "door fan" and door_skin
+                triangles.append((mat_id, triangle, normal, smooth,
+                                  dorsal_lift_fan_skin or door_skin or plain_paint_fuselage,
+                                  match_dorsal_normals))
 
-        for mat_id, triangle, face_normal, smooth, dorsal_lift_fan_skin in triangles:
+        for mat_id, triangle, face_normal, smooth, remap_to_skin, match_dorsal_normals in triangles:
             target = mesh_data.setdefault(mat_id, {"positions": [], "normals": [], "uvs": [], "indices": [],
                                                       "min": [float("inf")] * 3, "max": [float("-inf")] * 3})
             for ref in triangle:
                 vertex = verts[ref[0]]
                 normal = normalize(smooth_normals[ref[0]]) if smooth else face_normal
+                if match_dorsal_normals:
+                    normal = blend_dorsal_normal(vertex, normal)
                 new_index = len(target["positions"]) // 3
                 target["positions"].extend(vertex)
                 target["normals"].extend(normal)
-                if dorsal_lift_fan_skin:
-                    # The source atlas paints the B-model lift-fan hatch onto
-                    # the fuselage UVs too. Sample its plain paint field so
-                    # those baked panel lines do not survive on the new skin.
+                if remap_to_skin:
+                    # Use the existing plain airframe-paint sample to hide
+                    # the baked warning graphic without changing geometry.
                     target["uvs"].extend((0.41015625, 1 - 0.70703125))
                 else:
                     target["uvs"].extend((ref[1], 1 - ref[2]))

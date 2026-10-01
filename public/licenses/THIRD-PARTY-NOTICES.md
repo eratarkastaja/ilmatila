@@ -8,7 +8,7 @@ The bundled player visual is derived from the FlightGear F-35B model by FGMEMBER
 
 Hostile flights use converted FlightGear exterior models:
 
-- **Su-27 Flanker family**, based on [xcvb85/Su-27](https://github.com/xcvb85/Su-27), revision `30f1cb45c87d4f2443de198d7577a3a9b6b0455a`. It is not a Su-35-specific model. Source, selected textures, license, and conversion details are in [`assets/aircraft/su27/`](../assets/aircraft/su27/).
+- **Su-27 Flanker family**, based on [xcvb85/Su-27](https://github.com/xcvb85/Su-27), revision `30f1cb45c87d4f2443de198d7577a3a9b6b0455a`. Source, selected textures, license, and conversion details are in [`assets/aircraft/su27/`](../assets/aircraft/su27/).
 - **MiG-29 Fulcrum**, based on [Mercenary-Mercury/MiG-29_9-12](https://github.com/Mercenary-Mercury/MiG-29_9-12), revision `d4a299bf88412f579b2067874989a8088b2f6d66`. The exterior and required textures are included with their license in [`assets/aircraft/mig29/`](../assets/aircraft/mig29/). The upstream optional GPL-2.0 cockpit clock is not used or included.
 
 Both aircraft source assets and converted GLBs are provided under GNU GPL version 3. Contributor credits and conversions are recorded beside the source files. The ERÄGAMES aircraft logo is not included in these model license grants.

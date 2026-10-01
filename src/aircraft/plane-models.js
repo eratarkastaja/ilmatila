@@ -254,7 +254,7 @@ export function buildImportedEnemyAircraft(plane, aircraftAsset, variant) {
 }
 
 export function buildFlanker(plane, m) {
-  // Su-35 family: long nose, broad swept wings, twin nacelles and widely spaced tails.
+  // Su-27 Flanker family: long nose, broad swept wings, twin nacelles and widely spaced tails.
   addFuselage(plane, m.paint, [
     [-9.2, 0.55, 0.48, 0], [-8.2, 0.95, 0.72, 0], [-6.2, 1.16, 0.88, 0],
     [-3.2, 1.2, 0.88, 0], [0.4, 1.16, 0.82, 0], [3.4, 0.9, 0.69, 0.04],

@@ -49,7 +49,7 @@ export async function loadCombatAircraft(onProgress, signal) {
   signal?.addEventListener('abort', abort, { once: true });
   const loader = new GLTFLoader(manager);
   const files = [
-    'assets/f35/f35-lightning.glb?rev=f35a-dorsal-skin-3',
+    'assets/f35/f35-lightning.glb?rev=f35a-dorsal-skin-10',
     'assets/aircraft/su27/su27.glb',
     'assets/aircraft/mig29/mig29.glb',
   ];

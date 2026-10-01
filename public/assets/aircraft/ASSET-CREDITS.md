@@ -4,7 +4,7 @@ This game includes converted FlightGear exterior aircraft models for hostile fli
 
 ## Su-27 Flanker
 
-The model is derived from xcvb85's FlightGear Su-27 family project, based on Yanes Bechir's Su-27SK model. It represents a Su-27-family Flanker; it is not a Su-35-specific airframe. [Full attribution and conversion record](su27/ASSET-CREDITS.md).
+The model is derived from xcvb85's FlightGear Su-27 family project, based on Yanes Bechir's Su-27SK model. It is used as a Flanker-family adversary. [Full attribution and conversion record](su27/ASSET-CREDITS.md).
 
 ## MiG-29 Fulcrum
 
