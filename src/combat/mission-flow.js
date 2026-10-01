@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { formatNumber, t } from '../i18n.js';
+import { formatNumber, t } from '../ui/i18n.js';
 import { MISSION_OUTCOME } from './mission-objective.js';
 
 export const MISSION_PHASE = Object.freeze({
@@ -17,7 +17,7 @@ const horizontal = new THREE.Vector3();
 
 /** Sortie progression from launch through ingress, tasking, recovery, and debrief. */
 export class MissionFlowSystem {
-  constructor({ mission, player, terrain, nodes = {}, onIngress = () => {}, onObjectiveActive = () => {}, onObjectiveComplete = () => {}, onRtb = () => {}, onEnd = () => {} }) {
+  constructor({ mission, player, terrain, nodes = {}, onIngress = () => {}, onObjectiveActive = () => {}, onObjectiveComplete = () => {}, onRtb = () => {}, onPhaseChange = () => {}, onEnd = () => {} }) {
     this.mission = mission;
     this.player = player;
     this.nodes = nodes;
@@ -25,6 +25,7 @@ export class MissionFlowSystem {
     this.onObjectiveActive = onObjectiveActive;
     this.onObjectiveComplete = onObjectiveComplete;
     this.onRtb = onRtb;
+    this.onPhaseChange = onPhaseChange;
     this.onEnd = onEnd;
     this.outcome = MISSION_OUTCOME.ACTIVE;
     this.elapsed = 0;
@@ -135,9 +136,11 @@ export class MissionFlowSystem {
 
   setPhase(phase) {
     if (this.phase === phase) return;
+    const previous = this.phase;
     this.phase = phase;
     this.phaseElapsed = 0;
     this.render();
+    this.onPhaseChange(previous, phase);
   }
 
   horizontalDistanceTo(point) {

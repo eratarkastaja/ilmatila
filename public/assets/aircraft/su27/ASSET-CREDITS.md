@@ -2,6 +2,8 @@
 
 The exterior model is derived from the FlightGear Su-27 family model by xcvb85, based on Yanes Bechir's Su-27SK model. The source project credits the FGUK team and contributors to the MiG-29, F-15, and Mirage 2000 projects. This game uses the Su-27 exterior as a Flanker-family adversary; it is not a model of the later Su-35 airframe.
 
+ERÄGAMES adapted the included model for ILMATILA. The current converted GLB was added on 2026-09-29; its model axes were adjusted and static geometry was combined for browser rendering.
+
 The GLB is converted from the included AC3D source and uses the included Russian Air Force `RusAF871FR.png` livery and `fabric.png` texture. It is statically combined for browser rendering. The game rotates the source model into its flight axes.
 
 - Source project: <https://github.com/xcvb85/Su-27>

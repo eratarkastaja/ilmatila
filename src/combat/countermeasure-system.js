@@ -1,15 +1,58 @@
 import * as THREE from 'three';
 
-const flareDecoyGeo = new THREE.SphereGeometry(1, 7, 5);
-const flareDecoyMaterial = new THREE.MeshBasicMaterial({ color: '#ff8c37', toneMapped: false });
+const flareDecoyGeo = new THREE.SphereGeometry(.3, 8, 6);
+const flareDecoyMaterial = new THREE.MeshBasicMaterial({ color: '#fff0b4', toneMapped: false });
+const flarePlumeGeo = new THREE.ConeGeometry(.36, 2.25, 8, 1);
+const flarePlumeMaterial = new THREE.MeshBasicMaterial({
+  color: '#ff6a24', transparent: true, opacity: .74,
+  blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false,
+});
+const flareInnerPlumeGeo = new THREE.ConeGeometry(.16, 1.45, 7, 1);
+const flareInnerPlumeMaterial = new THREE.MeshBasicMaterial({
+  color: '#ffd16c', transparent: true, opacity: .9,
+  blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false,
+});
 const chaffDecoyGeo = new THREE.TetrahedronGeometry(.18, 0);
 const chaffDecoyMaterial = new THREE.MeshBasicMaterial({ color: '#d9e2d8', transparent: true, opacity: .72, toneMapped: false });
 const localForward = new THREE.Vector3(0, 0, 1);
 const localRight = new THREE.Vector3(1, 0, 0);
 const localUp = new THREE.Vector3(0, 1, 0);
 const stationaryVelocity = new THREE.Vector3();
-const flareParticleColor = new THREE.Color('#ffae42');
+const flareParticleColor = new THREE.Color('#ffe4a0');
+const flareSmokeColor = new THREE.Color('#756458');
 const chaffParticleColor = new THREE.Color('#c9d3ce');
+
+function addFlareBundle(cloud, addTransientGlow) {
+  for (let i = 0; i < 3; i++) {
+    const offset = new THREE.Vector3((i - 1) * 1.35, (Math.random() - .5) * .7, (Math.random() - .5) * .8);
+    const scale = .82 + Math.random() * .28;
+
+    const plume = new THREE.Mesh(flarePlumeGeo, flarePlumeMaterial);
+    plume.position.copy(offset).addScaledVector(localForward, -1.1 * scale);
+    plume.rotation.x = -Math.PI / 2;
+    plume.scale.setScalar(scale);
+    plume.userData.flarePlume = true;
+    cloud.add(plume);
+
+    const innerPlume = new THREE.Mesh(flareInnerPlumeGeo, flareInnerPlumeMaterial);
+    innerPlume.position.copy(offset).addScaledVector(localForward, -.72 * scale);
+    innerPlume.rotation.x = -Math.PI / 2;
+    innerPlume.scale.setScalar(scale);
+    innerPlume.userData.flarePlume = true;
+    cloud.add(innerPlume);
+
+    const core = new THREE.Mesh(flareDecoyGeo, flareDecoyMaterial);
+    core.position.copy(offset);
+    core.scale.set(.78, .78, 1.05).multiplyScalar(scale);
+    cloud.add(core);
+
+    const glow = addTransientGlow(cloud, '#fff0c0', 8.5 + Math.random() * 2.5, .94);
+    glow.position.copy(offset);
+    glow.userData.baseSize = glow.scale.x;
+    glow.userData.flareGlow = true;
+    glow.userData.flickerPhase = Math.random() * Math.PI * 2;
+  }
+}
 
 function disposeTransientMaterials(object) {
   object.traverse(child => {
@@ -34,6 +77,7 @@ export class CountermeasureSystem {
     this.addTransientGlow = addTransientGlow;
     this._drift=new THREE.Vector3();
     this._jitter=new THREE.Vector3();
+    this._orientation=new THREE.Vector3();
     this.onInventoryChange = onInventoryChange;
     this.countermeasures = initialCount;
     this.cooldown = 0;
@@ -67,24 +111,17 @@ export class CountermeasureSystem {
     const right = localRight.clone().applyQuaternion(attitude).normalize();
     const up = localUp.clone().applyQuaternion(attitude).normalize();
 
+    const flareVelocity = this.playerVelocity.clone().addScaledVector(rear, 115)
+      .addScaledVector(right, (Math.random() - .5) * 18).addScaledVector(up, 18);
     const flareCloud = new THREE.Group();
     flareCloud.position.copy(this.player.position).addScaledVector(rear, 6);
-    for (let i = 0; i < 3; i++) {
-      const flareMesh = new THREE.Mesh(flareDecoyGeo, flareDecoyMaterial);
-      flareMesh.position.set((i - 1) * 1.8, (Math.random() - .5) * 1.8, (Math.random() - .5) * 1.8);
-      flareMesh.scale.setScalar(1.1 + Math.random() * .7);
-      flareCloud.add(flareMesh);
-      const glow = this.addTransientGlow(flareCloud, '#ff9b35', 15 + Math.random() * 7, .96);
-      glow.position.copy(flareMesh.position);
-      glow.userData.baseSize = glow.scale.x;
-      glow.userData.flareGlow = true;
-    }
+    flareCloud.quaternion.setFromUnitVectors(localForward, this._orientation.copy(flareVelocity).normalize());
+    addFlareBundle(flareCloud, this.addTransientGlow);
     this.scene.add(flareCloud);
     this.decoys.push({
       team: 'player', type: 'ir', mesh: flareCloud, position: flareCloud.position,
       previousPosition: flareCloud.position.clone(),
-      velocity: this.playerVelocity.clone().addScaledVector(rear, 115)
-        .addScaledVector(right, (Math.random() - .5) * 18).addScaledVector(up, 18),
+      velocity: flareVelocity,
       life: 2.7, maxLife: 2.7, active: true, age: 0, trailClock: 0,
     });
 
@@ -112,8 +149,11 @@ export class CountermeasureSystem {
   deployHostile(enemy, seeker = null) {
     if (!enemy?.mesh || enemy.dead || enemy.countermeasures <= 0 || enemy.countermeasureCooldown > 0) return false;
     enemy.countermeasures--;
-    enemy.countermeasureCooldown = 4.5 + Math.random() * 1.5;
-    enemy.evasiveTimer = 2.4;
+    enemy.countermeasureCooldown = (enemy.countermeasureCooldownBase ?? 4.5)
+      + Math.random() * (enemy.countermeasureCooldownJitter ?? 1.5);
+    const evasiveDuration = enemy.countermeasureEvasionDuration ?? 2.4;
+    enemy.evasiveTimer = Math.max(enemy.evasiveTimer ?? 0, evasiveDuration);
+    enemy.evasiveDuration = Math.max(enemy.evasiveDuration ?? 0, evasiveDuration);
     enemy.evasiveDirection = Math.random() < .5 ? -1 : 1;
 
     const attitude = enemy.mesh.quaternion;
@@ -125,17 +165,13 @@ export class CountermeasureSystem {
       const cloud = new THREE.Group();
       cloud.position.copy(enemy.mesh.position).addScaledVector(rear, type === 'ir' ? 6 : 4);
       cloud.position.addScaledVector(up, type === 'ir' ? 1 : -1);
+      const velocity = (enemy.velocity ?? stationaryVelocity).clone()
+        .addScaledVector(rear, type === 'ir' ? 105 : 62)
+        .addScaledVector(right, (Math.random() - .5) * 18)
+        .addScaledVector(up, type === 'ir' ? 18 : -5);
       if (type === 'ir') {
-        for (let i = 0; i < 3; i++) {
-          const flareMesh = new THREE.Mesh(flareDecoyGeo, flareDecoyMaterial);
-          flareMesh.position.set((i - 1) * 1.8, (Math.random() - .5) * 1.8, (Math.random() - .5) * 1.8);
-          flareMesh.scale.setScalar(1.1 + Math.random() * .7);
-          cloud.add(flareMesh);
-          const glow = this.addTransientGlow(cloud, '#ff9b35', 15 + Math.random() * 7, .96);
-          glow.position.copy(flareMesh.position);
-          glow.userData.baseSize = glow.scale.x;
-          glow.userData.flareGlow = true;
-        }
+        cloud.quaternion.setFromUnitVectors(localForward, this._orientation.copy(velocity).normalize());
+        addFlareBundle(cloud, this.addTransientGlow);
       } else {
         for (let i = 0; i < 18; i++) {
           const piece = new THREE.Mesh(chaffDecoyGeo, chaffDecoyMaterial);
@@ -145,10 +181,6 @@ export class CountermeasureSystem {
         }
       }
       this.scene.add(cloud);
-      const velocity = (enemy.velocity ?? stationaryVelocity).clone()
-        .addScaledVector(rear, type === 'ir' ? 105 : 62)
-        .addScaledVector(right, (Math.random() - .5) * 18)
-        .addScaledVector(up, type === 'ir' ? 18 : -5);
       this.decoys.push({
         team: 'enemy', source: enemy, type, mesh: cloud, position: cloud.position,
         previousPosition: cloud.position.clone(), velocity, life: 2.7, maxLife: 2.7,
@@ -167,22 +199,35 @@ export class CountermeasureSystem {
         decoy.previousPosition.copy(decoy.position);
         decoy.mesh.position.addScaledVector(decoy.velocity, dt);
         decoy.velocity.multiplyScalar(Math.exp(-.24 * dt));
-        decoy.mesh.rotation.y += dt * (decoy.type === 'ir' ? 1.5 : .4);
+        if (decoy.type === 'radar') decoy.mesh.rotation.y += dt * .4;
         const progress = 1 - decoy.life / decoy.maxLife;
         if (decoy.type === 'ir') {
-          decoy.mesh.scale.setScalar(1 + progress * .42);
+          decoy.mesh.scale.setScalar(1 - progress * .18);
           for (const child of decoy.mesh.children) {
-            if (!child.userData.flareGlow) continue;
-            const flicker = .84 + Math.sin(decoy.age * 43 + child.position.x) * .16;
-            child.material.opacity = (1 - progress) ** .72 * flicker;
-            child.scale.setScalar(child.userData.baseSize * (.72 + progress * .75) * flicker);
+            const flicker = .78 + Math.sin(decoy.age * 47 + (child.userData.flickerPhase ?? child.position.x)) * .22;
+            if (child.userData.flareGlow) {
+              child.material.opacity = (1 - progress) ** .72 * flicker;
+              child.scale.setScalar(child.userData.baseSize * (.78 + progress * .2) * flicker);
+            } else if (child.userData.flarePlume) {
+              child.scale.x = flicker;
+              child.scale.y = .72 + flicker * .28;
+            }
           }
           decoy.trailClock -= dt;
           if (decoy.trailClock <= 0) {
             const drift = this._drift.copy(decoy.velocity).multiplyScalar(.055)
-              .add(this._jitter.set((Math.random() - .5) * 7, Math.random() * 8, (Math.random() - .5) * 7));
-            this.fx?.emitParticle(decoy.position, drift, flareParticleColor, .42, 2.4 + Math.random() * 1.2, .98, 1);
-            decoy.trailClock = .035;
+              .add(this._jitter.set((Math.random() - .5) * 5, Math.random() * 6, (Math.random() - .5) * 5));
+            const hotEmber = Math.random() < .72;
+            this.fx?.emitParticle(
+              decoy.position,
+              drift,
+              hotEmber ? flareParticleColor : flareSmokeColor,
+              hotEmber ? .22 + Math.random() * .18 : .48 + Math.random() * .28,
+              hotEmber ? .55 + Math.random() * .8 : 1.1 + Math.random() * .7,
+              hotEmber ? .9 : .2,
+              hotEmber ? .9 : .12,
+            );
+            decoy.trailClock = .025 + Math.random() * .055;
           }
         } else {
           decoy.mesh.scale.setScalar(1 + progress * .72);

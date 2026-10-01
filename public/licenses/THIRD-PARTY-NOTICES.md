@@ -1,39 +1,45 @@
 # Third-party notices
 
-ILMATILA is created and published by ERÄGAMES. Copyright © 2026 ERÄGAMES. The project source is licensed under GNU GPL version 3 only and is provided without warranty; see the repository's `LICENSE` file. The ERÄGAMES name and logo are studio brand assets and are not covered by the source-code license. Components and data listed below retain their own licenses.
+ILMATILA is an independent game by ERÄGAMES. Copyright © 2026 ERÄGAMES. The project source is licensed under GNU GPL version 3 only; redistribution is permitted under that license, and the software is provided without warranty. Read the complete [GPL-3.0 license](GPL-3.0.txt) and obtain the corresponding source from the [public project repository](https://github.com/eratarkastaja/ilmatila). The ERÄGAMES name and logo are separate studio brand assets. Other assets retain their own terms below.
 
-## Aircraft model
+## Aircraft models
 
-The bundled GLB is derived from the FlightGear F-35B model by FGMEMBERS. The original AC3D model and texture, the full GPL-3.0 license, and contributor credits are in [`public/assets/f35/source/`](public/assets/f35/source/). The conversion is described in [`public/assets/f35/ASSET-CREDITS.md`](public/assets/f35/ASSET-CREDITS.md) and implemented by `scripts/convert-flightgear-f35.py`.
+The bundled player visual is derived from the FlightGear F-35B model by FGMEMBERS and is used as an F-35A stand-in. The original model, source livery, license, contributors, and conversion details are in [`assets/f35/`](../assets/f35/).
 
-Hostile aircraft also use two FlightGear exterior models:
+Hostile flights use converted FlightGear exterior models:
 
-- **Su-27 Flanker** is derived from [xcvb85/Su-27](https://github.com/xcvb85/Su-27), revision 30f1cb45c87d4f2443de198d7577a3a9b6b0455a. It is a Su-27-family exterior, not a Su-35-specific model. The original model, selected textures, GPL-3.0 license, source credits, and conversion details are in [public/assets/aircraft/su27/](public/assets/aircraft/su27/).
-- **MiG-29 Fulcrum** is derived from [Mercenary-Mercury/MiG-29_9-12](https://github.com/Mercenary-Mercury/MiG-29_9-12), revision d4a299bf88412f579b2067874989a8088b2f6d66. The exterior airframe and required textures are included with the GPL-3.0 license and source credits in [public/assets/aircraft/mig29/](public/assets/aircraft/mig29/). The upstream repository also contains an optional GPL-2.0 clock; that cockpit component is not used or included.
+- **Su-27 Flanker family**, based on [xcvb85/Su-27](https://github.com/xcvb85/Su-27), revision `30f1cb45c87d4f2443de198d7577a3a9b6b0455a`. It is not a Su-35-specific model. Source, selected textures, license, and conversion details are in [`assets/aircraft/su27/`](../assets/aircraft/su27/).
+- **MiG-29 Fulcrum**, based on [Mercenary-Mercury/MiG-29_9-12](https://github.com/Mercenary-Mercury/MiG-29_9-12), revision `d4a299bf88412f579b2067874989a8088b2f6d66`. The exterior and required textures are included with their license in [`assets/aircraft/mig29/`](../assets/aircraft/mig29/). The upstream optional GPL-2.0 cockpit clock is not used or included.
 
-Both converted GLBs are distributed under GNU GPL version 3 along with their corresponding model sources and license text. The offline converter is tools/assets/convert-flightgear-aircraft.mjs and uses MIT-licensed assimpjs and glTF Transform packages.
+Both aircraft source assets and converted GLBs are provided under GNU GPL version 3. Contributor credits and conversions are recorded beside the source files. The ERÄGAMES aircraft logo is not included in these model license grants.
 
-## Ground vehicle model research
+## Terrain data
 
-Ground vehicles currently use project-authored procedural geometry. External candidates and their license checks are documented in [docs/asset-sourcing.md](docs/asset-sourcing.md); those candidate files are not bundled or used at runtime. No downloaded Sketchfab model is included. Sketchfab's download API requires account authentication and requires visible author, source, and license attribution; downloads must be obtained through an authorized account.
+The hosted game uses four area packages containing Maanmittauslaitos (National Land Survey of Finland) **Elevation Model 2 m** and **Colour Orthophotos** data, retrieved on 2026-09-30. The current packages cover Päijänne, Virolahti, Ilomantsi, and Kuusamo. They are published separately in the [terrain data release](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.2.0). Each archive includes metadata and attribution. Elevation was downsampled and mosaicked; orthophotos were cropped, resampled, tiled, and recompressed; the moving detail layer was JPEG-encoded; water masks were derived from imagery.
 
-## Mapping data
+© National Land Survey of Finland. Contains Elevation Model 2 m and Colour Orthophotos open data provided by the National Land Survey of Finland on 2026-09-30. The data is licensed under [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/). MML's [license and attribution terms](https://www.maanmittauslaitos.fi/avoindata-lisenssi-cc40) require the provider, dataset, and date associated with the data; package-level notices provide the same information.
 
-Terrain packages use National Land Survey of Finland open data: Elevation Model 2 m and Colour Orthophotos, fetched from its WCS service. The public [terrain data release v1.2.0](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.2.0) contains four 32 × 32 km areas, retrieved 2026-09-30. Each package includes `terrain.json` and `ATTRIBUTION.md` with provider, dataset, retrieval date, source, license, and modification details. The game derives a lower-resolution elevation grid, crops and resamples standard orthophotos into tiles, streams a moving 6 × 6 km higher-detail image window in 2 km steps across each theater, and derives water masks from the imagery. The source data is licensed under [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/). See the [terrain-tool guide](https://github.com/eratarkastaja/ilmatila/blob/master/tools/terrain/README.md) for details.
+## Software and typefaces
 
-## Libraries and fonts
-
-- **Three.js** is used by the browser app under the MIT License. The copyright and license text are in [`public/licenses/THREE-MIT.txt`](public/licenses/THREE-MIT.txt).
-- **Vite**, **geotiff.js**, **assimpjs**, and **glTF Transform** are used for development, optional terrain downloads, and offline asset conversion. They are MIT licensed and remain development/tooling dependencies; neither their runtime code nor the converters are bundled into the browser app. Their lockfile records the resolved versions.
-- **Sharp** is used only by the optional terrain downloader to encode high-detail orthophotos as JPEG. Sharp is Apache-2.0 licensed; its prebuilt libvips binaries are LGPL-3.0-or-later. Neither is bundled into the browser app.
-- **Barlow Condensed** by The Barlow Project Authors and **Rajdhani** by Indian Type Foundry are loaded from Google Fonts and licensed under the SIL Open Font License 1.1. The font source projects are [Barlow](https://github.com/jpt/barlow) and [Rajdhani](https://github.com/itfoundry/rajdhani); the upstream license is available at [SIL Open Font License](https://openfontlicense.org/).
+- **Three.js** is used for browser rendering under the MIT License. The full text is [`THREE-MIT.txt`](THREE-MIT.txt).
+- **Vite**, **Vitest**, **ESLint**, **geotiff.js**, **assimpjs**, and **glTF Transform** are development and asset-preparation dependencies. Their package license metadata and resolved versions are in the lockfile; they are not bundled in the game runtime.
+- **Sharp** is used by the optional terrain downloader. Sharp is Apache-2.0 licensed; its prebuilt libvips binaries are LGPL-3.0-or-later. It is not bundled in the game runtime.
+- **Barlow Condensed** by The Barlow Project Authors and **Rajdhani** by Indian Type Foundry are loaded from Google Fonts under SIL Open Font License 1.1. See the [Barlow](https://github.com/jpt/barlow) and [Rajdhani](https://github.com/itfoundry/rajdhani) source projects and the [OFL text](https://openfontlicense.org/).
 
 ## Sound effects
 
-The game bundles four sound effects under `public/assets/audio/`. The cannon loop and explosion by **qubodup** and the rocket launch by **gracenew** are published on Freesound under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). The incoming-missile warning is synthesized in-game and uses no external audio asset. The jet takeoff sound by **dklon** is published on OpenGameArt under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) and is credited here as required. Its original mono WAV was encoded to Ogg Vorbis for the game. Source links, filenames, and use are listed in the in-game **Assets & licenses** panel and [`public/assets/audio/ATTRIBUTION.md`](public/assets/audio/ATTRIBUTION.md).
+Four audio effects are bundled under `assets/audio/`. Cannon fire and explosion by **qubodup**, and missile launch by **gracenew**, are published on Freesound under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). The jet takeoff accent by **dklon** is published on OpenGameArt under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) and credited in [`assets/audio/ATTRIBUTION.md`](../assets/audio/ATTRIBUTION.md). The incoming-missile alert is synthesized in-game and uses no external recording.
 
 ## Original soundtrack
 
-The original soundtrack tracks `fm-rankaisija.ogg` and `orbital-decay.ogg` are composed and performed by **Erätarkastaja**, the project owner. Copyright remains with Erätarkastaja, who grants permission to include the recordings in ILMATILA. All other rights are reserved; the tracks are not covered by the project GPL license. See [`public/assets/audio/ATTRIBUTION.md`](public/assets/audio/ATTRIBUTION.md).
+`fm-rankaisija.ogg` and `orbital-decay.ogg` are original compositions and recordings by **Erätarkastaja**, the project owner. Copyright remains with Erätarkastaja, who has granted permission to include the tracks in ILMATILA. All other rights are reserved; the music is not covered by the project GPL license. See [`assets/audio/ATTRIBUTION.md`](../assets/audio/ATTRIBUTION.md).
 
-The in-game **Assets & licenses** panel provides user-facing attribution links. Optional terrain data is not stored in this repository; see [`tools/terrain/README.md`](tools/terrain/README.md) before redistributing generated map packages.
+## Procedural military visuals
+
+Ground vehicles and the Mi-24 helicopter use project-authored procedural geometry. U.S. Army ODIN descriptions of the ZSU-23-4 Shilka and Mi-24, and Finnish Government information about ITO 90 / Crotale, informed platform roles and visible features; no source-page imagery or geometry is copied:
+
+- [U.S. Army ODIN: ZSU-23-4](https://odin.t2com.army.mil/WEG/Asset/d4cb684d59fa9e42f8fbc8224c92972a)
+- [U.S. Army ODIN: Mi-24](https://odin.t2com.army.mil/WEG/Asset/Mi-24_%28Hind%29_Russian_Attack_Helicopter)
+- [Finnish Government: ground-based air defence](https://valtioneuvosto.fi/en/-/1950813/independent-finland-s-high-performance-ground-based-air-defence-celebrates-its-100-year-journey)
+
+The game is not affiliated with or endorsed by the Finnish Air Force, Lockheed Martin, FlightGear, or the National Land Survey of Finland.

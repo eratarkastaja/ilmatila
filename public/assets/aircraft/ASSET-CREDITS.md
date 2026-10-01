@@ -1,6 +1,6 @@
 # Hostile aircraft model credits
 
-This game includes converted FlightGear exterior aircraft models for hostile flights. Both source projects and included source assets are licensed under GNU General Public License version 3. The conversion changes the model axis, combines static meshes, and optimizes the geometry for browser rendering. Original files, revision identifiers, selected textures, contributor credits, and the complete license are kept beside each converted model.
+This game includes converted FlightGear exterior aircraft models for hostile flights. Both source projects and included source assets are licensed under GNU General Public License version 3. ERÄGAMES adapted and converted the models for ILMATILA; the current converted assets were added on 2026-09-29. The conversion changes model axes, combines static meshes, and optimizes geometry for browser rendering. Original files, revision identifiers, selected textures, contributor credits, and the complete license are kept beside each converted model.
 
 ## Su-27 Flanker
 

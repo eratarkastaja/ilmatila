@@ -33,7 +33,7 @@ export class ProjectileSystem {
   constructor({
     scene, player, playerShots = [], hostiles = [], decoys = [], collision, audio,
     playerVelocity = stationaryVelocity, onPlayerDestroyed, onPlayerDamaged, onPlayerHit, onJetDestroyed,
-    onUnitDestroyed, addSpark, addWaterImpact, addExplosion, incomingDamageMultiplier = 1,
+    onUnitDestroyed, onFriendlyAircraftHit, addSpark, addWaterImpact, addExplosion, incomingDamageMultiplier = 1,
     hostileMissileTurnRate = HOSTILE_MISSILE_TURN_RATE,
   }) {
     this.scene = scene;
@@ -48,6 +48,7 @@ export class ProjectileSystem {
     this.onPlayerDamaged = onPlayerDamaged;
     this.onPlayerHit = onPlayerHit;
     this.onJetDestroyed = onJetDestroyed;
+    this.onFriendlyAircraftHit = onFriendlyAircraftHit;
     this.onUnitDestroyed = onUnitDestroyed;
     this.incomingDamageMultiplier = incomingDamageMultiplier;
     this.hostileMissileTurnRate = hostileMissileTurnRate;
@@ -163,7 +164,9 @@ export class ProjectileSystem {
         shot.life = 0;
       }
       let impact = shot.life > 0
-        ? this.collision.findProjectileImpact(previous, shot.mesh.position, dt, { ally: shot.ally, ballistic: shot.ballistic })
+        ? this.collision.findProjectileImpact(previous, shot.mesh.position, dt, {
+            ally: shot.ally, ballistic: shot.ballistic, canHitGround: shot.canHitGround,
+          })
         : null;
       if (!impact && shot.life > 0 && shot.homing && shot.target && !shot.decoyTarget) {
         impact = this.collision.findMissileProximityImpact(
@@ -192,8 +195,8 @@ export class ProjectileSystem {
           });
         }
         if (target.hp <= 0) {
-          if (target.mesh.userData.faction === 'red') this.onUnitDestroyed(target, !shot.ally);
-          else this.onJetDestroyed(target, !shot.ally);
+          if (target.mesh.userData.faction === 'red') this.onUnitDestroyed(target, !shot.ally, { sourceUnit: shot.sourceUnit, shot });
+          else this.onJetDestroyed(target, !shot.ally, { sourceUnit: shot.sourceUnit, shot });
         } else {
           this.addSpark(impactPosition);
         }
@@ -269,8 +272,12 @@ export class ProjectileSystem {
             }
           }
           const aimTarget = shot.decoyTarget ? shot.decoyTarget.position : player.position;
-          const missileSpeed = shot.velocity.length();
-          const wanted = this._targetOffset.subVectors(aimTarget,shot.mesh.position).normalize();
+          const targetVelocity = shot.decoyTarget?.velocity ?? this.playerVelocity ?? stationaryVelocity;
+          const missileSpeed = Math.max(1, shot.velocity.length());
+          const targetOffset = this._targetOffset.subVectors(aimTarget, shot.mesh.position);
+          const leadTime = estimateInterceptTime(targetOffset, targetVelocity, missileSpeed, 6);
+          const aimPoint = this._aimPoint.copy(aimTarget).addScaledVector(targetVelocity, leadTime);
+          const wanted = this._targetOffset.subVectors(aimPoint, shot.mesh.position).normalize();
           const direction = turnDirection(shot.velocity, wanted, this.hostileMissileTurnRate * dt, this._steeringDirection, this._steeringAxis);
           shot.velocity.copy(direction).multiplyScalar(missileSpeed);
           if (shot.velocity.lengthSq() > 1) shot.mesh.quaternion.setFromUnitVectors(forward,this._tracerDirection.copy(shot.velocity).normalize());
@@ -285,15 +292,36 @@ export class ProjectileSystem {
           this.addExplosion(shot.mesh.position, .48);
           shot.life = 0;
         }
+      } else if (shot.groundAA) {
+        shot.mesh.position.addScaledVector(shot.velocity, dt);
+        const target = shot.target;
+        if (target && !target.dead && this.collision.sweptDistanceSquared(
+          previous,
+          shot.mesh.position,
+          this._targetStart.copy(target.mesh.position).addScaledVector(target.velocity ?? stationaryVelocity, -dt),
+          target.mesh.position,
+        ) < 24 ** 2) {
+          target.hp -= shot.damage ?? .1;
+          if (target.mesh?.userData.airframeHealthRatio !== undefined) {
+            applyAirframeCondition(target.mesh, target.hp, target.maxHp);
+          }
+          if (target.hp <= 0) {
+            this.onJetDestroyed?.(target, false);
+            this.addExplosion(shot.mesh.position, .82);
+          } else {
+            this.addSpark(shot.mesh.position);
+          }
+          shot.life = 0;
+        }
       } else if (shot.flak) {
         shot.mesh.position.addScaledVector(shot.velocity, dt);
         const distanceSquared = this.collision.sweptDistanceSquared(previous, shot.mesh.position, this.collision.lastCollisionPosition, player.position);
         if (distanceSquared < 9 ** 2) {
-          this.damagePlayer(22, 'combat.hostileFire');
+          this.damagePlayer(shot.directDamage ?? 22, 'combat.hostileFire');
           this.addExplosion(shot.mesh.position, .38);
           shot.life = 0;
         } else if (!shot.burst && distanceSquared < 42 ** 2) {
-          const nearMissDamage = Math.max(4, 12 * (1 - Math.sqrt(distanceSquared) / 42));
+          const nearMissDamage = Math.max(shot.nearMissDamageMin ?? 2, (shot.nearMissDamage ?? 12) * (1 - Math.sqrt(distanceSquared) / 42));
           this.damagePlayer(nearMissDamage, 'combat.hostileFire');
           this.addExplosion(shot.mesh.position, .28);
           shot.burst = true;
@@ -301,18 +329,34 @@ export class ProjectileSystem {
         }
       } else {
         shot.mesh.position.addScaledVector(shot.velocity, dt);
+        if (shot.aircraftGun) {
+          const impact = this.collision.findFriendlyAircraftImpact?.(previous, shot.mesh.position, dt);
+          if (impact) {
+            this.onFriendlyAircraftHit?.(impact.target, shot.damage ?? 0.85, shot.sourceUnit);
+            this.addSpark(shot.mesh.position);
+            shot.life = 0;
+          }
+        }
         if (shot.ground && shot.target && !shot.target.dead && this.collision.sweptDistanceSquared(
           previous,
           shot.mesh.position,
           this._targetStart.copy(shot.target.mesh.position).addScaledVector(shot.target.velocity ?? stationaryVelocity, -dt),
           shot.target.mesh.position,
         ) < 12 ** 2) {
-          shot.target.hp--;
-          if (shot.target.hp <= 0) this.onUnitDestroyed(shot.target, false);
-          this.addExplosion(shot.mesh.position, .72);
+          if (shot.aircraftStrafe) {
+            shot.target.hp -= shot.damage ?? .18;
+            if (shot.target.hp <= 0) {
+              this.onUnitDestroyed(shot.target, false, { sourceUnit: shot.sourceUnit, shot });
+              this.addExplosion(shot.mesh.position, .72);
+            } else this.addSpark(shot.mesh.position);
+          } else {
+            shot.target.hp--;
+            if (shot.target.hp <= 0) this.onUnitDestroyed(shot.target, false);
+            this.addExplosion(shot.mesh.position, .72);
+          }
           shot.life = 0;
         }
-        if (!shot.ground && this.collision.sweptDistanceSquared(previous, shot.mesh.position, this.collision.lastCollisionPosition, player.position) < 9 ** 2) {
+        if (shot.life > 0 && !shot.ground && this.collision.sweptDistanceSquared(previous, shot.mesh.position, this.collision.lastCollisionPosition, player.position) < 9 ** 2) {
           this.damagePlayer(8, 'combat.hostileFire');
           shot.life = 0;
         }

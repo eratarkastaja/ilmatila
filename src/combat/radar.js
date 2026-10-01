@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { t } from '../i18n.js';
+import { t } from '../ui/i18n.js';
 
 /** Owns radar contacts, search mode and the arcade-friendly weapon lock cue. */
 export class CombatRadar {

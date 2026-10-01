@@ -1,5 +1,5 @@
 import { evaluateMissionObjective, MISSION_OUTCOME } from './mission-objective.js';
-import { t } from '../i18n.js';
+import { t } from '../ui/i18n.js';
 
 /** Owns objective progress/outcome and its mission-specific presentation. */
 export class MissionSystem {

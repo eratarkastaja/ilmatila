@@ -1,4 +1,4 @@
-import { t } from '../i18n.js';
+import { t } from '../ui/i18n.js';
 
 const TONE_PRIORITY = { info: 1, friendly: 2, success: 3, warning: 4, damage: 5 };
 

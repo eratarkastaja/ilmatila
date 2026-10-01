@@ -1,27 +1,29 @@
 import * as THREE from 'three';
-import { createFighter } from './plane.js';
-import { AssetRepository } from './asset-repository.js';
-import { makeClouds } from './clouds.js';
-import { MenuRadar } from './menu-radar.js';
-import { FlightControls } from './controls.js';
-import { CombatWorld, disposeCombatEffectResources } from './combat.js';
-import { createPreviewTerrain, disposeTerrain, TERRAIN_AREAS } from './terrain.js';
-import { FlightFX } from './fx.js';
-import { GameAudio } from './audio.js';
-import { TacticalHud } from './hud.js';
-import { SunEffects, SUN_DIRECTION } from './sun.js';
-import { ATMOSPHERE } from './atmosphere.js';
-import { MISSIONS } from './missions.js';
-import { CareerProgress } from './progression.js';
+import packageMetadata from '../package.json';
+import { createFighter } from './aircraft/plane.js';
+import { AssetRepository } from './assets/asset-repository.js';
+import { makeClouds } from './environment/clouds.js';
+import { MenuRadar } from './ui/menu-radar.js';
+import { FlightControls } from './input/controls.js';
+import { CombatWorld, disposeCombatEffectResources } from './combat/world.js';
+import { createPreviewTerrain, disposeTerrain, TERRAIN_AREAS } from './environment/terrain.js';
+import { FlightFX } from './effects/fx.js';
+import { GameAudio } from './audio/audio.js';
+import { TacticalHud } from './ui/hud.js';
+import { SunEffects, SUN_DIRECTION } from './environment/sun.js';
+import { ATMOSPHERE } from './environment/atmosphere.js';
+import { MISSIONS } from './mission/missions.js';
+import { CareerProgress } from './mission/progression.js';
 import { CombatStressScenario } from './performance/stress-scenario.js';
 import { disposeMissilePool } from './combat/projectiles.js';
-import { formatPercent, getLanguage, initializeLanguagePicker, t } from './i18n.js';
-import './style.css';
-import './hud.css';
-import './menu.css';
+import { formatPercent, getLanguage, initializeLanguagePicker, t } from './ui/i18n.js';
+import './ui/styles/base.css';
+import './ui/styles/hud.css';
+import './ui/styles/menu.css';
 
 const root = document.querySelector('#game');
 const startMenu = document.querySelector('#start-menu');
+document.querySelector('#menu-version').textContent = packageMetadata.version;
 const flightHud = document.querySelector('#flight-hud');
 const menuStatus = document.querySelector('#menu-status');
 const menuTheater = document.querySelector('#menu-theater');
@@ -31,6 +33,13 @@ const launchProgress = document.querySelector('#launch-progress');
 const launchProgressFill = document.querySelector('#launch-progress-fill');
 const launchProgressStatus = document.querySelector('#launch-progress-status');
 const launchProgressTitle = document.querySelector('#launch-progress-title');
+const pauseControlsReference = document.querySelector('#pause-controls-reference');
+pauseControlsReference.append(
+  document.querySelector('#start-menu .menu-control-grid').cloneNode(true),
+);
+const pauseControlsDescription = document.querySelector('#start-menu .menu-lock-instruction').cloneNode(true);
+pauseControlsDescription.id = 'pause-controls-description';
+pauseControlsReference.append(pauseControlsDescription);
 initializeLanguagePicker();
 const audio = new GameAudio();
 const missionCards = [...document.querySelectorAll('[data-mission]')];
@@ -106,7 +115,6 @@ let stressScenario = null;
 let tacticalHud = null;
 let gameStarted = false;
 let gamePaused = false;
-let suppressEscapeResumeUntil = 0;
 let launchInProgress = false;
 let aircraftAsset = null;
 let menuStatusDescriptor = { key: 'menu.statusReady', params: {}, state: 'ready' };
@@ -310,8 +318,12 @@ for (const card of missionCards) card.addEventListener('click', () => selectMiss
 
 const creditsDialog = document.querySelector('#credits-dialog');
 const pauseDialog = document.querySelector('#pause-dialog');
+const pauseMainPanel = document.querySelector('#pause-main-panel');
+const pauseControlsPanel = document.querySelector('#pause-controls-panel');
 const missionDebriefDialog = document.querySelector('#mission-debrief');
 const resumeFlightButton = document.querySelector('#resume-flight');
+const showFlightControlsButton = document.querySelector('#show-flight-controls');
+const backToPauseButton = document.querySelector('#back-to-pause');
 const quitToMenuButton = document.querySelector('#quit-to-menu');
 const missionDebriefReturnButton = document.querySelector('#mission-debrief-return');
 document.querySelector('#open-credits').addEventListener('click', () => creditsDialog.showModal());
@@ -324,26 +336,49 @@ creditsDialog.addEventListener('click', event => {
 function pauseFlight() {
   if (!gameStarted || gamePaused || !combat || combat.destroyed) return;
   gamePaused = true;
+  root.classList.add('flight-paused');
   controls.setEnabled(false);
   controls.keys.clear();
   controls.resetMouseAim();
   combat.clearInput();
   audio.setPaused(true);
+  pauseControlsPanel.hidden = true;
+  pauseMainPanel.hidden = false;
+  pauseDialog.setAttribute('aria-labelledby', 'pause-title');
+  pauseDialog.setAttribute('aria-describedby', 'pause-description');
   pauseDialog.showModal();
   resumeFlightButton.focus({ preventScroll: true });
 }
 
+function showPauseControls() {
+  if (!gamePaused) return;
+  pauseMainPanel.hidden = true;
+  pauseControlsPanel.hidden = false;
+  pauseDialog.setAttribute('aria-labelledby', 'pause-controls-title');
+  pauseDialog.setAttribute('aria-describedby', 'pause-controls-description');
+  backToPauseButton.focus({ preventScroll: true });
+}
+
+function returnToPauseOptions(focus = true) {
+  pauseControlsPanel.hidden = true;
+  pauseMainPanel.hidden = false;
+  pauseDialog.setAttribute('aria-labelledby', 'pause-title');
+  pauseDialog.setAttribute('aria-describedby', 'pause-description');
+  if (focus && gamePaused) showFlightControlsButton.focus({ preventScroll: true });
+}
+
 document.addEventListener('pointerlockchange', () => {
-  // Escape first releases pointer lock in the browser. Treat that release as
-  // the pause command so the player does not need to press Escape twice.
+  // Escape releases pointer lock before the page receives its key event in
+  // some browsers. Use that release to open pause immediately; the key handler
+  // below also covers browsers that deliver the key event first.
   if (!gameStarted || gamePaused || !controls.enabled || controls.pointerLockActive) return;
   pauseFlight();
-  suppressEscapeResumeUntil = performance.now() + 150;
 });
 
 function resumeFlight() {
   if (!gamePaused) return;
   gamePaused = false;
+  root.classList.remove('flight-paused');
   if (pauseDialog.open) pauseDialog.close();
   controls.keys.clear();
   controls.resetMouseAim();
@@ -353,9 +388,19 @@ function resumeFlight() {
   audio.setPaused(false);
 }
 
+function resetPlayerAirframeVisuals() {
+  Object.assign(player.userData, {
+    airframeHealthRatio: 1,
+    damageSmokeSeverity: 0,
+    handlingFactor: 1,
+    destroyed: false,
+  });
+}
+
 function returnToMenu() {
   if (!gameStarted) return;
   gamePaused = false;
+  root.classList.remove('flight-active', 'flight-paused');
   if (pauseDialog.open) pauseDialog.close();
   if (missionDebriefDialog.open) missionDebriefDialog.close();
   audio.setPaused(false);
@@ -379,6 +424,7 @@ function returnToMenu() {
   controls.bankReferenceValid = true;
   player.position.set(0, 70, 0);
   player.quaternion.identity();
+  resetPlayerAirframeVisuals();
   player.userData.boosting = false;
   if (player.userData.afterburner) player.userData.afterburner.visible = false;
   controls.updateAttitude();
@@ -409,13 +455,16 @@ function returnToMenu() {
   launchButton.focus({ preventScroll: true });
 }
 
-resumeFlightButton.addEventListener('click', resumeFlight);
+resumeFlightButton.addEventListener('click', () => resumeFlight());
+showFlightControlsButton.addEventListener('click', showPauseControls);
+backToPauseButton.addEventListener('click', () => returnToPauseOptions());
 quitToMenuButton.addEventListener('click', returnToMenu);
 missionDebriefReturnButton.addEventListener('click', returnToMenu);
 missionDebriefDialog.addEventListener('cancel', event => event.preventDefault());
 pauseDialog.addEventListener('cancel', event => {
+  // Escape is reserved for opening pause; use the visible controls to resume
+  // so the browser can grant pointer lock from a direct click gesture.
   event.preventDefault();
-  resumeFlight();
 });
 document.addEventListener('keydown', event => {
   if (event.code !== 'Escape' || event.repeat || !gameStarted || combat?.destroyed) return;
@@ -424,11 +473,14 @@ document.addEventListener('keydown', event => {
     event.stopPropagation();
     return;
   }
+  if (gamePaused) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
   event.preventDefault();
   event.stopPropagation();
-  if (gamePaused && performance.now() < suppressEscapeResumeUntil) return;
-  if (gamePaused) resumeFlight();
-  else pauseFlight();
+  pauseFlight();
 }, { capture: true });
 
 launchButton.addEventListener('click', async () => {
@@ -513,6 +565,8 @@ launchButton.addEventListener('click', async () => {
     setLaunchProgress(96, 'launch.buildingMission', 'launch.systemsStarting');
     setMenuStatus('launch.finalizingArea', 'loading');
     await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+    fx.reset();
+    resetPlayerAirframeVisuals();
 
     const mission = stressMode
       ? {
@@ -543,6 +597,7 @@ launchButton.addEventListener('click', async () => {
       note.textContent = messages.join(' · ');
       note.hidden = messages.length === 0;
       gamePaused = true;
+      root.classList.add('flight-paused');
       controls.setEnabled(false);
       controls.keys.clear();
       combat?.clearInput();
@@ -565,6 +620,8 @@ launchButton.addEventListener('click', async () => {
     }
     tacticalHud = nextHud;
     gameStarted = true;
+    root.classList.add('flight-active');
+    root.classList.remove('flight-paused');
     launchInProgress = false;
     controls.resetMouseAim();
     controls.setEnabled(true);

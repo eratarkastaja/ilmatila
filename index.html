@@ -30,6 +30,7 @@
       <div class="menu-layout">
         <section class="launch-panel">
           <h1 id="menu-title">ILMA<span>TILA</span></h1>
+          <p class="menu-version"><span data-i18n="menu.versionLabel">VERSION</span><b id="menu-version"></b></p>
           <p class="menu-intro" data-i18n="menu.intro">Choose a mission and area of operations.</p>
 
           <div class="mission-heading"><span>01</span><strong data-i18n="menu.chooseProfile">Select a mission</strong><i data-i18n="menu.missionCount">4 MISSIONS</i></div>
@@ -101,12 +102,12 @@
               <span class="menu-control"><kbd>SHIFT</kbd><b data-i18n="controls.boost">AFTERBURNER</b></span>
               <span class="menu-control"><span class="menu-keys"><kbd>SPACE</kbd><kbd>LMB</kbd></span><b data-i18n="controls.fire">FIRE CANNON</b></span>
               <span class="menu-control"><span class="menu-keys"><kbd>M</kbd><kbd>RMB</kbd></span><b data-i18n="controls.missile">LAUNCH GUIDED MISSILE</b></span>
-              <span class="menu-control menu-control-wide"><span class="menu-keys"><kbd>V</kbd></span><b data-i18n="controls.mouseFlight">TOGGLE MOUSE STEERING · CURSOR HIDDEN</b></span>
+              <span class="menu-control menu-control-wide"><span class="menu-keys"><kbd>MOUSE</kbd></span><b data-i18n="controls.mouseSteer">MOVE MOUSE TO STEER · CURSOR HIDDEN</b></span>
               <span class="menu-control"><span class="menu-keys"><kbd>WHEEL</kbd><kbd>+</kbd><kbd>−</kbd></span><b data-i18n="controls.cameraZoom">CAMERA ZOOM</b></span>
               <span class="menu-control"><kbd>R</kbd><b data-i18n="controls.radar">SELECT RADAR MODE</b></span>
               <span class="menu-control"><kbd>T</kbd><b data-i18n="controls.targetCycle">CYCLE RADAR TARGET</b></span>
               <span class="menu-control"><kbd>C</kbd><b data-i18n="controls.countermeasures">FLARES / CHAFF</b></span>
-              <span class="menu-control menu-control-wide"><span class="menu-keys"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></span><b data-i18n="controls.wingmen">WINGMEN · ATTACK / DEFEND / REGROUP</b></span>
+              <span class="menu-control menu-control-wide"><span class="menu-keys"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd></span><b data-i18n="controls.wingmen">WINGMEN · ATTACK / DEFEND / REGROUP / DISENGAGE</b></span>
             </div>
             <p class="menu-lock-instruction" data-i18n="menu.lockInstruction">T selects a hostile track. Keep it ahead of the nose until lock is confirmed, then press M or right mouse button to fire. AIR and GND modes have separate missile stores.</p>
           </section>
@@ -134,7 +135,7 @@
           <section class="credit-entry"><span class="credit-index">04</span><div><small data-i18n="credits.rendererLabel">3D RENDERING</small><h3>Three.js</h3><p data-i18n="credits.rendererDescription">The game uses Three.js for 3D rendering, released under the MIT license.</p><div class="credit-links"><a href="%BASE_URL%licenses/THREE-MIT.txt" target="_blank" rel="noreferrer" data-i18n="credits.readMit">Read the MIT license ↗</a><a href="https://github.com/mrdoob/three.js" target="_blank" rel="noreferrer" data-i18n="credits.threeProject">Three.js project ↗</a></div></div><b class="license-tag">MIT</b></section>
           <section class="credit-entry"><span class="credit-index">05</span><div><small data-i18n="credits.fontLabel">INTERFACE TYPEFACES</small><h3>Barlow Condensed · Rajdhani</h3><p data-i18n="credits.fontDescription">The interface loads Barlow Condensed by The Barlow Project Authors and Rajdhani by Indian Type Foundry from Google Fonts. Both typefaces are licensed under SIL Open Font License 1.1.</p><div class="credit-links"><a href="https://github.com/google/fonts/tree/main/ofl/barlowcondensed" target="_blank" rel="noreferrer" data-i18n="credits.barlowSource">Barlow source ↗</a><a href="https://github.com/google/fonts/tree/main/ofl/rajdhani" target="_blank" rel="noreferrer" data-i18n="credits.rajdhaniSource">Rajdhani source ↗</a><a href="https://openfontlicense.org/" target="_blank" rel="noreferrer" data-i18n="credits.fontLicense">SIL Open Font License 1.1 ↗</a></div></div><b class="license-tag">OFL 1.1</b></section>
           <section class="credit-entry"><span class="credit-index">06</span><div><small data-i18n="credits.audioLabel">COMBAT AUDIO</small><h3 data-i18n="credits.audioTitle">Weapons and engine sound effects</h3><p data-i18n="credits.audioDescription">Cannon, missile launch and explosion effects use CC0 samples by qubodup and gracenew. Missile alerts are generated in-game. The jet takeoff accent by dklon is licensed under CC BY 3.0.</p><div class="credit-links"><a href="https://freesound.org/people/qubodup/sounds/854643/" target="_blank" rel="noreferrer" data-i18n="credits.audioCannon">Cannon loop · qubodup ↗</a><a href="https://freesound.org/people/gracenew/sounds/857959/" target="_blank" rel="noreferrer" data-i18n="credits.audioMissile">Missile launch · gracenew ↗</a><a href="https://freesound.org/people/qubodup/sounds/442958/" target="_blank" rel="noreferrer" data-i18n="credits.audioExplosion">Explosion · qubodup ↗</a><a href="https://opengameart.org/content/jet-engine-takeoff" target="_blank" rel="noreferrer" data-i18n="credits.audioEngine">Jet takeoff · dklon ↗</a><a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noreferrer" data-i18n="credits.audioCc0">CC0 1.0 license ↗</a><a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noreferrer" data-i18n="credits.audioLicense">CC BY 3.0 license ↗</a><a href="%BASE_URL%assets/audio/ATTRIBUTION.md" target="_blank" rel="noreferrer" data-i18n="credits.audioDetails">Audio asset details ↗</a></div></div><b class="license-tag">CC0 · CC BY 3.0</b></section>
-          <div class="credits-note"><span>ⓘ</span><p data-i18n="credits.distributionNote">ILMATILA source code is licensed under GNU GPL version 3 only. Third-party assets and data retain their own licenses, listed here and in the full notices file.</p><a href="%BASE_URL%licenses/GPL-3.0.txt" target="_blank" rel="noreferrer" data-i18n="credits.projectLicense">Project source license ↗</a><a href="%BASE_URL%licenses/THIRD-PARTY-NOTICES.md" target="_blank" rel="noreferrer" data-i18n="credits.notices">Full third-party notices ↗</a></div>
+          <div class="credits-note"><span>ⓘ</span><p data-i18n="credits.distributionNote">ILMATILA source code © 2026 ERÄGAMES is licensed under GNU GPL-3.0-only. You may redistribute it under that license; it is provided without warranty. Third-party assets and data retain their own terms.</p><a href="https://github.com/eratarkastaja/ilmatila" target="_blank" rel="noreferrer" data-i18n="credits.sourceCode">Project source code ↗</a><a href="%BASE_URL%licenses/GPL-3.0.txt" target="_blank" rel="noreferrer" data-i18n="credits.projectLicense">Project source license ↗</a><a href="%BASE_URL%licenses/THIRD-PARTY-NOTICES.md" target="_blank" rel="noreferrer" data-i18n="credits.notices">Full third-party notices ↗</a></div>
         </div>
         <footer class="credits-footer"><span data-i18n="credits.footer">ILMATILA / ASSET AND LICENSE INFORMATION</span><button id="credits-back" type="button"><span data-i18n="credits.back">BACK TO MENU</span> <b>↗</b></button></footer>
       </div>
@@ -142,18 +143,28 @@
 
     <dialog id="pause-dialog" class="pause-dialog" aria-labelledby="pause-title" aria-describedby="pause-description">
       <div class="pause-card">
-        <div class="pause-mark" aria-hidden="true"><i></i><b>Ⅱ</b></div>
-        <div class="pause-copy">
-          <small data-i18n="pause.kicker">MISSION STATUS</small>
-          <h2 id="pause-title" data-i18n="pause.title">FLIGHT PAUSED</h2>
-          <p id="pause-description" data-i18n="pause.description">Flight is paused. Resume the sortie or return to mission selection.</p>
-          <span class="pause-hint"><kbd>ESC</kbd> <span data-i18n="pause.hint">RESUME FLIGHT</span></span>
+        <div id="pause-main-panel" class="pause-main-panel">
+          <div class="pause-mark" aria-hidden="true"><i></i><b>Ⅱ</b></div>
+          <div class="pause-copy">
+            <small data-i18n="pause.kicker">MISSION STATUS</small>
+            <h2 id="pause-title" data-i18n="pause.title">FLIGHT PAUSED</h2>
+            <p id="pause-description" data-i18n="pause.description">Flight is paused. Resume the sortie or return to mission selection.</p>
+            <span class="pause-hint"><kbd>LMB</kbd> <span data-i18n="pause.hint">RESUME FLIGHT</span></span>
+          </div>
+          <div class="pause-actions">
+            <button id="pause-music-toggle" class="music-toggle pause-music-toggle" type="button" aria-pressed="false" data-i18n-aria-label="music.enableAria"><span class="music-toggle-icon" aria-hidden="true">♫</span><span class="music-toggle-label" data-i18n="music.disabled">MUSIC OFF</span><b>♪</b></button>
+            <button id="show-flight-controls" class="pause-controls-button" type="button"><span data-i18n="pause.controlsButton">SHOW CONTROLS</span><b aria-hidden="true">↗</b></button>
+            <button id="resume-flight" class="pause-resume" type="button"><span data-i18n="pause.resume">RESUME FLIGHT</span><b>↗</b></button>
+            <button id="quit-to-menu" class="pause-quit" type="button"><span data-i18n="pause.quit">RETURN TO MISSION SELECTION</span><b>⌂</b></button>
+          </div>
         </div>
-        <div class="pause-actions">
-          <button id="pause-music-toggle" class="music-toggle pause-music-toggle" type="button" aria-pressed="false" data-i18n-aria-label="music.enableAria"><span class="music-toggle-icon" aria-hidden="true">♫</span><span class="music-toggle-label" data-i18n="music.disabled">MUSIC OFF</span><b>♪</b></button>
-          <button id="resume-flight" class="pause-resume" type="button"><span data-i18n="pause.resume">RESUME FLIGHT</span><b>↗</b></button>
-          <button id="quit-to-menu" class="pause-quit" type="button"><span data-i18n="pause.quit">RETURN TO MISSION SELECTION</span><b>⌂</b></button>
-        </div>
+        <section id="pause-controls-panel" class="pause-controls-panel" aria-labelledby="pause-controls-title" aria-describedby="pause-controls-description" hidden>
+          <header class="pause-controls-heading">
+            <div><small data-i18n="pause.controlsKicker">QUICK REFERENCE</small><h2 id="pause-controls-title" data-i18n="pause.controlsTitle">FLIGHT CONTROLS</h2></div>
+            <button id="back-to-pause" type="button"><span data-i18n="pause.controlsBack">BACK TO PAUSE</span><b aria-hidden="true">↙</b></button>
+          </header>
+          <div id="pause-controls-reference" class="pause-control-reference"></div>
+        </section>
       </div>
     </dialog>
 
@@ -209,9 +220,17 @@
         <strong id="mission-phase-detail"></strong>
         <div id="mission-route-readout" class="mission-route-readout" hidden><span id="mission-route-label"></span><b id="mission-route-range"></b></div>
         <div class="mission-objective-task"><small data-i18n="mission.objectiveLabel">MISSION OBJECTIVE</small><strong id="mission-objective-title"></strong><span id="mission-objective-progress"></span></div>
+        <div class="radio-call" id="radio-call" hidden role="status" aria-live="polite" aria-atomic="true"><i aria-hidden="true"></i><div class="radio-call-heading"><small data-i18n="hud.radioInbound">INBOUND TRANSMISSION</small><b data-radio-callsign>RAVEN 1-1</b></div><span data-radio-message></span></div>
       </section>
       <section class="mission-complete" id="mission-complete" hidden role="status" aria-live="assertive" aria-labelledby="mission-complete-title">
         <div class="mission-complete-card"><small><i></i> <span data-i18n="mission.objectiveAchieved">MISSION OBJECTIVE ACHIEVED</span></small><h2 id="mission-complete-title" data-i18n="mission.objectiveAchieved">MISSION OBJECTIVE ACHIEVED</h2><p id="mission-complete-detail"></p></div>
+      </section>
+      <section class="selected-track-panel" id="selected-track-panel" hidden role="group" data-i18n-aria-label="hud.trackPanel">
+        <div class="selected-track-copy">
+          <div class="selected-track-heading"><small data-i18n="hud.fireControlTrack">FIRE CONTROL TRACK</small><b id="selected-track-state"></b></div>
+          <strong id="selected-track-name"></strong>
+          <div class="selected-track-meta"><span id="selected-track-type"></span><b id="selected-track-range"></b></div>
+        </div>
       </section>
       <section class="radar" data-i18n-aria-label="hud.radar"><div class="radar-screen" data-i18n-aria-label="hud.radarScreen"><i class="range-ring ring-inner"></i><i class="range-ring ring-middle"></i><i class="range-ring ring-outer"></i><i class="azimuth-line"></i><i class="ownship"></i><span class="radar-mode-indicator" id="radar-mode-indicator">AIR</span></div></section>
       <section class="weapons"><div class="weapon-row"><i class="weapon-icon gun-icon"></i><div><small data-i18n="hud.gun">GAU-22/A · 25 mm</small><strong id="weapon">READY</strong></div></div><div class="weapon-row"><i class="weapon-icon missile-icon"></i><div><small id="missile-type">AIM-120C · AMRAAM</small><strong id="ammo">AIR SEARCH</strong></div><b class="ammo-count" id="missile-count">06</b><kbd>M</kbd></div><div class="weapon-row countermeasure-row"><i class="weapon-icon countermeasure-icon"></i><div><small data-i18n="hud.countermeasures">FLARES / CHAFF</small><strong id="countermeasure-count">12</strong></div><kbd>C</kbd></div><div class="wingman-order-row"><small data-i18n="hud.wingmanOrder">WINGMAN ORDERS</small><b id="wingman-order">ATTACK</b></div><div class="hull-row"><div><small data-i18n="hud.airframeIntegrity">AIRFRAME</small><strong id="hull-value">100%</strong></div><i><b id="hull-fill"></b></i></div><div class="score-row"><span data-i18n="hud.score">MISSION SCORE</span><b id="score">00000</b></div></section>

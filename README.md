@@ -1,35 +1,29 @@
 # ILMATILA
 
-**ILMATILA 0.1.0-alpha.9** is an independent browser-based air-combat game by **ERÄGAMES**, built with Three.js. It remains in **alpha**: the sortie loop and progression are playable, but combat balance and mission pacing still need broader player testing. Aircraft handling, radar, weapons, opponents, and ground battles are game simulations and are not intended for real-world training or operational use.
+ILMATILA is an independent browser-based air-combat game by ERÄGAMES. The current source version is **0.1.0-alpha.10**. It is an alpha build: missions, combat, progression, aircraft handling, radar, and weapons are playable, while balance and mission pacing remain under development. The simulation is fictional and is not intended for real-world training or operational use.
 
-The interface defaults to English and also supports Finnish. See the [changelog](CHANGELOG.md) for this alpha's updates.
+The interface supports English and Finnish. The game runs in a modern browser with WebGL and needs no API key at runtime.
 
 ## Run locally
 
-Requirements: Node.js 20.19+, 22.13.x, or 24+, npm, and a modern browser with WebGL support.
+Requirements: Node.js 20.19+, 22.13.x, or 24+, and npm.
 
 ```sh
 npm ci
 npm run dev
 ```
 
-Open the local URL printed by Vite. Run the automated checks with `npm test` and `npm run lint`; `npm run test:watch` keeps Vitest running while you edit. Create a production build with `npm run build`; `npm run preview` serves that build locally. The app does not need an API key at runtime.
+Use `npm run build` to create the production site and `npm run preview` to serve it locally. Run the automated checks with `npm test` and `npm run lint`; `npm run test:watch` runs Vitest in watch mode.
 
-## GitHub Pages
+## Current game
 
-After GitHub Pages is enabled with **Settings → Pages → Build and deployment → Source → GitHub Actions**, the site is built and deployed automatically when changes are pushed to `master`. The workflow can also be started manually from the repository's Actions tab. The project URL is <https://eratarkastaja.github.io/ilmatila/>.
+The available sorties are Combat Air Patrol, Intercept Flight, Close Air Support, and Training. Combat missions use a briefing, departure, navigation, contact, engagement, objective, return-to-base, extraction, and debrief flow. Difficulty affects hostile combat behavior and damage. Mission records and unlocks are stored locally in the browser.
 
-Generated MML terrain packages stay out of Git history. The Pages workflow downloads the four versioned area archives from the [terrain data release](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.2.0), verifies their SHA-256 checksums, and includes them in the deployed site. The published Päijänne, Virolahti, Ilomantsi, and Kuusamo maps now each cover 32 × 32 km. The in-game terrain viewer needs no API key; a key is only required to fetch updated source data.
+The player flies an F-35A representation using an included FlightGear F-35B visual model. Hostile flights use FlightGear Su-27-family and MiG-29 exterior models. Ground vehicles and the Mi-24 helicopter are low-detail, project-authored procedural models. These models are visual game assets, not exact engineering replicas.
 
-## Missions and progression
+Flight controls are shown in the mission menu and in the pause menu's **Show Controls** view. Mouse steering and keyboard steering work together. The radar can switch between air and ground modes; the gun lead cue and selected radar target support combat. Air-to-air and air-to-ground missiles use separate inventories.
 
-Combat Air Patrol is the first available combat sortie, followed by Intercept Flight and Close Air Support as each previous mission is completed and the aircraft returns to the extraction area. Training remains available from the start. The debrief reports score, gun accuracy, aircraft and ground-unit losses, damage, sortie time, and objective completion. Best scores are stored in browser local storage separately for each mission and difficulty. Clearing site data resets this local progression.
-
-Choose Easy, Standard, or Hard in the mission menu. The setting adjusts aircraft durability, countermeasure stores, hostile weapon damage and accuracy, hostile aircraft durability, and wingman effectiveness. Scores are compared only within the same mission and difficulty.
-
-The mission flow is departure, navigation, contact, engagement, objective, return to base, extraction, and debrief. Not every task requires an air-to-air engagement; the exact objective is shown in the briefing and cockpit HUD.
-
-## Flight controls
+## Controls
 
 | Input | Action |
 | --- | --- |
@@ -41,45 +35,35 @@ The mission flow is departure, navigation, contact, engagement, objective, retur
 | Shift | Afterburner |
 | Space | Fire cannon |
 | T | Cycle detected hostile radar tracks |
-| M | Fire a guided missile when the selected hostile contact is within range and locked |
+| M | Fire a missile when the selected target is in range and locked |
 | R | Switch radar between air and ground modes |
 | C | Deploy flares and chaff |
-| 1 / 2 / 3 | Order wingmen: attack / defend / regroup |
-| Move mouse | Steer the aircraft; mouse steering is active throughout flight |
+| 1 / 2 / 3 / 4 | Order wingmen: attack / defend / regroup / disengage |
+| Move mouse | Steer the aircraft |
 | Left / right mouse button | Fire cannon / launch a missile |
-| Mouse wheel or + / − | Zoom the chase camera in / out |
-| Esc | Pause the sortie |
+| Mouse wheel or + / − | Zoom the chase camera |
+| Esc | Open the pause menu |
 
-The pointer is captured and hidden during flight, and returns in the pause menu. Keyboard and mouse steering work together.
+## Terrain and GitHub Pages
 
-## Weapons and radar
+The game currently serves four Finnish areas: Päijänne, Virolahti, Ilomantsi, and Kuusamo. Each terrain package covers 32 × 32 km and contains Maanmittauslaitos elevation and colour orthophoto data. The playable boundary follows the usable elevation and orthophoto coverage; terrain outside that footprint is obscured and is not part of the mission area.
 
-The heading-up radar keeps the aircraft's nose at the top of the display. Press `R` to choose air or ground mode, then `T` to select a hostile track. The cannon lead cue shows the predicted firing point for the selected aircraft or ground vehicle. The missile cue and count follow the selected radar mode: six AIM-120C AMRAAM air-to-air missiles and four AGM-65D Maverick air-to-ground missiles are carried as separate game inventories. Missiles use limited powered guidance and a forgiving proximity fuze; chaff and flares can still defeat a seeker.
+Generated terrain packages are published separately from the source repository. The GitHub Pages workflow downloads the current `terrain-data-v1.2.0` release, checks its SHA-256 manifest, and adds the packages to the site build. Local terrain generation requires an MML API key; see the [terrain tool guide](tools/terrain/README.md).
 
-## Audio
+## Project layout
 
-Combat audio uses bundled CC0 samples for cannon fire, missile launch, and explosions, plus a CC BY 3.0 jet-engine accent. The incoming-missile warning is synthesized in-game. Sample sources and attribution are listed in the in-game **Assets & licenses** panel and [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
+- `src/main.js` starts the app and coordinates menu, mission, and lifecycle.
+- `src/aircraft/`, `src/ground/`, and `src/assets/` contain aircraft, procedural ground units, and asset loading.
+- `src/combat/` contains `CombatWorld` and the flight, weapon, projectile, collision, radar, mission, radio, and AI systems.
+- `src/environment/` contains terrain, terrain coverage and streaming, atmosphere, clouds, and sun effects.
+- `src/audio/`, `src/effects/`, `src/input/`, `src/mission/`, and `src/ui/` contain audio, effects, controls, mission data/progression, HUD, menu, translations, and styles.
+- `tests/` contains the Vitest suite, grouped by area.
+- `tools/terrain/` contains the optional MML downloader and terrain package builder.
+- `tools/assets/` and `scripts/` contain the aircraft conversion tools.
+- `docs/architecture.md`, `docs/performance-profiling.md`, and `docs/assets-and-licensing.md` describe the current implementation.
 
-The optional soundtrack contains two original tracks by Erätarkastaja. They are encoded as stereo Ogg Vorbis and total about 4.6 MB; the WAV masters remain outside the repository. Music is loaded only after the player enables it from the menu or pause dialog, and the preference persists between visits. Copyright and use details are in [`public/assets/audio/ATTRIBUTION.md`](public/assets/audio/ATTRIBUTION.md); the soundtrack is not covered by the project GPL license.
+## Licensing
 
-## Terrain data
+Project source code is licensed under [GNU GPL version 3 only](LICENSE). The interactive **Assets & Licenses** panel links to the project source, the complete GPL text, and the third-party notices. Aircraft source files include their own license copies and attribution. Terrain, sound, typefaces, and original music retain their respective terms. The ERÄGAMES name and logo are studio brand assets and are excluded from the source-code license.
 
-The repository contains the terrain-area index and downloader, while generated map packages are published as [versioned terrain archives](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.2.0). The Pages deployment downloads all four 32 × 32 km areas (Päijänne, Virolahti, Ilomantsi, and Kuusamo) and includes them in the site. Local source-data updates require an MML API key; see [the terrain-tool guide](tools/terrain/README.md). The game itself needs no API key.
-
-## Aircraft and project structure
-
-The player aircraft uses a converted FlightGear F-35B model as a visual stand-in for an F-35A. It is not an F-35A-specific model or livery. The original model source, texture, license, credits, and conversion script are included. Hostile flights use converted FlightGear Su-27 and MiG-29 exterior models; the Su-27 is a Flanker-family visual, not a Su-35-specific model. Their source files, licenses, credits, and browser-optimized conversions are included. Ground vehicles remain project-authored procedural models; vetted external candidates and license notes are in [docs/asset-sourcing.md](docs/asset-sourcing.md).
-
-- `src/main.js` coordinates the menu, sortie, pause, and game lifecycle.
-- `src/combat/` contains flight controls, radar, ballistics, hit testing, projectiles, and air and ground combat behavior.
-- `src/terrain.js`, `src/clouds.js`, `src/sun.js`, and `src/fx.js` build the environment and visual effects.
-- `src/hud.js`, `src/menu-radar.js`, and `src/i18n.js` implement the HUD, menu radar, and translations.
-- `tools/terrain/` contains the optional MML data downloader and its guide.
-- `scripts/convert-flightgear-f35.py` rebuilds the player aircraft GLB from its included source files.
-- `npm run assets:aircraft` rebuilds the Su-27 and MiG-29 GLBs from their included source files.
-
-## Licensing and attribution
-
-The project source is licensed under [GNU GPL version 3 only](LICENSE). Copyright © 2026 ERÄGAMES. The ERÄGAMES name and logo are studio brand assets and are not covered by the source-code license. Third-party files and optional data have their own terms; see [third-party notices](THIRD-PARTY-NOTICES.md), the in-game **Assets & licenses** panel, and the aircraft [asset credits](public/assets/aircraft/ASSET-CREDITS.md). MML map data is not committed to the repository.
-
-ILMATILA is an independent game by ERÄGAMES and is not affiliated with or endorsed by the Finnish Air Force, Lockheed Martin, FlightGear, or the National Land Survey of Finland.
+See [current asset and license information](docs/assets-and-licensing.md) and the complete [third-party notices](public/licenses/THIRD-PARTY-NOTICES.md). ILMATILA is not affiliated with or endorsed by the Finnish Air Force, Lockheed Martin, FlightGear, or the National Land Survey of Finland.

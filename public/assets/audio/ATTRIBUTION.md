@@ -1,10 +1,10 @@
 # Audio asset attribution
 
-ILMATILA uses the following sound assets. The Freesound clips are high-quality
-previews from their source pages, encoded as Ogg Vorbis for browser delivery.
-The `jet-takeoff.ogg` file was encoded from the original mono WAV; no other
-edits were made to those samples. The incoming-missile warning is synthesized
-in-game and does not use an external audio file.
+ILMATILA uses the following sound assets. WAV files from Freesound and
+OpenGameArt were encoded as Ogg Vorbis for browser delivery. The
+`jet-takeoff.ogg` file was encoded from the original mono WAV; no other edits
+were made to that sample. The incoming-missile warning is synthesized in-game
+and does not use an external audio file.
 
 | Bundled file | Source and creator | License | Use |
 | --- | --- | --- | --- |
@@ -15,6 +15,16 @@ in-game and does not use an external audio file.
 
 The CC0 samples do not require attribution; creator and source links are kept
 here as a courtesy. The dklon sample requires attribution under CC BY 3.0.
+
+The cannon loop's Freesound page identifies its source as a U.S. Army V Corps
+B-roll video by Sgt. Max Elliott. That DVIDS video is marked public domain and
+requests proper byline credit; the game credits qubodup as the Freesound sound
+creator and links both sources. The explosion sample is a mix of CC0 sounds by
+vate, blaukreuz, qubodup, and V-ktor; those component creators are recorded
+here as a courtesy as well as the main sound-page creator.
+
+- Source footage for the cannon loop: [B-Roll: Integration meets innovation, U.S. Army V Corps](https://www.dvidshub.net/video/1005552/b-roll-integration-meets-innovation-us-uk-forces-prove-lethality-against-aerial-threats-project-flytrap), video by Sgt. Max Elliott, marked public domain.
+- Components mixed into the explosion effect: [hard door banging · vate](https://freesound.org/people/vate/sounds/268126/), [avl07.wav · blaukreuz](https://freesound.org/people/blaukreuz/sounds/162672/), [Door Gate Slam · qubodup](https://freesound.org/people/qubodup/sounds/159552/), and [explosion10.wav · V-ktor](https://freesound.org/people/V-ktor/sounds/435415/). The Freesound asset page labels the mix CC0.
 
 ## Music
 

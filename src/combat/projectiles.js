@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createAfterburnerFlame } from '../plane.js';
+import { createAfterburnerFlame } from '../aircraft/plane.js';
 
 // Game-tuned burn and coast budgets reward a good lock without allowing
 // missiles to steer indefinitely or across an entire theater.

@@ -28,7 +28,7 @@ TERRAIN_OUTPUT_DIR="/tmp/ilmatila-terrain-32km" npm run terrain:fetch
 
 The full download creates 32 × 32 km packages. `--detail-only` refreshes imagery only for the extent in existing metadata; use a full download to expand older packages.
 
-To add or refresh detailed imagery without redownloading elevation and standard-resolution data, use `node tools/terrain/fetch-finland-terrain.mjs --detail-only`. The older `--near-only` flag remains an alias for the moving detail update.
+To refresh detailed imagery without redownloading elevation and standard-resolution data, run `npm run terrain:fetch -- --detail-only`. The moving detail window is generated across the complete theater and follows the aircraft at runtime.
 
 To populate a local checkout with the published package without an MML API key, download the five assets from the [terrain data release](https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.2.0), verify them with `SHA256SUMS.txt`, and extract each area ZIP into `public/terrain/areas/`.
 
@@ -60,6 +60,6 @@ python3 tools/terrain/package-release.py
 
 It writes ignored release files to `release-assets/`. The current packages are published as `terrain-data-v1.2.0`; the [Pages workflow](../../.github/workflows/pages.yml) verifies their hashes and copies them into the site build. Generating or validating local data does not publish a package or change which terrain release Pages uses.
 
-The published terrain archives are available at <https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.2.0>. See the [v1.2.0 release notes](terrain-data-v1.2.0-release-notes.md). Each archive includes `terrain.json` with its retrieval date and source metadata plus an attribution notice. The in-game asset and license panel also links to the source, CC BY 4.0 terms, and the terrain release.
+The current terrain archives are available at <https://github.com/eratarkastaja/ilmatila/releases/tag/terrain-data-v1.2.0>. Each archive includes `terrain.json` with its retrieval date and source metadata plus an attribution notice. The in-game asset and license panel also links to the source and CC BY 4.0 terms.
 
 Sources: [MML WCS service description](https://www.maanmittauslaitos.fi/ortokuvien-ja-korkeusmallien-kyselypalvelu/tekninen-kuvaus) · [MML open-data license and attribution requirements](https://www.maanmittauslaitos.fi/avoindata-lisenssi-cc40).

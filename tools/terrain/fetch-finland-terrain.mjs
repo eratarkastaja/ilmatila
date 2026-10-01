@@ -28,7 +28,7 @@ const WATER_TILE_PIXELS = 256;
 const DETAIL_ORTHO_SCALE = 0.25; // ~1,000 px/tile (about 2 m/pixel) across the full theater.
 const DETAIL_ORTHO_GRID = ORTHO_GRID;
 const DETAIL_ORTHO_TILE_PIXELS = 1000;
-const DETAIL_ONLY = process.argv.includes('--detail-only') || process.argv.includes('--near-only');
+const DETAIL_ONLY = process.argv.includes('--detail-only');
 const OUTPUT_DIR = process.env.TERRAIN_OUTPUT_DIR;
 const OUT_ROOT = OUTPUT_DIR
   ? pathToFileURL(`${resolve(OUTPUT_DIR)}${sep}`)

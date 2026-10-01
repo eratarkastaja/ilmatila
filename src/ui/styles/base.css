@@ -1,0 +1,225 @@
+/* Shared application styles */
+@import "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&display=swap";
+
+:root {
+  font-family: Rajdhani,sans-serif;
+  color: #dce8e8;
+  background: #07111b;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,body,#game {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+#game canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg,transparent 0%,transparent 70%,rgba(5,13,20,.38) 100%),radial-gradient(ellipse 125% 110% at 50% 45%,transparent 60%,rgba(3,9,14,.24) 100%);
+}
+
+.speed {
+  right: 34px;
+}
+
+.altitude {
+  right: 143px;
+}
+
+.r1 {
+  width: 35%;
+  height: 35%;
+}
+
+.r2 {
+  width: 65%;
+  height: 65%;
+}
+
+.r3 {
+  width: 94%;
+  height: 94%;
+}
+
+.sweep {
+  position: absolute;
+  z-index: 2;
+  width: 50%;
+  height: 50%;
+  left: 50%;
+  top: 50%;
+  transform-origin: 0 0;
+  background: conic-gradient(from 275deg,transparent 0 76%,#81d9a11c 88%,#a1e8acb0 100%);
+  animation: sweep 5s linear infinite;
+  border-right: 1px solid #b4f1bf8c;
+}
+
+@media (max-width:700px) {
+  .speed {
+    right: 16px;
+  }
+  .altitude {
+    right: 107px;
+  }
+}
+
+.missile-icon {
+  width: 8px;
+  height: 21px;
+  border-radius: 5px 5px 2px 2px;
+  background: #77908255;
+}
+
+.missile-icon:before,.missile-icon:after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 8px;
+  height: 7px;
+  background: #779082;
+  clip-path: polygon(50% 0,100% 100%,0 100%);
+}
+
+.missile-icon:before {
+  left: -6px;
+}
+
+.missile-icon:after {
+  right: -6px;
+}
+
+.score-row {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 7px;
+  font-size: 8px;
+  letter-spacing: .12em;
+  color: #9cb3a8;
+}
+
+.score-row b {
+  font: 600 12px Barlow Condensed,sans-serif;
+  color: #dbe9dd;
+}
+
+#game.flight-active:not(.flight-paused) canvas {
+  cursor: none;
+}
+
+#game.flight-active.flight-paused canvas {
+  cursor: auto;
+}
+
+.speed {
+  right: 34px;
+  justify-content: flex-end;
+}
+
+.altitude {
+  right: 145px;
+  justify-content: flex-end;
+}
+
+.climb {
+  right: 265px;
+  justify-content: flex-end;
+  min-width: 108px;
+}
+
+.ring-inner {
+  width: 30%;
+  height: 30%;
+}
+
+.ring-middle {
+  width: 60%;
+  height: 60%;
+}
+
+.ring-outer {
+  width: 90%;
+  height: 90%;
+  border-color: #9ab9aa45;
+}
+
+.countermeasure-icon {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  transform: none;
+}
+
+.countermeasure-icon:before,.countermeasure-icon:after {
+  content: "";
+  position: absolute;
+  border: 1px solid #c2d0bf;
+  transform: rotate(45deg);
+}
+
+.countermeasure-icon:before {
+  width: 5px;
+  height: 5px;
+  top: 2px;
+  left: 5px;
+}
+
+.countermeasure-icon:after {
+  width: 2px;
+  height: 2px;
+  bottom: 1px;
+  left: 7px;
+  background: #ffad69;
+  box-shadow: 4px -2px #ffad69,-4px -2px #ffad69;
+}
+
+.score-row {
+  padding-top: 8px;
+}
+
+@media (max-width:900px) {
+  .climb {
+    display: none;
+  }
+}
+
+@media (max-width:700px) {
+  .speed {
+    right: 14px;
+  }
+  .altitude {
+    right: 108px;
+  }
+  .score-row {
+    font-size: 7px;
+  }
+}
+
+.score-row {
+  font-size: 10px;
+}
+
+@media (max-width:700px) {
+  .score-row {
+    font-size: 8px;
+  }
+}
+
+.difficulty-select-row {
+  margin-top: 0;
+  border-top: 0;
+}
