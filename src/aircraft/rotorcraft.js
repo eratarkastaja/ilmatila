@@ -171,6 +171,10 @@ export function createMi24AttackHelicopter() {
     }
     aircraft.add(r60Store);
     airToAirStores.push(r60Store);
+    const reserveStore = r60Store.clone(true);
+    reserveStore.position.y -= 0.28;
+    aircraft.add(reserveStore);
+    airToAirStores.push(reserveStore);
     // Short, tucked wheeled landing gear remains distinct from a jet undercarriage.
     cylinder(aircraft, 0.13, 0.13, 0.92, [side * 0.82, -0.72, 1.65], steel, [0, 0, Math.PI / 2], 8);
     cylinder(aircraft, 0.18, 0.18, 0.17, [side * 1.28, -1.12, 1.65], paintDark, [0, 0, Math.PI / 2], 8);

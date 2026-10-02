@@ -220,7 +220,7 @@ export class AirSpawnSystem {
         targetRefreshTimer: 0,
         groundTarget: null,
         rocketCooldown: 4 + i * 3,
-        airToAirMissilesRemaining: 2,
+        airToAirMissilesRemaining: 4,
         airMissileCooldown: 1.8 + i * 1.8,
         waypoint: new THREE.Vector3(),
         steeringOffset: new THREE.Vector3(),

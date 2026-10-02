@@ -12,7 +12,7 @@ export const DIFFICULTY_PRESETS = deepFreeze({
       hull: 135,
       countermeasures: 20,
       chaff: {
-        count: 16,
+        count: 20,
         cooldown: 1.4,
         radarTrackBreakChance: 0.62,
         radarMissileBreakChance: 0.68,
@@ -75,7 +75,7 @@ export const DIFFICULTY_PRESETS = deepFreeze({
         }
       },
       missile: {
-        capacity: 1,
+        capacity: 2,
         initialDelay: 9,
         cooldown: 19,
         cooldownJitter: 5,
@@ -98,7 +98,7 @@ export const DIFFICULTY_PRESETS = deepFreeze({
       damage: 1.15,
       aimSpread: 0.9,
       airMissile: {
-        capacity: 2,
+        capacity: 4,
         cooldown: 6.5,
         minRange: 2600,
         maxRange: 6900
@@ -134,7 +134,7 @@ export const DIFFICULTY_PRESETS = deepFreeze({
       hull: 100,
       countermeasures: 20,
       chaff: {
-        count: 12,
+        count: 20,
         cooldown: 1.7,
         radarTrackBreakChance: 0.5,
         radarMissileBreakChance: 0.56,
@@ -197,7 +197,7 @@ export const DIFFICULTY_PRESETS = deepFreeze({
         }
       },
       missile: {
-        capacity: 3,
+        capacity: 4,
         initialDelay: 5.5,
         cooldown: 10.5,
         cooldownJitter: 2.8,
@@ -220,7 +220,7 @@ export const DIFFICULTY_PRESETS = deepFreeze({
       damage: 1,
       aimSpread: 1,
       airMissile: {
-        capacity: 3,
+        capacity: 6,
         cooldown: 5.2,
         minRange: 2300,
         maxRange: 7800
@@ -256,7 +256,7 @@ export const DIFFICULTY_PRESETS = deepFreeze({
       hull: 88,
       countermeasures: 20,
       chaff: {
-        count: 10,
+        count: 20,
         cooldown: 2,
         radarTrackBreakChance: 0.4,
         radarMissileBreakChance: 0.46,
@@ -319,7 +319,7 @@ export const DIFFICULTY_PRESETS = deepFreeze({
         }
       },
       missile: {
-        capacity: 5,
+        capacity: 6,
         initialDelay: 1.6,
         cooldown: 4.4,
         cooldownJitter: 1.1,
@@ -342,7 +342,7 @@ export const DIFFICULTY_PRESETS = deepFreeze({
       damage: 0.9,
       aimSpread: 1.1,
       airMissile: {
-        capacity: 4,
+        capacity: 8,
         cooldown: 4.1,
         minRange: 1900,
         maxRange: 8500

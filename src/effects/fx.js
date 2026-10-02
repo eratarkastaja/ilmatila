@@ -144,7 +144,8 @@ export class FlightFX {
     this.wingVaporRibbon.frustumCulled = false;
     this.scene.add(this.wingVaporRibbon);
 
-    this.missileTrailCapacity = 192;
+    this.missileTrailCapacity = 240;
+    this.missileTrailSampleInterval = 0.025;
     this.maxMissileTrails = 24;
     this.missileTrailCrossSection = 9;
     this.missileTrailLifetime = 5.8;
@@ -892,27 +893,56 @@ export class FlightFX {
           positions: new Float32Array(this.missileTrailCapacity * 3),
           ages: new Float32Array(this.missileTrailCapacity),
           strengths: new Float32Array(this.missileTrailCapacity),
+          previousPosition: new Float32Array(3),
           head: 0,
           count: 0,
           timer: 0,
+          hasPreviousPosition: false,
         };
         this.missileTrailStates.set(missile, trail);
       }
-      trail.timer -= dt;
-      if (trail.timer > 0) continue;
-
-      const point = trail.head;
       const rear = mesh.localToWorld(this._world.set(0, 0, -1.85));
-      const offset = point * 3;
-      trail.positions[offset] = rear.x;
-      trail.positions[offset + 1] = rear.y;
-      trail.positions[offset + 2] = rear.z;
-      trail.ages[point] = 0;
       const strength = missile.motorBurning ? 1 : .68;
-      trail.strengths[point] = strength;
-      trail.head = (point + 1) % this.missileTrailCapacity;
-      trail.count = Math.min(trail.count + 1, this.missileTrailCapacity);
-      trail.timer = missile.motorBurning ? 0.025 : 0.038;
+      if (!trail.hasPreviousPosition) {
+        const point = trail.head;
+        const offset = point * 3;
+        trail.positions[offset] = rear.x;
+        trail.positions[offset + 1] = rear.y;
+        trail.positions[offset + 2] = rear.z;
+        trail.ages[point] = 0;
+        trail.strengths[point] = strength;
+        trail.head = (point + 1) % this.missileTrailCapacity;
+        trail.count = Math.min(trail.count + 1, this.missileTrailCapacity);
+        trail.previousPosition[0] = rear.x;
+        trail.previousPosition[1] = rear.y;
+        trail.previousPosition[2] = rear.z;
+        trail.hasPreviousPosition = true;
+        continue;
+      }
+
+      const previousX = trail.previousPosition[0];
+      const previousY = trail.previousPosition[1];
+      const previousZ = trail.previousPosition[2];
+      const sampleInterval = this.missileTrailSampleInterval;
+      let sampleOffset = sampleInterval - trail.timer;
+      while (sampleOffset <= dt) {
+        const fraction = dt > 0 ? sampleOffset / dt : 1;
+        const age = Math.max(0, dt - sampleOffset);
+        const point = trail.head;
+        const offset = point * 3;
+        trail.positions[offset] = previousX + (rear.x - previousX) * fraction + wind.x * age;
+        trail.positions[offset + 1] = previousY + (rear.y - previousY) * fraction + wind.y * age;
+        trail.positions[offset + 2] = previousZ + (rear.z - previousZ) * fraction + wind.z * age;
+        trail.ages[point] = age;
+        trail.strengths[point] = strength;
+        trail.head = (point + 1) % this.missileTrailCapacity;
+        trail.count = Math.min(trail.count + 1, this.missileTrailCapacity);
+        sampleOffset += sampleInterval;
+      }
+      trail.timer = (trail.timer + dt) % sampleInterval;
+      trail.previousPosition[0] = rear.x;
+      trail.previousPosition[1] = rear.y;
+      trail.previousPosition[2] = rear.z;
     }
 
     this.missileTrailMaterial.uniforms.time.value += dt;

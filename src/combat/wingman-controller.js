@@ -91,7 +91,8 @@ export class WingmanController {
       const targetRange = target ? target.mesh.position.distanceTo(ally.mesh.position) : Infinity;
       const waypoint=ally.waypoint;
 
-      if (target && targetRange < (ally.groundTarget ? 650 : 1100)) ally.phase = 'extend';
+      if (target && !groundTarget && ally.airMissiles <= 0) ally.phase = 'attack';
+      else if (target && targetRange < (groundTarget ? 650 : 1100)) ally.phase = 'extend';
       else if (!target || (ally.phase === 'extend' && targetRange > 2050)) ally.phase = target ? 'attack' : 'formation';
 
       if (ally.defensiveTimer > 0) {

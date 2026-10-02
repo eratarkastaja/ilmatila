@@ -10,9 +10,9 @@ The implemented game is a single-player, real-time 3D air-combat sortie in a cha
 
 - **Flight:** Keyboard and pointer-locked mouse steering work together. The aircraft has pitch, bank, heading, speed, afterburner, chase-camera zoom, and terrain-relative altitude feedback.
 - **Radar and targeting:** The radar switches between air and ground search modes. Contacts are selected with `T`/`Y`; the selected target has separate sensor, lock-envelope, and boresight conditions. Lock acquisition and confirmation are shown to the player.
-- **Weapons:** The player fires a cannon and carries separate air-to-air and air-to-ground missile stores. Missile launch depends on the radar-selected target, mode, lock, and launch envelope. The gun uses ballistic projectiles; missiles have finite motor/lifetime behavior and can be spoofed by decoys.
-- **Countermeasures:** `F` deploys flares against infrared missiles and `C` deploys chaff against existing hostile radar tracks and radar-guided missiles. Both inventories are finite and use cooldowns. Flare decoys can distract infrared seekers when the missile can see a fresh flare ahead of its target. Each chaff burst gets one break roll against an eligible radar missile; a later burst may retry after a failed roll or once an earlier disruption ends. A successful break briefly interrupts guidance, followed by normal reacquisition.
-- **Wingmen:** The player can order wingmen to attack, defend, regroup, or disengage. Wingmen have their own targeting, weapons, health, loss behavior, and radio reports.
+- **Weapons:** The player fires a cannon and carries 10 air-to-air missiles and 10 air-to-ground missiles. Missile launch depends on the radar-selected target, mode, lock, and launch envelope. The gun uses ballistic projectiles; missiles have finite motor/lifetime behavior and can be spoofed by decoys.
+- **Countermeasures:** `F` deploys flares against infrared missiles and `C` deploys chaff against existing hostile radar tracks and radar-guided missiles. Both inventories contain 20 charges and use cooldowns. Flare decoys can distract infrared seekers when the missile can see a fresh flare ahead of its target. Each chaff burst gets one break roll against an eligible radar missile; a later burst may retry after a failed roll or once an earlier disruption ends. A successful break briefly interrupts guidance, followed by normal reacquisition.
+- **Wingmen:** The player can order wingmen to attack, defend, regroup, or disengage. Wingmen have their own targeting, weapons, health, loss behavior, and radio reports. When their air-to-air missiles run out, they continue pursuing air targets for cannon attacks.
 - **Objectives:** Current objective types are clear air, support, and timed training. Mission phases guide the player through departure, navigation/ingress, contact, engagement, objective, RTB, and debrief. Clear-air and support sorties complete after the objective and extraction; training completes after its configured duration and then uses the return route.
 
 ## Combat philosophy
@@ -24,6 +24,8 @@ The player is not granted a confirmed hit merely by firing at a locked contact: 
 ## Difficulty philosophy
 
 The three built-in presets are `easy`, `standard`, and `hard` in `src/combat/difficulty.js`. They currently tune both numeric advantages and AI behavior parameters, including player hull/incoming damage, hostile health and aim spread, detection/reaction, firing cadence and range, maneuver/evasion chances, missile properties, wingman effectiveness, and ground air-defense behavior. Do not silently change those relationships or presume difficulty is already behavior-only.
+
+Wingmen carry 4, 6, and 8 air-to-air missiles across easy, standard, and hard; hostile fighters carry 2, 4, and 6. Mi-24s carry 4 air-to-air missiles. Hostile fighters steer toward their selected air target inside their weapon engagement range so they can continue making cannon passes after their missiles are spent.
 
 **Non-binding recommendation:** If future difficulty work needs more distinction, consider adding tactical choices, coordination, or reaction patterns alongside numeric tuning rather than relying only on accuracy, damage, or health multipliers. This is a direction to evaluate, not a requirement for technical changes.
 

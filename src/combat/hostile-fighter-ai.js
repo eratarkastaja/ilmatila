@@ -138,6 +138,27 @@ export class HostileFighterAI {
         enemy.attackRight.copy(playerRight);
       }
 
+      const canEngage = enemy.phase !== 'staging';
+      if (enemy.targetRefreshTimer <= 0 || !enemy.engagementTarget || enemy.engagementTarget.dead) {
+        const selected = this.selectEnemyEngagementTarget(battle, enemy, range);
+        enemy.engagementTarget = selected?.target ?? null;
+        enemy.engagementTargetDomain = selected?.domain ?? 'air';
+        enemy.targetRefreshTimer = 1.15 + this.random() * .8;
+      }
+      const engagement = enemy.burstShots > 0 && enemy.burstTarget && !enemy.burstTarget.dead
+        ? { target: enemy.burstTarget, domain: enemy.burstTargetDomain }
+        : { target: enemy.engagementTarget, domain: enemy.engagementTargetDomain };
+      const targetPosition = engagement.target === battle.player
+        ? playerPosition
+        : engagement.target?.mesh?.position;
+      const targetVelocity = engagement.target === battle.player
+        ? battle.playerVelocity
+        : engagement.target?.velocity ?? zeroVelocity;
+      const engagementRange = targetPosition ? enemy.mesh.position.distanceTo(targetPosition) : Infinity;
+      const gunLeadTime = battle.difficulty?.fighter?.gun?.leadTime ?? 4.5;
+      const gunMaxRange = battle.difficulty?.fighter?.gun?.maxRange ?? 2200;
+      const missileMaxRange = battle.difficulty?.fighter?.missile?.maxRange ?? 6400;
+
       if (enemy.phase === 'staging') {
         const laneDrift = Math.sin(enemy.phaseClock * .22 + enemy.stagingLane) * 70;
         waypoint.copy(playerPosition)
@@ -184,6 +205,21 @@ export class HostileFighterAI {
       const runOffset = Math.sin(enemy.phaseClock * (.2 + enemy.attackPattern * .035) + enemy.lane * 1.8)
         * (105 + enemy.attackPattern * 45);
       waypoint.addScaledVector(enemy.attackRight, runOffset);
+      const pursuitRange = Math.max(gunMaxRange * 2, missileMaxRange);
+      if (canEngage && engagement.domain === 'air' && engagement.target
+        && engagementRange < pursuitRange && enemy.evasiveTimer <= 0) {
+        const gunLead = leadPoint(
+          enemy.mesh.position,
+          targetPosition,
+          targetVelocity,
+          720,
+          gunLeadTime,
+          enemy.lead,
+          enemy.leadOffset,
+        );
+        enemy.separation.subVectors(gunLead, enemy.mesh.position).normalize();
+        waypoint.copy(gunLead).addScaledVector(enemy.separation, 1300);
+      }
       if (enemy.evasiveTimer > 0) {
         const urgency = THREE.MathUtils.clamp(enemy.evasiveTimer / Math.max(2.4, enemy.evasiveDuration), 0, 1);
         waypoint.addScaledVector(rightOfHeading(enemy.heading, enemy.away), enemy.evasiveDirection * (1050 + urgency * 950));
@@ -226,24 +262,6 @@ export class HostileFighterAI {
       );
 
       const enemyNose = enemy.nose.copy(forward).applyQuaternion(enemy.mesh.quaternion).normalize();
-      const canEngage = enemy.phase !== 'staging';
-      if (enemy.targetRefreshTimer <= 0 || !enemy.engagementTarget || enemy.engagementTarget.dead) {
-        const selected = this.selectEnemyEngagementTarget(battle, enemy, range);
-        enemy.engagementTarget = selected?.target ?? null;
-        enemy.engagementTargetDomain = selected?.domain ?? 'air';
-        enemy.targetRefreshTimer = 1.15 + this.random() * .8;
-      }
-      const engagement = enemy.burstShots > 0 && enemy.burstTarget && !enemy.burstTarget.dead
-        ? { target: enemy.burstTarget, domain: enemy.burstTargetDomain }
-        : { target: enemy.engagementTarget, domain: enemy.engagementTargetDomain };
-      const targetPosition = engagement.target === battle.player
-        ? playerPosition
-        : engagement.target?.mesh?.position;
-      const targetVelocity = engagement.target === battle.player
-        ? battle.playerVelocity
-        : engagement.target?.velocity ?? zeroVelocity;
-      const engagementRange = targetPosition ? enemy.mesh.position.distanceTo(targetPosition) : Infinity;
-      const gunLeadTime = battle.difficulty?.fighter?.gun?.leadTime ?? 4.5;
       const targetLead = targetPosition
         ? leadPoint(enemy.mesh.position, targetPosition, targetVelocity, 720, gunLeadTime, enemy.lead, enemy.leadOffset)
           .sub(enemy.mesh.position).normalize()
@@ -287,7 +305,6 @@ export class HostileFighterAI {
 
       const missileCapacity = battle.difficulty?.fighter?.missile?.capacity ?? 2;
       const missileMinRange = battle.difficulty?.fighter?.missile?.minRange ?? 3000;
-      const missileMaxRange = battle.difficulty?.fighter?.missile?.maxRange ?? 6400;
       const missileBoresight = battle.difficulty?.fighter?.missile?.boresight ?? .93;
       const missileSpeed = battle.difficulty?.fighter?.missile?.projectile?.speed ?? MISSILE_PROFILES.hostile.speed;
       const toPlayer = leadPoint(

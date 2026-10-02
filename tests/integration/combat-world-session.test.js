@@ -160,6 +160,9 @@ describe('CombatWorld sortie lifecycle', () => {
     const world = new CombatWorld(
       scene, player, createTerrain(), null, createAircraftAsset(), createMission(), null, vi.fn(), 'standard',
     );
+    expect(world.countermeasureSystem.chaff).toBe(20);
+    world.update(0);
+    expect(document.querySelector('#chaff-count').textContent).toBe('20');
     const press = code => {
       const event = new Event('keydown');
       Object.defineProperty(event, 'code', { value: code });
@@ -168,9 +171,9 @@ describe('CombatWorld sortie lifecycle', () => {
 
     press('KeyC');
     world.update(.016);
-    expect(world.countermeasureSystem.chaff).toBe(11);
+    expect(world.countermeasureSystem.chaff).toBe(19);
     expect(world.countermeasureSystem.flares).toBe(20);
-    expect(document.querySelector('#chaff-count').textContent).toBe('11');
+    expect(document.querySelector('#chaff-count').textContent).toBe('19');
     expect(document.querySelector('#flare-count').textContent).toBe('20');
 
     world.countermeasureSystem.tick(2);
