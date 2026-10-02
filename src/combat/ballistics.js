@@ -15,8 +15,9 @@ export function estimateInterceptTime(offset, targetVelocity, projectileSpeed, m
     const root = Math.sqrt(discriminant);
     const first = (-b - root) / (2 * a);
     const second = (-b + root) / (2 * a);
-    const valid = [first, second].filter(candidate => candidate > 0);
-    if (valid.length) time = Math.min(...valid);
+    if (first > 0 && second > 0) time = Math.min(first, second);
+    else if (first > 0) time = first;
+    else if (second > 0) time = second;
   } else if (Math.abs(b) > 1e-6) {
     const linear = -c / b;
     if (linear > 0) time = linear;

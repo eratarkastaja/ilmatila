@@ -4,6 +4,7 @@ import { CombatStressScenario } from '../performance/stress-scenario.js';
 import { CombatTelemetry } from '../performance/combat-telemetry.js';
 import { TacticalHud } from '../ui/hud.js';
 import { MISSIONS } from '../mission/missions.js';
+import { createSortieSeed } from '../combat/random.js';
 
 function withTimeout(promise, milliseconds, reason, onTimeout) {
   let timer;
@@ -30,7 +31,7 @@ export class SortieController {
     controls,
     renderer,
     difficulty,
-    random = Math.random,
+    seedFactory = createSortieSeed,
     playerStartAgl = 450,
     stressMode = false,
     telemetryMode = false,
@@ -56,7 +57,8 @@ export class SortieController {
     this.controls = controls;
     this.renderer = renderer;
     this.difficulty = difficulty;
-    this.random = random;
+    this.seedFactory = seedFactory;
+    this.sortieSeed = null;
     this.playerStartAgl = playerStartAgl;
     this.stressMode = stressMode;
     this.telemetryMode = telemetryMode;
@@ -87,8 +89,9 @@ export class SortieController {
     this.pendingTerrain = null;
   }
 
-  async prepare({ missionId, areaId, area, difficulty = this.difficulty }) {
+  async prepare({ missionId, areaId, area, difficulty = this.difficulty, seed }) {
     if (this.started || this.launchInProgress || this.prepared) return false;
+    this.sortieSeed = seed === undefined ? this.seedFactory() : Number(seed) >>> 0;
     const generation = ++this.generation;
     this.launchInProgress = true;
     const supersededMenuTerrain = this.callbacks.onPrepareStart();
@@ -196,6 +199,7 @@ export class SortieController {
             groundTrucks: 24,
             groundFrontSpan: 11800,
             convoyArea: 11600,
+            variants: [],
           }
         : MISSIONS[missionId];
       preparedCombat = new CombatWorld(
@@ -209,7 +213,7 @@ export class SortieController {
         (outcome, result) => this.finish(outcome, result),
         difficulty,
         this.renderer.domElement,
-        this.random,
+        this.sortieSeed,
       );
       if (this.telemetryMode) {
         preparedTelemetry = new CombatTelemetry({ difficulty });

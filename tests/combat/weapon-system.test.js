@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { MISSILE_PROFILES } from '../../src/combat/projectiles.js';
+import { createSeededRandom } from '../../src/combat/random.js';
 import { WeaponSystem } from '../../src/combat/weapon-system.js';
 
 function makeSystem(overrides = {}) {
@@ -105,5 +106,42 @@ describe('WeaponSystem', () => {
     system.update(.02, { gunFiring: false });
     expect(system.gunClock).toBe(0);
     expect(audio.setGunFiring).toHaveBeenLastCalledWith(false);
+  });
+
+  it('stops at the finite cannon ammunition limit and keeps the gun silent when empty', () => {
+    const { system, shots, audio } = makeSystem({
+      loadout: { airMissiles: 6, groundMissiles: 6, gunRounds: 1 },
+    });
+
+    system.update(.02, { gunFiring: true });
+    expect(shots).toHaveLength(1);
+    expect(system.gunAmmoRemaining).toBe(0);
+    expect(system.gunRoundCount).toBe(1);
+
+    system.update(.1, { gunFiring: true });
+    expect(shots).toHaveLength(1);
+    expect(audio.setGunFiring).toHaveBeenLastCalledWith(false);
+    expect(system.fireGun()).toBe(false);
+  });
+
+  it('uses the configured player missile stores', () => {
+    const { system } = makeSystem({
+      loadout: { airMissiles: 6, groundMissiles: 6, gunRounds: 1200 },
+    });
+
+    expect(system.missiles).toEqual({ air: 6, ground: 6 });
+    expect(system.gunAmmoCapacity).toBe(1200);
+    expect(system.gunAmmoRemaining).toBe(1200);
+  });
+
+  it('uses the sortie seed for repeatable gun dispersion', () => {
+    const fireWithSeed = seed => {
+      const { system, shots } = makeSystem({ random: createSeededRandom(seed) });
+      system.fireGun();
+      return shots[0].velocity.toArray();
+    };
+
+    expect(fireWithSeed(1234)).toEqual(fireWithSeed(1234));
+    expect(fireWithSeed(1234)).not.toEqual(fireWithSeed(5678));
   });
 });

@@ -9,7 +9,23 @@ import {
 import { formatNumber, t } from './i18n.js';
 
 const wrapHeading = degrees => THREE.MathUtils.euclideanModulo(degrees, 360);
+const stationaryVelocity = new THREE.Vector3();
 const MISSILE_CUE_FADE_SECONDS = 0.7;
+const HUD_DETAIL_INTERVAL = 1 / 15;
+const setTextIfChanged = (node, value) => {
+  if (node && node.textContent !== value) node.textContent = value;
+};
+const setHiddenIfChanged = (node, hidden) => {
+  if (node && node.hidden !== hidden) node.hidden = hidden;
+};
+const setClassIfChanged = (node, className, enabled) => {
+  if (node && node.classList.contains(className) !== Boolean(enabled)) {
+    node.classList.toggle(className, Boolean(enabled));
+  }
+};
+const setStylePropertyIfChanged = (node, property, value) => {
+  if (node && node.style.getPropertyValue(property) !== value) node.style.setProperty(property, value);
+};
 
 export class TacticalHud {
   constructor() {
@@ -17,6 +33,7 @@ export class TacticalHud {
     this.headingMarks = [];
     this.targetDesignator = document.querySelector('#target-designator');
     this.targetCode = this.targetDesignator?.querySelector('#target-code');
+    this.targetLabel = this.targetDesignator?.querySelector('small');
     this.selectedTrackPanel = document.querySelector('#selected-track-panel');
     this.selectedTrackState = document.querySelector('#selected-track-state');
     this.selectedTrackName = document.querySelector('#selected-track-name');
@@ -30,6 +47,8 @@ export class TacticalHud {
     this.missionWaypointCue = document.querySelector('#mission-waypoint-cue');
     this.verticalSpeed = document.querySelector('#vertical-speed');
     this.lastLabeledHeading = null;
+    this.detailUpdateElapsed = HUD_DETAIL_INTERVAL;
+    this.lastDetailsTarget = null;
     this.cameraForward = new THREE.Vector3();
     this.gunMuzzlePosition = new THREE.Vector3();
     this.gunMuzzleOffset = new THREE.Vector3();
@@ -59,86 +78,82 @@ export class TacticalHud {
     }
   }
 
-  update(controls, player, camera, combat, verticalSpeedMps, dt = 0) {
+  update(controls, player, camera, state, verticalSpeedMps, dt = 0) {
+    this.detailUpdateElapsed += dt;
+    const updateDetails = this.detailUpdateElapsed >= HUD_DETAIL_INTERVAL;
+    if (updateDetails) this.detailUpdateElapsed %= HUD_DETAIL_INTERVAL;
     const heading = wrapHeading(THREE.MathUtils.radToDeg(controls.heading));
     const baseHeading = Math.floor(heading / 5) * 5;
     const fraction = (heading - baseHeading) / 5;
     const labelHeading = baseHeading;
     for (const mark of this.headingMarks) {
       const step = Number(mark.dataset.step);
-      mark.style.left = `calc(50% + ${(step - fraction) * 12}px)`;
+      const left = `calc(50% + ${(step - fraction) * 12}px)`;
+      if (mark.style.left !== left) mark.style.left = left;
       if (mark.firstElementChild && labelHeading !== this.lastLabeledHeading) {
-        mark.firstElementChild.textContent = String(wrapHeading(baseHeading + step * 5)).padStart(3, '0');
+        setTextIfChanged(mark.firstElementChild, String(wrapHeading(baseHeading + step * 5)).padStart(3, '0'));
       }
     }
     this.lastLabeledHeading = labelHeading;
 
-    if (this.verticalSpeed) {
+    if (this.verticalSpeed && updateDetails) {
       const feetPerMinute = Math.round(verticalSpeedMps * 196.8504 / 100) * 100;
       const sign = feetPerMinute >= 0 ? '+' : '';
-      this.verticalSpeed.textContent = `${sign}${String(feetPerMinute).padStart(4, '0')}`;
+      setTextIfChanged(this.verticalSpeed, `${sign}${String(feetPerMinute).padStart(4, '0')}`);
     }
 
-    this.updateGunAimCue(player, camera, combat, dt);
-    const waypoint = combat.missionFlow?.waypoint;
+    this.updateGunAimCue(player, camera, state, dt);
+    const waypoint = state.mission.waypoint;
     if (this.missionWaypointCue && waypoint) {
       this.placeWorldMarker(this.missionWaypointCue, waypoint, camera);
     } else if (this.missionWaypointCue) {
-      this.missionWaypointCue.hidden = true;
+      setHiddenIfChanged(this.missionWaypointCue, true);
     }
 
-    const missileThreat = combat.projectileSystem?.missileThreat;
-    const launchSource = combat.missileLaunchTimer > 0 ? combat.missileLaunchSource : null;
-    const threatPosition = missileThreat?.mesh?.position ?? launchSource?.mesh?.position;
+    const missileThreat = state.threats.missile;
+    const launchSourcePosition = state.threats.launchVisible ? state.threats.launchSourcePosition : null;
+    const threatPosition = missileThreat?.mesh?.position ?? launchSourcePosition;
     if (this.missileApproachCue) {
-      if (threatPosition && !combat.destroyed) {
+      if (threatPosition && !state.session.destroyed) {
         this.placeWorldMarker(this.missileApproachCue, this.missileMarkerPosition.copy(threatPosition), camera);
-        const eta = combat.projectileSystem.missileThreatEta;
-        this.missileApproachCue.classList.toggle('urgent', Boolean(missileThreat && eta < 5.4));
-        this.missileApproachCue.classList.toggle('launch-detected', !missileThreat);
-        this.missileApproachCue.classList.add('visible');
+        const eta = state.threats.missileEta;
+        setClassIfChanged(this.missileApproachCue, 'urgent', Boolean(missileThreat && eta < 5.4));
+        setClassIfChanged(this.missileApproachCue, 'launch-detected', !missileThreat);
+        setClassIfChanged(this.missileApproachCue, 'visible', true);
         this.missileCueActive = true;
         this.missileCueFadeRemaining = 0;
       } else {
         if (this.missileCueActive) {
           this.missileCueActive = false;
           this.missileCueFadeRemaining = MISSILE_CUE_FADE_SECONDS;
-          this.missileApproachCue.classList.remove('visible', 'urgent', 'launch-detected');
+          setClassIfChanged(this.missileApproachCue, 'visible', false);
+          setClassIfChanged(this.missileApproachCue, 'urgent', false);
+          setClassIfChanged(this.missileApproachCue, 'launch-detected', false);
         }
         if (this.missileCueFadeRemaining > 0) {
           this.missileCueFadeRemaining = Math.max(0, this.missileCueFadeRemaining - dt);
         }
-        if (this.missileCueFadeRemaining === 0) this.missileApproachCue.hidden = true;
+        if (this.missileCueFadeRemaining === 0) setHiddenIfChanged(this.missileApproachCue, true);
       }
     }
 
-    const radar = combat.radar;
+    const radar = state.radar;
     const target = radar.target;
     if (!target || target.dead) {
-      if (this.targetDesignator) this.targetDesignator.hidden = true;
-      if (this.selectedTrackPanel) this.selectedTrackPanel.hidden = true;
+      setHiddenIfChanged(this.targetDesignator, true);
+      setHiddenIfChanged(this.selectedTrackPanel, true);
+      this.lastDetailsTarget = null;
       return;
     }
+    const refreshDetails = updateDetails || this.lastDetailsTarget !== target;
+    this.lastDetailsTarget = target;
     const lastKnownBearing = !radar.targetInSensorRange && radar.hasLastKnownPosition;
     const targetPosition = this.targetWorldPosition.copy(
       lastKnownBearing ? radar.targetLastKnownPosition : target.mesh.position,
     );
     if (radar.targetDomain === 'ground') targetPosition.y += (target.mesh.userData.vehicleSpec?.totalHeight ?? 2.5) * 0.5;
     this.placeWorldMarker(this.targetDesignator, targetPosition, camera);
-    const range = targetPosition.distanceTo(player.position);
-    const rangeText = range >= 1000
-      ? `${formatNumber(range / 1000, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} KM`
-      : `${formatNumber(Math.round(range))} M`;
     const groundTarget = radar.targetDomain === 'ground';
-    const targetType = t(groundTarget ? 'combat.targetGround' : 'combat.targetAir');
-    const platform = target.mesh.userData.platformName ?? target.label;
-    const hostiles = (groundTarget ? combat.redUnits : combat.enemies)
-      .filter(unit => !unit.dead);
-    const targetIndex = hostiles.indexOf(target);
-    const targetNumber = targetIndex >= 0
-      ? t('combat.targetNumber', { number: targetIndex + 1, total: hostiles.length })
-      : targetType;
-    if (this.targetCode) this.targetCode.textContent = platform ? `${targetNumber} · ${platform}` : targetNumber;
     const trackState = !radar.targetInSensorRange
       ? 'hud.trackBearingOnly'
       : !radar.inLockEnvelope
@@ -149,54 +164,62 @@ export class TacticalHud {
             ? 'hud.trackAcquiring'
             : 'hud.trackSelected';
     if (this.selectedTrackPanel) {
-      this.selectedTrackPanel.hidden = false;
-      this.selectedTrackPanel.classList.toggle('locked', radar.lockCueConfirmed);
-      this.selectedTrackPanel.classList.toggle('acquiring', radar.lockCueTarget && !radar.lockCueConfirmed);
-      this.selectedTrackPanel.classList.toggle('out-of-range', !radar.inLockEnvelope);
-      this.selectedTrackPanel.classList.toggle('sensor-lost', !radar.targetInSensorRange);
-      this.selectedTrackPanel.style.setProperty('--track-progress', String(THREE.MathUtils.clamp(radar.lock, 0, 1)));
+      setHiddenIfChanged(this.selectedTrackPanel, false);
+      setClassIfChanged(this.selectedTrackPanel, 'locked', radar.lockCueConfirmed);
+      setClassIfChanged(this.selectedTrackPanel, 'acquiring', radar.lockCueTarget && !radar.lockCueConfirmed);
+      setClassIfChanged(this.selectedTrackPanel, 'out-of-range', !radar.inLockEnvelope);
+      setClassIfChanged(this.selectedTrackPanel, 'sensor-lost', !radar.targetInSensorRange);
+      if (refreshDetails) {
+        setStylePropertyIfChanged(this.selectedTrackPanel, '--track-progress', String(THREE.MathUtils.clamp(radar.lock, 0, 1)));
+      }
     }
     if (this.selectedTrackState) {
       const text = t(trackState);
-      if (this.selectedTrackState.textContent !== text) this.selectedTrackState.textContent = text;
+      setTextIfChanged(this.selectedTrackState, text);
     }
-    if (this.selectedTrackName) {
-      const text = platform || targetNumber;
-      if (this.selectedTrackName.textContent !== text) this.selectedTrackName.textContent = text;
+    setClassIfChanged(this.targetDesignator, 'ground-target', groundTarget);
+    setClassIfChanged(this.targetDesignator, 'out-of-range', !radar.inLockEnvelope);
+    setClassIfChanged(this.targetDesignator, 'sensor-lost', !radar.targetInSensorRange);
+    setClassIfChanged(this.targetDesignator, 'acquiring', radar.lockCueTarget && !radar.lockCueConfirmed);
+    setClassIfChanged(this.targetDesignator, 'locked', radar.lockCueConfirmed);
+    if (refreshDetails) {
+      const range = targetPosition.distanceTo(player.position);
+      const rangeText = range >= 1000
+        ? `${formatNumber(range / 1000, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} KM`
+        : `${formatNumber(Math.round(range))} M`;
+      const targetType = t(groundTarget ? 'combat.targetGround' : 'combat.targetAir');
+      const platform = target.mesh.userData.platformName ?? target.label;
+      const hostiles = (groundTarget ? state.units.ground : state.units.air)
+        .filter(unit => !unit.dead);
+      const targetIndex = hostiles.indexOf(target);
+      const targetNumber = targetIndex >= 0
+        ? t('combat.targetNumber', { number: targetIndex + 1, total: hostiles.length })
+        : targetType;
+      setTextIfChanged(this.targetCode, platform ? `${targetNumber} · ${platform}` : targetNumber);
+      setTextIfChanged(this.selectedTrackName, platform || targetNumber);
+      setTextIfChanged(this.selectedTrackType, `${targetNumber} · ${targetType}`);
+      setTextIfChanged(this.selectedTrackRange, rangeText);
+      const lockText = !radar.targetInSensorRange
+        ? t('combat.sensorContactLost')
+        : !radar.inLockEnvelope
+          ? t('combat.outOfRange')
+          : radar.lockCueConfirmed
+            ? t('combat.locked')
+            : radar.lockCueTarget
+              ? t('combat.locking', { percent: Math.round(radar.lock * 100) })
+              : t('combat.aimAtSelected');
+      setTextIfChanged(this.targetLabel, `${lockText} · ${rangeText}`);
+      setStylePropertyIfChanged(this.targetDesignator, '--lock-progress', `${THREE.MathUtils.clamp(radar.lock, 0, 1) * 100}%`);
     }
-    if (this.selectedTrackType) {
-      const text = `${targetNumber} · ${t(groundTarget ? 'combat.targetGround' : 'combat.targetAir')}`;
-      if (this.selectedTrackType.textContent !== text) this.selectedTrackType.textContent = text;
-    }
-    if (this.selectedTrackRange && this.selectedTrackRange.textContent !== rangeText) {
-      this.selectedTrackRange.textContent = rangeText;
-    }
-    const label = this.targetDesignator.querySelector('small');
-    const lockText = !radar.targetInSensorRange
-      ? t('combat.sensorContactLost')
-      : !radar.inLockEnvelope
-        ? t('combat.outOfRange')
-        : radar.lockCueConfirmed
-          ? t('combat.locked')
-          : radar.lockCueTarget
-            ? t('combat.locking', { percent: Math.round(radar.lock * 100) })
-            : t('combat.aimAtSelected');
-    if (label) label.textContent = `${lockText} · ${rangeText}`;
-    this.targetDesignator.classList.toggle('ground-target', groundTarget);
-    this.targetDesignator.classList.toggle('out-of-range', !radar.inLockEnvelope);
-    this.targetDesignator.classList.toggle('sensor-lost', !radar.targetInSensorRange);
-    this.targetDesignator.classList.toggle('acquiring', radar.lockCueTarget && !radar.lockCueConfirmed);
-    this.targetDesignator.classList.toggle('locked', radar.lockCueConfirmed);
-    this.targetDesignator.style.setProperty('--lock-progress', `${THREE.MathUtils.clamp(radar.lock, 0, 1) * 100}%`);
   }
 
-  updateGunAimCue(player, camera, combat, dt) {
-    const target = combat.radar.target;
-    const targetDomain = combat.radar.targetDomain;
+  updateGunAimCue(player, camera, state, dt) {
+    const target = state.radar.target;
+    const targetDomain = state.radar.targetDomain;
     const groundTarget = targetDomain === 'ground';
     if (!this.gunAimCue || !target || target.dead || (targetDomain !== 'air' && targetDomain !== 'ground')) {
-      if (this.gunAimCue) this.gunAimCue.hidden = true;
-      this.gunAimCue?.classList.remove('ground-aim');
+      setHiddenIfChanged(this.gunAimCue, true);
+      setClassIfChanged(this.gunAimCue, 'ground-aim', false);
       this.gunAimTarget = null;
       this.hasGunAimPoint = false;
       return;
@@ -212,11 +235,11 @@ export class TacticalHud {
     this.gunAimPoint.copy(target.mesh.position);
     if (groundTarget) this.gunAimPoint.y += (target.mesh.userData.vehicleSpec?.totalHeight ?? 2.5) * 0.55;
     this.gunAimOffset.copy(this.gunAimPoint).sub(this.gunMuzzlePosition);
-    this.gunAimVelocity.copy(target.velocity ?? new THREE.Vector3()).sub(combat.playerVelocity);
+    this.gunAimVelocity.copy(target.velocity ?? stationaryVelocity).sub(state.player.velocity);
     const flightTime = estimateInterceptTime(this.gunAimOffset, this.gunAimVelocity, GUN_PROJECTILE_SPEED);
     if (flightTime <= 0 || flightTime > GUN_PROJECTILE_LIFETIME) {
-      this.gunAimCue.hidden = true;
-      this.gunAimCue.classList.remove('ground-aim');
+      setHiddenIfChanged(this.gunAimCue, true);
+      setClassIfChanged(this.gunAimCue, 'ground-aim', false);
       this.gunAimTarget = null;
       this.hasGunAimPoint = false;
       return;
@@ -237,8 +260,8 @@ export class TacticalHud {
     }
 
     const onScreen = this.placeWorldMarker(this.gunAimCue, this.smoothedGunAimPoint, camera);
-    this.gunAimCue.hidden = !onScreen;
-    this.gunAimCue.classList.toggle('ground-aim', groundTarget);
+    setHiddenIfChanged(this.gunAimCue, !onScreen);
+    setClassIfChanged(this.gunAimCue, 'ground-aim', groundTarget);
   }
 
   placeWorldMarker(element, position, camera) {
@@ -260,14 +283,16 @@ export class TacticalHud {
       const scale = Math.min(maxX / Math.max(Math.abs(x), 0.001), maxY / Math.max(Math.abs(y), 0.001));
       x *= scale;
       y *= scale;
-      element.style.setProperty('--target-bearing', `${Math.atan2(-y, x)}rad`);
-    } else {
+      setStylePropertyIfChanged(element, '--target-bearing', `${Math.atan2(-y, x)}rad`);
+    } else if (element.style.getPropertyValue('--target-bearing')) {
       element.style.removeProperty('--target-bearing');
     }
-    element.classList.toggle('offscreen', !onScreen);
-    element.hidden = false;
-    element.style.left = `${(x * 0.5 + 0.5) * innerWidth}px`;
-    element.style.top = `${(-y * 0.5 + 0.5) * innerHeight}px`;
+    setClassIfChanged(element, 'offscreen', !onScreen);
+    setHiddenIfChanged(element, false);
+    const left = `${(x * 0.5 + 0.5) * innerWidth}px`;
+    const top = `${(-y * 0.5 + 0.5) * innerHeight}px`;
+    if (element.style.left !== left) element.style.left = left;
+    if (element.style.top !== top) element.style.top = top;
     return onScreen;
   }
 }

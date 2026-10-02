@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { F35_GUN_MUZZLE_OFFSET, F35_GUN_TRACER_CLEARANCE } from '../aircraft/plane-models.js';
 import { createMissile, MISSILE_PROFILES } from './projectiles.js';
 import { forward, leadPoint, projectileAxis, zeroVelocity } from './air-combat-utils.js';
+import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
 
 const allyShotGeo = new THREE.SphereGeometry(.12, 5, 4);
 const hostileShotGeo = new THREE.CylinderGeometry(.055, .045, .92, 6, 1);
@@ -12,11 +13,14 @@ const helicopterRocketMaterial = new THREE.MeshBasicMaterial({ color: '#d3d3bd',
 
 /** Builds air launched cannon rounds, rockets, and missiles. */
 export class AirWeaponAI {
-  constructor(random = Math.random) {
+  constructor(random = createSeededRandom(DEFAULT_RANDOM_SEED)) {
     this.random = random;
     this._helicopterMissileStart = new THREE.Vector3();
     this._allyGunMuzzle = new THREE.Vector3();
+    this._groundGunMuzzle = new THREE.Vector3();
     this._gunMuzzle = new THREE.Vector3();
+    this._spread = new THREE.Vector3();
+    this._tracerOptions = {};
   }
 
   fireHelicopterAirMissile(battle, enemy) {
@@ -114,14 +118,18 @@ export class AirWeaponAI {
     const predicted = leadPoint(start, target.mesh.position, target.velocity, 680, 3);
     const aim = predicted.sub(start).normalize();
     const spread=battle.difficulty?.wingman?.aimSpread ?? 1;
-    aim.add(new THREE.Vector3((this.random() - .5) * .012 * spread, (this.random() - .5) * .009 * spread, (this.random() - .5) * .012 * spread)).normalize();
+    aim.add(this._spread.set(
+      (this.random() - .5) * .012 * spread,
+      (this.random() - .5) * .009 * spread,
+      (this.random() - .5) * .012 * spread,
+    )).normalize();
     const velocity = aim.multiplyScalar(680);
-    battle.fx?.addMovingTracer(start, velocity, '#82e7ff', {
-      life: .14,
-      trailTime: .06,
-      ownerAircraft: ally.mesh,
-      aircraftForwardClearance: F35_GUN_TRACER_CLEARANCE,
-    });
+    this._tracerOptions.life = .14;
+    this._tracerOptions.trailTime = .06;
+    this._tracerOptions.gravity = 0;
+    this._tracerOptions.ownerAircraft = ally.mesh;
+    this._tracerOptions.aircraftForwardClearance = F35_GUN_TRACER_CLEARANCE;
+    battle.fx?.addMovingTracer(start, velocity, '#82e7ff', this._tracerOptions);
     const shot = new THREE.Mesh(allyShotGeo, allyShotMaterial);
     shot.position.copy(start);
     battle.scene.add(shot);
@@ -154,22 +162,28 @@ export class AirWeaponAI {
   }
 
   fireAllyGround(battle, ally, target) {
-    const start = new THREE.Vector3(-.78, .38, 2.65)
+    const start = this._groundGunMuzzle.set(-.78, .38, 2.65)
       .applyQuaternion(ally.mesh.quaternion)
       .add(ally.mesh.position);
     const predicted = leadPoint(start, target.mesh.position, target.velocity ?? zeroVelocity, 880, 3);
     const flightTime = Math.min(3, start.distanceTo(predicted) / 880);
     predicted.y += .5 * 9.81 * flightTime * flightTime;
     const aim = predicted.sub(start).normalize();
-    aim.add(new THREE.Vector3((this.random() - .5) * .018, (this.random() - .5) * .012, (this.random() - .5) * .018)).normalize();
+    aim.add(this._spread.set(
+      (this.random() - .5) * .018,
+      (this.random() - .5) * .012,
+      (this.random() - .5) * .018,
+    )).normalize();
     const velocity = aim.multiplyScalar(880).add(ally.velocity);
     battle.audio?.playDistantGun(ally.mesh.position.distanceTo(battle.player.position), 'air');
     ally.groundRoundCount++;
     if (ally.groundRoundCount % 3 === 0) {
-      battle.fx?.addMovingTracer(start, velocity, '#ffd282', {
-        life: .14, trailTime: .06, gravity: 9.81, ownerAircraft: ally.mesh,
-        aircraftForwardClearance: 7.2,
-      });
+      this._tracerOptions.life = .14;
+      this._tracerOptions.trailTime = .06;
+      this._tracerOptions.gravity = 9.81;
+      this._tracerOptions.ownerAircraft = ally.mesh;
+      this._tracerOptions.aircraftForwardClearance = 7.2;
+      battle.fx?.addMovingTracer(start, velocity, '#ffd282', this._tracerOptions);
     }
     const shot = new THREE.Mesh(allyShotGeo, allyShotMaterial);
     shot.position.copy(start);
@@ -216,18 +230,22 @@ export class AirWeaponAI {
     const predicted = leadPoint(start, targetPosition, targetVelocity, 720, battle.difficulty?.fighter?.gun?.leadTime ?? 4.5);
     const aim = predicted.sub(start).normalize();
     const spread=battle.difficulty?.fighter?.aimSpread ?? 1;
-    aim.add(new THREE.Vector3((this.random() - .5) * .018 * spread, (this.random() - .5) * .012 * spread, (this.random() - .5) * .018 * spread)).normalize();
+    aim.add(this._spread.set(
+      (this.random() - .5) * .018 * spread,
+      (this.random() - .5) * .012 * spread,
+      (this.random() - .5) * .018 * spread,
+    )).normalize();
     const shot = new THREE.Mesh(hostileShotGeo, hostileShotMaterial);
     shot.position.copy(start);
     shot.quaternion.setFromUnitVectors(projectileAxis, aim);
     battle.scene.add(shot);
     const velocity = aim.multiplyScalar(720);
-    battle.fx?.addMovingTracer(start, velocity, '#ffc477', {
-      life: .14,
-      trailTime: .045,
-      ownerAircraft: enemy.mesh,
-      aircraftForwardClearance: clearance,
-    });
+    this._tracerOptions.life = .14;
+    this._tracerOptions.trailTime = .045;
+    this._tracerOptions.gravity = 0;
+    this._tracerOptions.ownerAircraft = enemy.mesh;
+    this._tracerOptions.aircraftForwardClearance = clearance;
+    battle.fx?.addMovingTracer(start, velocity, '#ffc477', this._tracerOptions);
     battle.addHostileProjectile({
       projectile: true,
       aircraftGun: domain !== 'ground',

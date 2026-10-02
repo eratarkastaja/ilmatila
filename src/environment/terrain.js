@@ -129,8 +129,8 @@ export async function createTerrain({ areaId, fallback = true, onProgress, signa
       coverageCellMeters: coverage.cellMeters,
       isPlayableArea: (x, z) => isInCoverage(coverage, x, z),
       getBoundaryClearance: (x, z) => coverageClearance(coverage, x, z),
-      getBoundaryApproach: (position, velocity) => coverageApproach(
-        coverage, position.x, position.z, velocity.x, velocity.z,
+      getBoundaryApproach: (position, velocity, result) => coverageApproach(
+        coverage, position.x, position.z, velocity.x, velocity.z, 5_000, 25, result,
       ),
       sampleHeight: heightSampler,
       boundaryLine,

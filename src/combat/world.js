@@ -3,7 +3,6 @@ import { AirBattle } from './air-battle.js';
 import { GroundBattle } from './ground-battle.js';
 import { CombatInput } from './input.js';
 import { CombatRadar } from './radar.js';
-import { MISSILE_PROFILES } from './projectiles.js';
 import { ProjectileSystem } from './projectile-system.js';
 import { CollisionSystem } from './collision-system.js';
 import { CountermeasureSystem } from './countermeasure-system.js';
@@ -18,23 +17,38 @@ import { DestructionSystem } from './destruction-system.js';
 import { applyAirframeCondition } from './airframe-condition.js';
 import { getBoundaryApproach } from './boundary-warning.js';
 import { getDifficultyPreset } from './difficulty.js';
+import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
+import { calculateDebriefGrade } from '../mission/debrief-grade.js';
+import { MissionOptionalObjectives } from '../mission/optional-objectives.js';
+import { resolveMissionVariant } from '../mission/mission-variants.js';
 import { addTransientGlow, CombatEffects, disposeCombatEffectResources } from '../effects/combat-effects.js';
+import { CombatHud } from '../ui/combat-hud.js';
+import { renderOptionalObjectives } from '../ui/optional-objectives.js';
 import { formatNumber, formatPercent, t } from '../ui/i18n.js';
 
 export { disposeCombatEffectResources };
 
 const forward=new THREE.Vector3(0,0,1);
 const headingDirection=new THREE.Vector3();
+const HUD_UPDATE_INTERVAL=1/15;
 
 export class CombatWorld {
-  constructor(scene, player, terrain, fx, aircraftAsset = null, mission = {}, audio = null, onMissionEnd = () => {}, difficultyId = 'standard', inputTarget = null, random = Math.random) {
+  constructor(scene, player, terrain, fx, aircraftAsset = null, mission = {}, audio = null, onMissionEnd = () => {}, difficultyId = 'standard', inputTarget = null, seed = DEFAULT_RANDOM_SEED) {
     this.scene=scene; this.player=player; this.destroyed=false; this.missionAborted=false;
     this.fx=fx; this.audio=audio;
+    this.combatHud=new CombatHud();
     this.onMissionEnd=onMissionEnd;
+    this.hudUpdateElapsed=HUD_UPDATE_INTERVAL;
+    this.boundaryApproach=null;
+    this.boundaryCritical=false;
     this.difficulty=getDifficultyPreset(difficultyId);
-    this.random=random;
+    this.seed = Number(seed) >>> 0;
+    this.random = createSeededRandom(this.seed);
     this.telemetry=null;
-    const missionConfig={hostiles:4,wingmen:2,groundBattle:true,groundPairs:6,groundTrucks:12,...mission};
+    const missionResolution=resolveMissionVariant(mission,this.seed);
+    this.missionVariant=missionResolution.variant;
+    this.reinforcement=missionResolution.reinforcement;
+    const missionConfig={hostiles:4,wingmen:2,groundBattle:true,groundPairs:6,groundTrucks:12,...missionResolution.mission};
     this.input = new CombatInput(window, inputTarget);
     this.scoreSystem=new ScoreSystem();
     this.damageTaken=0;
@@ -69,6 +83,11 @@ export class CombatWorld {
     this.missileLaunchSeeker=null;
     this.missileLaunchAlertCooldown=0;
     this.terrain=terrain; this.playerHeading=0; this.previousPlayerPosition=player.position.clone();
+    this._fallbackBoundaryBounds=terrain.operationBounds??{
+      minX:-terrain.worldSize*.5,maxX:terrain.worldSize*.5,
+      minZ:-terrain.worldSize*.5,maxZ:terrain.worldSize*.5,
+    };
+    this._boundaryApproachScratch={clearance:0};
     this.remainingMissionState={airRemaining:0,groundRemaining:0};
     this.incomingAircraftMissiles=[];
     this.playerVelocity=new THREE.Vector3();
@@ -83,17 +102,20 @@ export class CombatWorld {
       onWingmanRadio: (event, wingman, details) => this.reportWingmanRadio(event, wingman, details),
       difficulty:this.difficulty,
       random:this.random,
+      reinforcement:this.reinforcement,
     });
     this.groundBattle = new GroundBattle({
       scene, player, playerVelocity: this.playerVelocity, terrain, mission: missionConfig,
       audio, fx, difficulty:this.difficulty, enemies:this.airBattle.enemies,
       addProjectile: shot => this.projectileSystem.addHostileProjectile(shot),
       addFriendlyProjectile: shot => this.projectileSystem.addPlayerProjectile(shot),
+      random: this.random,
     });
     this.airBattle.setGroundUnits(this.groundBattle.redUnits);
     this.airBattle.setFriendlyGroundUnits(this.groundBattle.friends);
+    const scheduledReinforcements=this.reinforcement?.scheduled ? this.reinforcement.hostiles : 0;
     const objectiveTotals={
-      air:missionConfig.hostiles + (missionConfig.hostileHelicopters ?? 0),
+      air:missionConfig.hostiles + (missionConfig.hostileHelicopters ?? 0) + scheduledReinforcements,
       ground:this.redUnits.filter(unit=>unit.armed!==false).length,
     };
     this.collisionSystem = new CollisionSystem({
@@ -118,6 +140,7 @@ export class CombatWorld {
         this.feedback.gunHit(details.destroyed);
         this.audio?.playGunHit();
       },
+      onPlayerMissileHit: () => this.scoreSystem.recordPlayerMissileHit(),
       onFriendlyAircraftHit: (wingman, damage, sourceUnit) => this.airBattle.damageWingman(wingman, damage, sourceUnit),
       onJetDestroyed: (enemy, credited, details) => this.destructionSystem.destroyAircraft(enemy, credited, details),
       onUnitDestroyed: (unit, credited, details) => this.destructionSystem.destroyGroundUnit(unit, credited, details),
@@ -140,19 +163,10 @@ export class CombatWorld {
     this.weaponSystem = new WeaponSystem({
       player, scene, fx, audio, radar: this.radar, playerVelocity: this.playerVelocity,
       addProjectile: shot => this.projectileSystem.addPlayerProjectile(shot),
+      loadout:this.difficulty?.player?.weapons,
+      random: this.random,
     });
     this.lastObservedMissilesFired=this.weaponSystem.missilesFired;
-    this.weapon=document.querySelector('#weapon'); this.ammo=document.querySelector('#ammo'); this.missileType=document.querySelector('#missile-type'); this.missileCount=document.querySelector('#missile-count'); this.scoreEl=document.querySelector('#score');
-    this.flareCount=document.querySelector('#flare-count'); this.chaffCount=document.querySelector('#chaff-count');
-    this.radarWarning=document.querySelector('#radar-warning');
-    this.radarWarningLabel=document.querySelector('#radar-warning-label');
-    this.threatWarning=document.querySelector('#threat-warning');
-    this.threatWarningLabel=document.querySelector('#threat-warning-label');
-    this.threatWarningDetail=document.querySelector('#threat-warning-detail');
-    this.wingmanOrderNode=document.querySelector('#wingman-order');
-    this.boundaryWarning=document.querySelector('#boundary-warning');
-    this.boundaryWarningText=document.querySelector('#boundary-warning-text');
-    this.boundaryWarningDistance=document.querySelector('#boundary-warning-distance');
     this.status=document.querySelector('.status'); this.deathScreen=document.querySelector('#death-screen'); this.deathReason=document.querySelector('#death-reason');
     this.statusText=this.status?.querySelector('[data-i18n]');
     const objectiveTitle=document.querySelector('#mission-objective-title');
@@ -167,7 +181,12 @@ export class CombatWorld {
       deferCompletion:true,
       initiallyActive:false,
       getRemaining: state => {
-        state.airRemaining=this.airBattle.hostilesSpawned?0:missionConfig.hostiles+(missionConfig.hostileHelicopters??0);
+        state.airRemaining=this.airBattle.hostilesSpawned
+          ? 0
+          : missionConfig.hostiles+(missionConfig.hostileHelicopters??0);
+        if (this.reinforcement?.scheduled && !this.airBattle.reinforcementSpawned) {
+          state.airRemaining += this.reinforcement.hostiles;
+        }
         state.groundRemaining=0;
         if(this.airBattle.hostilesSpawned){
           for(const enemy of this.enemies)if(!enemy.dead)state.airRemaining++;
@@ -188,17 +207,32 @@ export class CombatWorld {
       dialog:debriefDialog,
       title:document.querySelector('#debrief-title'),
       mission:document.querySelector('#debrief-mission'),
+      variant:document.querySelector('#debrief-variant'),
       difficulty:document.querySelector('#debrief-difficulty'),
       outcome:document.querySelector('#debrief-outcome'),
       duration:document.querySelector('#debrief-duration'),
+      kills:document.querySelector('#debrief-kills'),
       airKills:document.querySelector('#debrief-air-kills'),
       groundKills:document.querySelector('#debrief-ground-kills'),
       gunRounds:document.querySelector('#debrief-gun-rounds'),
       missiles:document.querySelector('#debrief-missiles'),
+      missileHits:document.querySelector('#debrief-missile-hits'),
+      wingmen:document.querySelector('#debrief-wingmen'),
       score:document.querySelector('#debrief-score'),
       accuracy:document.querySelector('#debrief-accuracy'),
       damage:document.querySelector('#debrief-damage'),
       objectives:document.querySelector('#debrief-objectives'),
+      optionalObjectives:document.querySelector('#debrief-optional-objective-list'),
+      gradeMark:document.querySelector('#debrief-grade-mark'),
+      gradeScore:document.querySelector('#debrief-grade-score'),
+      gradeCriteria:{
+        mission:document.querySelector('#debrief-grade-mission'),
+        survival:document.querySelector('#debrief-grade-survival'),
+        wingmen:document.querySelector('#debrief-grade-wingmen'),
+        accuracy:document.querySelector('#debrief-grade-accuracy'),
+        damage:document.querySelector('#debrief-grade-damage'),
+        efficiency:document.querySelector('#debrief-grade-efficiency'),
+      },
     };
     this.debriefData=null;
     this.missionFlow=new MissionFlowSystem({
@@ -229,6 +263,50 @@ export class CombatWorld {
       onPhaseChange:(_previous,phase)=>this.reportMissionPhase(phase),
       onEnd:(outcome,elapsed)=>this.finishMission(outcome,elapsed),
     });
+    this.optionalObjectiveTracker=new MissionOptionalObjectives(missionConfig.optionalObjectives??[]);
+    this.optionalObjectiveState={
+      outcome:MISSION_OUTCOME.ACTIVE,
+      elapsed:0,
+      damageTaken:0,
+      wingmenReturned:0,
+      wingmenTotal:this.airBattle.allies.length,
+      missilesRemaining:0,
+      airHostiles:this.enemies,
+      groundHostiles:this.redUnits,
+      friendlyGround:this.friends,
+      extractionCenter:this.missionFlow.home,
+    };
+    this._radarContactSets={
+      airFriendly:this.allies,airHostile:this.enemies,
+      groundFriendly:this.friends,groundHostile:this.redUnits,
+    };
+    this._weaponInput={gunFiring:false,missileRequested:false};
+    this._airPlayerThreat={lockedTarget:null,incomingMissiles:this.incomingAircraftMissiles};
+    this._missionFlowState={
+      detectedHostiles:0,playerEngaged:false,hostileEngaged:false,
+      targetDestroyed:false,objectiveSatisfied:false,destroyed:false,
+    };
+    /** Stable, borrowed-data read model for the UI; simulation systems remain the source of truth. */
+    this.hudState={
+      session:{destroyed:false,gunFiring:false},
+      player:{position:this.player.position,velocity:this.playerVelocity},
+      units:{air:this.enemies,ground:this.redUnits},
+      radar:{
+        mode:this.radar.mode,target:null,targetDomain:'air',targetLastKnownPosition:this.radar.targetLastKnownPosition,
+        hasLastKnownPosition:false,targetInSensorRange:false,inLockEnvelope:false,
+        lockCueConfirmed:false,lockCueTarget:false,lock:0,
+      },
+      weapons:{missiles:this.weaponSystem.missiles,gunAmmoRemaining:this.weaponSystem.gunAmmoRemaining,cooldown:0,feedbackKey:null,feedbackTimer:0},
+      countermeasures:{flares:0,chaff:0},
+      wingmanOrder:this.airBattle.wingmanOrder,
+      score:0,
+      mission:{waypoint:null,boundaryApproach:null,boundaryCritical:false},
+      threats:{
+        radarWarningState:null,missile:null,missileEta:Infinity,missileDistance:Infinity,
+        launchVisible:false,launchSourcePosition:null,launchSeeker:null,
+      },
+    };
+    this.refreshHudState();
     this.restartButton = document.querySelector('#restart');
     this.onRestart = () => location.reload();
     this.restartButton?.addEventListener('click', this.onRestart);
@@ -274,6 +352,41 @@ export class CombatWorld {
     if(direction.x*direction.x+direction.z*direction.z>1e-4)this.playerHeading=Math.atan2(direction.x,direction.z);
     return this.playerHeading;
   }
+  refreshHudState(){
+    const state=this.hudState;
+    if(!state)return;
+    state.session.destroyed=this.destroyed;
+    state.session.gunFiring=this.input.pressed.has('Space');
+    state.radar.mode=this.radar.mode;
+    state.radar.target=this.radar.target;
+    state.radar.targetDomain=this.radar.targetDomain;
+    state.radar.hasLastKnownPosition=this.radar.hasLastKnownPosition;
+    state.radar.targetInSensorRange=this.radar.targetInSensorRange;
+    state.radar.inLockEnvelope=this.radar.inLockEnvelope;
+    state.radar.lockCueConfirmed=this.radar.lockCueConfirmed;
+    state.radar.lockCueTarget=this.radar.lockCueTarget;
+    state.radar.lock=this.radar.lock;
+    state.weapons.cooldown=this.weaponSystem.cooldown;
+    state.weapons.gunAmmoRemaining=this.weaponSystem.gunAmmoRemaining;
+    state.weapons.feedbackKey=this.weaponSystem.missileFeedbackKey;
+    state.weapons.feedbackTimer=this.weaponSystem.missileFeedbackTimer;
+    state.countermeasures.flares=this.countermeasureSystem.flares;
+    state.countermeasures.chaff=this.countermeasureSystem.chaff;
+    state.wingmanOrder=this.airBattle.wingmanOrder;
+    state.score=this.score;
+    state.mission.waypoint=this.missionFlow.waypoint;
+    state.mission.boundaryApproach=this.boundaryApproach;
+    state.mission.boundaryCritical=this.boundaryCritical;
+    state.threats.radarWarningState=this.getPlayerRadarWarningState();
+    state.threats.missile=this.projectileSystem.missileThreat;
+    state.threats.missileEta=this.projectileSystem.missileThreatEta;
+    state.threats.missileDistance=this.projectileSystem.missileThreatDistance;
+    state.threats.launchVisible=Boolean(
+      this.missileLaunchTimer>0&&this.missileLaunchSource&&!this.missileLaunchSource.dead,
+    );
+    state.threats.launchSourcePosition=this.missileLaunchSource?.mesh?.position??null;
+    state.threats.launchSeeker=this.missileLaunchSeeker;
+  }
   update(dt){
     this.frameDelta=dt;
     this.missileLaunchTimer=Math.max(0,this.missileLaunchTimer-dt);
@@ -303,10 +416,7 @@ export class CombatWorld {
       this.radio.acknowledgeWingmanCommand(wingmanOrder,this.airBattle.allies,true);
     }
     const gunFiring=(this.input.pressed.has('Space')||this.input.pressed.has('MousePrimary'))&&!this.destroyed;
-    this.radar.updateContacts(dt, this.getPlayerHeading(), {
-      airFriendly: this.allies, airHostile: this.enemies,
-      groundFriendly: this.friends, groundHostile: this.redUnits,
-    });
+    this.radar.updateContacts(dt,this.getPlayerHeading(),this._radarContactSets);
     if(targetCycleDirection){
       if(this.radar.cycleTarget(this.enemies,this.redUnits,targetCycleDirection)){
         this.weaponSystem.clearFeedback();
@@ -320,22 +430,24 @@ export class CombatWorld {
     if(!previouslyLocked&&this.radar.lockCueConfirmed)this.feedback.notify('combat.lockConfirmed',1.25,'friendly');
     else if(previouslyLocked&&!this.radar.lockCueConfirmed)this.feedback.notify('combat.lockLost',1.05,'warning');
     else if(!previouslyAcquiring&&this.radar.lockCueTarget)this.feedback.notify('combat.lockAcquiring',1.05,'info');
-    this.weaponSystem.update(dt,{gunFiring,missileRequested});
+    this._weaponInput.gunFiring=gunFiring;
+    this._weaponInput.missileRequested=missileRequested;
+    this.weaponSystem.update(dt,this._weaponInput);
     const missileLaunched=this.weaponSystem.missilesFired>this.lastObservedMissilesFired;
     this.lastObservedMissilesFired=this.weaponSystem.missilesFired;
     this.incomingAircraftMissiles.length=0;
     for(const shot of this.projectileSystem.playerShots){
       if(shot.homing&&shot.targetDomain==='air')this.incomingAircraftMissiles.push(shot);
     }
-    this.airBattle.update(dt, {
-      lockedTarget: this.radar.targetDomain === 'air' && this.radar.lockCueConfirmed ? this.radar.target : null,
-      incomingMissiles: this.incomingAircraftMissiles,
-    });
+    this._airPlayerThreat.lockedTarget=this.radar.targetDomain==='air'&&this.radar.lockCueConfirmed?this.radar.target:null;
+    this.airBattle.update(dt,this._airPlayerThreat);
     this.groundBattle.update(dt);
     this.countermeasureSystem.update(dt);
     this.projectileSystem.update(dt);
     this.combatEffects.update(dt);
     this.radio.update(dt);
+    this.refreshOptionalObjectiveState();
+    this.optionalObjectiveTracker.update(this.optionalObjectiveState);
     this.missionSystem.update(dt,this.destroyed);
     if(this.missionSystem.objectiveSatisfied)this.scoreSystem.awardObjectiveCompletion();
     let detectedHostiles=0;
@@ -347,15 +459,21 @@ export class CombatWorld {
     let targetDestroyed=false;
     for(const enemy of this.enemies)if(enemy.dead){targetDestroyed=true;break;}
     if(!targetDestroyed)for(const unit of this.redUnits)if(unit.dead){targetDestroyed=true;break;}
-    this.missionFlow.update(dt,{
-      detectedHostiles,
-      playerEngaged:gunFiring||missileLaunched,
-      hostileEngaged,
-      targetDestroyed,
-      objectiveSatisfied:this.missionSystem.objectiveSatisfied,
-      destroyed:this.destroyed,
-    });
-    this.updateHud();
+    const missionFlowState=this._missionFlowState;
+    missionFlowState.detectedHostiles=detectedHostiles;
+    missionFlowState.playerEngaged=gunFiring||missileLaunched;
+    missionFlowState.hostileEngaged=hostileEngaged;
+    missionFlowState.targetDestroyed=targetDestroyed;
+    missionFlowState.objectiveSatisfied=this.missionSystem.objectiveSatisfied;
+    missionFlowState.destroyed=this.destroyed;
+    this.missionFlow.update(dt,missionFlowState);
+    this.updateBoundaryVisual();
+    this.refreshHudState();
+    this.hudUpdateElapsed+=dt;
+    if(this.hudUpdateElapsed>=HUD_UPDATE_INTERVAL){
+      this.hudUpdateElapsed%=HUD_UPDATE_INTERVAL;
+      this.combatHud.update(this.hudState);
+    }
     this.feedback.update(dt);
   }
   checkPlayerCollision(dt=this.frameDelta??0){
@@ -371,9 +489,9 @@ export class CombatWorld {
       this.feedback.damage(this.feedback.hull);
     }
     this.destroyed=true;
+    this.hudState.session.destroyed=true;
+    this.combatHud.hideRadarAndBoundaryWarnings();
     this.missionSystem.markPlayerDestroyed();
-    if(this.boundaryWarning)this.boundaryWarning.hidden=true;
-    if(this.radarWarning)this.radarWarning.hidden=true;
     this.weaponSystem.stopGun();
     this.audio?.playCollision();
     this.audio?.stopEngine();
@@ -384,14 +502,15 @@ export class CombatWorld {
     if(this.status){this.status.classList.remove('complete');this.status.classList.add('destroyed');this.status.replaceChildren(document.createElement('i'),document.createTextNode(` ${t('combat.destroyed')}`));}
     this.combatEffects.addExplosion(this.player.position,1.35);
     this.missionFlow.fail();
+    this.refreshHudState();
   }
 
   abortMission(){
     if(this.destroyed)return;
     this.destroyed=true;
     this.missionAborted=true;
-    if(this.boundaryWarning)this.boundaryWarning.hidden=true;
-    if(this.radarWarning)this.radarWarning.hidden=true;
+    this.hudState.session.destroyed=true;
+    this.combatHud.hideRadarAndBoundaryWarnings();
     if(this.terrain.boundaryLine)this.terrain.boundaryLine.visible=false;
     this.weaponSystem.stopGun();
     this.audio?.stopEngine();
@@ -403,6 +522,7 @@ export class CombatWorld {
     }
     this.missionSystem.finish(MISSION_OUTCOME.ABORTED);
     this.missionFlow.abort();
+    this.refreshHudState();
   }
 
   damagePlayer(amount,reasonKey){
@@ -476,6 +596,10 @@ export class CombatWorld {
 
   finishMission(outcome,elapsed){
     if(this.missionEnded)return;
+    this.refreshOptionalObjectiveState();
+    this.optionalObjectiveState.outcome=outcome;
+    this.optionalObjectiveState.elapsed=elapsed;
+    const optionalObjectiveResults=this.optionalObjectiveTracker.update(this.optionalObjectiveState,true);
     this.missionSystem.finish(outcome);
     this.missionEnded=true;
     if(outcome===MISSION_OUTCOME.COMPLETE)this.scoreSystem.awardMissionCompletion();
@@ -487,19 +611,29 @@ export class CombatWorld {
       outcome,
       elapsed,
       missionId:this.missionSystem.mission.id,
+      variantId:this.missionVariant?.id ?? null,
+      variantLabelKey:this.missionVariant?.labelKey ?? null,
       difficulty:this.difficulty?.id,
       score:this.score,
       airKills:this.airKills,
       groundKills:this.groundKills,
+      kills:this.airKills + this.groundKills,
       gunRounds,
       gunHits:this.gunHits,
       accuracy:gunRounds>0?this.gunHits/gunRounds:0,
       missilesFired:this.weaponSystem.missilesFired,
+      missilesHit:this.scoreSystem.playerMissileHits,
       damageTaken:this.damageTaken,
+      playerMaxHull:this.feedback.maxHull,
+      wingmenSurvived:this.airBattle.allies.reduce((count,wingman)=>count+Number(!wingman.dead),0),
+      wingmenTotal:this.airBattle.allies.length,
       objectivesCompleted:this.missionSystem.objectiveSatisfied?1:0,
       objectiveCount:1,
       missionTime:Math.max(0,elapsed),
+      optionalObjectives:optionalObjectiveResults,
     };
+    this.debriefData.wingmenReturned=this.debriefData.wingmenSurvived;
+    this.debriefData.grade=calculateDebriefGrade(this.debriefData);
     this.renderDebrief();
     this.onMissionEnd(outcome,this.debriefData);
   }
@@ -513,6 +647,12 @@ export class CombatWorld {
     text(this.debriefNodes.title,successful?'mission.debrief.completeTitle':aborted?'mission.debrief.abortedTitle':'mission.debrief.failedTitle');
     text(this.debriefNodes.mission,`mission.${this.missionSystem.mission.id}.title`);
     text(this.debriefNodes.difficulty,`difficulty.${this.debriefData.difficulty}`);
+    if(this.debriefNodes.variant){
+      this.debriefNodes.variant.hidden=!this.debriefData.variantLabelKey;
+      this.debriefNodes.variant.textContent=this.debriefData.variantLabelKey
+        ?t('mission.debrief.variant',{name:t(this.debriefData.variantLabelKey)})
+        :'';
+    }
     const outcomeText=t(successful?'mission.debrief.complete':aborted?'mission.debrief.aborted':'mission.debrief.failed');
     const lossCause=!successful&&!aborted&&this.deathReasonKey?` · ${t(this.deathReasonKey,this.deathReasonParams)}`:'';
     if(this.debriefNodes.outcome)this.debriefNodes.outcome.textContent=`${outcomeText}${lossCause}`;
@@ -520,18 +660,61 @@ export class CombatWorld {
     if(this.debriefNodes.duration)this.debriefNodes.duration.textContent=`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;
     if(this.debriefNodes.airKills)this.debriefNodes.airKills.textContent=formatNumber(this.airKills);
     if(this.debriefNodes.groundKills)this.debriefNodes.groundKills.textContent=formatNumber(this.groundKills);
+    if(this.debriefNodes.kills)this.debriefNodes.kills.textContent=formatNumber(this.debriefData.kills);
     if(this.debriefNodes.gunRounds)this.debriefNodes.gunRounds.textContent=formatNumber(this.debriefData.gunRounds);
     if(this.debriefNodes.missiles)this.debriefNodes.missiles.textContent=formatNumber(this.debriefData.missilesFired);
+    if(this.debriefNodes.missileHits)this.debriefNodes.missileHits.textContent=`${formatNumber(this.debriefData.missilesHit)} / ${formatNumber(this.debriefData.missilesFired)}`;
+    if(this.debriefNodes.wingmen)this.debriefNodes.wingmen.textContent=`${formatNumber(this.debriefData.wingmenReturned)} / ${formatNumber(this.debriefData.wingmenTotal)}`;
     if(this.debriefNodes.score)this.debriefNodes.score.textContent=formatNumber(this.debriefData.score);
     if(this.debriefNodes.accuracy)this.debriefNodes.accuracy.textContent=this.debriefData.gunRounds>0?formatPercent(this.debriefData.accuracy):'—';
     if(this.debriefNodes.damage)this.debriefNodes.damage.textContent=formatNumber(Math.round(this.debriefData.damageTaken));
     if(this.debriefNodes.objectives)this.debriefNodes.objectives.textContent=`${this.debriefData.objectivesCompleted} / ${this.debriefData.objectiveCount}`;
+    renderOptionalObjectives(
+      this.debriefNodes.optionalObjectives,
+      this.missionSystem.mission.optionalObjectives,
+      this.debriefData.optionalObjectives,
+    );
+    const grade=this.debriefData.grade;
+    if(this.debriefNodes.gradeMark)this.debriefNodes.gradeMark.textContent=grade.letter;
+    if(this.debriefNodes.gradeScore)this.debriefNodes.gradeScore.textContent=t('mission.debrief.grade.summary',{
+      letter:grade.letter,
+      percent:formatNumber(grade.percentage),
+      earned:formatNumber(grade.earned),
+      possible:formatNumber(grade.possible),
+    });
+    for(const criterion of grade.criteria){
+      const node=this.debriefNodes.gradeCriteria[criterion.key];
+      if(!node)continue;
+      const reasonParams=Object.fromEntries(Object.entries(criterion.params).map(([key,value])=>[
+        key,typeof value==='number'?formatNumber(value):value,
+      ]));
+      const reason=t(criterion.reasonKey,reasonParams);
+      node.textContent=criterion.possible>0
+        ?t('mission.debrief.grade.points',{
+          earned:formatNumber(criterion.earned),
+          possible:formatNumber(criterion.possible),
+          reason,
+        })
+        :t('mission.debrief.grade.notScored',{reason});
+    }
+  }
+  refreshOptionalObjectiveState(){
+    const state=this.optionalObjectiveState;
+    if(!state)return;
+    state.outcome=this.missionFlow?.outcome??MISSION_OUTCOME.ACTIVE;
+    state.elapsed=this.missionFlow?.elapsed??0;
+    state.damageTaken=this.damageTaken;
+    state.wingmenTotal=this.airBattle.allies.length;
+    state.wingmenReturned=0;
+    for(const wingman of this.airBattle.allies)if(!wingman.dead)state.wingmenReturned++;
+    state.missilesRemaining=this.weaponSystem.missiles.air+this.weaponSystem.missiles.ground;
   }
   clearInput(){
     this.input.clear();
     this.weaponSystem.stopGun();
   }
   dispose(){
+    this.setTelemetry(null);
     this.clearInput();
     this.input.dispose();
     document.removeEventListener('ilmatila:languagechange', this.onLanguageChange);
@@ -545,119 +728,51 @@ export class CombatWorld {
     this.combatEffects.dispose();
     this.countermeasureSystem.dispose();
     this.radar.dispose();
+    this.incomingAircraftMissiles.length=0;
+    this.missileLaunchSource=null;
+    this.missileLaunchSeeker=null;
+    this.missileLaunchTimer=0;
+    this.missileLaunchAlertCooldown=0;
     const designator=document.querySelector('#target-designator');
     if(designator){designator.hidden=true;designator.classList.remove('ground-target','locked');}
-    if(this.threatWarning)this.threatWarning.hidden=true;
-    if(this.radarWarning)this.radarWarning.hidden=true;
+    this.combatHud.dispose();
     const missileCue=document.querySelector('#missile-approach-cue');
     if(missileCue)missileCue.hidden=true;
     if(this.status){this.status.classList.remove('destroyed','complete');this.status.replaceChildren(document.createElement('i'),document.createTextNode(` ${t('hud.ready')}`));}
   }
   updateHud(){
-    if(this.weapon)this.weapon.textContent=this.input.pressed.has('Space')?t('combat.firing'):t('hud.readyShort');
-    if(this.flareCount)this.flareCount.textContent=String(this.countermeasureSystem.flares).padStart(2,'0');
-    if(this.chaffCount)this.chaffCount.textContent=String(this.countermeasureSystem.chaff).padStart(2,'0');
-    if(this.wingmanOrderNode)this.wingmanOrderNode.textContent=t(`combat.wingmanStatus.${this.airBattle.wingmanOrder}`);
-    const radarWarningState=this.getPlayerRadarWarningState();
-    if(this.radarWarning){
-      this.radarWarning.hidden=this.destroyed||!radarWarningState;
-      if(radarWarningState){
-        this.radarWarning.dataset.state=radarWarningState;
-        const label=t(`hud.radarWarning.${radarWarningState}`);
-        if(this.radarWarningLabel&&this.radarWarningLabel.textContent!==label)this.radarWarningLabel.textContent=label;
-      }
-    }
-    const threat=this.projectileSystem.missileThreat;
-    const launchVisible=this.missileLaunchTimer>0&&this.missileLaunchSource&&!this.missileLaunchSource.dead;
-    if(this.threatWarning){
-      this.threatWarning.hidden=this.destroyed||(!threat&&!launchVisible);
-      this.threatWarning.classList.toggle('critical',Boolean(threat&&this.projectileSystem.missileThreatEta<4.5));
-      if(!this.threatWarning.hidden){
-        let warningKey='hud.missileLaunchDetected';
-        const missileSeeker=threat?.seeker??(launchVisible?this.missileLaunchSeeker:null);
-        const warningPhase=threat&&this.projectileSystem.missileThreatEta<=8.5?'Inbound':'LaunchDetected';
-        if(missileSeeker==='radar')warningKey=`hud.radarMissile${warningPhase}`;
-        else if(missileSeeker==='ir')warningKey=`hud.irMissile${warningPhase}`;
-        else if(threat)warningKey=this.projectileSystem.missileThreatEta<=8.5?'hud.missileInbound':'hud.missileLaunchDetected';
-        const label=t(warningKey);
-        if(this.threatWarningLabel&&this.threatWarningLabel.textContent!==label)this.threatWarningLabel.textContent=label;
-        let detail='';
-        if(threat){
-          const distance=this.projectileSystem.missileThreatDistance;
-          const range=distance>=1000?`${formatNumber(distance/1000,{minimumFractionDigits:1,maximumFractionDigits:1})} KM`:`${formatNumber(Math.round(distance))} M`;
-          detail=t('hud.missileThreatDetail',{range,seconds:Math.max(1,Math.ceil(this.projectileSystem.missileThreatEta))});
-        }else if(launchVisible){
-          const distance=this.missileLaunchSource.mesh.position.distanceTo(this.player.position);
-          detail=t('hud.launchSourceDetail',{range:`${formatNumber(distance/1000,{minimumFractionDigits:1,maximumFractionDigits:1})} KM`});
-        }
-        if(this.threatWarningDetail&&this.threatWarningDetail.textContent!==detail)this.threatWarningDetail.textContent=detail;
-      }
-    }
-    if(this.boundaryWarning){
-      const halfSize=this.terrain.worldSize*.5;
-      const bounds=this.terrain.operationBounds??{minX:-halfSize,maxX:halfSize,minZ:-halfSize,maxZ:halfSize};
-      const rectangularClearance=Math.max(0,Math.min(
-        this.player.position.x-bounds.minX,
-        bounds.maxX-this.player.position.x,
-        this.player.position.z-bounds.minZ,
-        bounds.maxZ-this.player.position.z,
-      ));
-      const clearance=this.terrain.getBoundaryClearance?.(this.player.position.x,this.player.position.z)
-        ?? rectangularClearance;
-      const approach=this.terrain.getBoundaryApproach
-        ? this.terrain.getBoundaryApproach(this.player.position,this.playerVelocity)
-        : getBoundaryApproach(this.player.position,this.playerVelocity,bounds);
-      const critical=Boolean(approach&&approach.clearance<=1_500);
-      this.boundaryWarning.hidden=this.destroyed||!approach;
-      this.boundaryWarning.classList.toggle('critical',critical);
-      const boundaryLine=this.terrain.boundaryLine;
-      if(boundaryLine){
-        const lineFade=1-THREE.MathUtils.smoothstep(clearance,8_000,22_000);
-        const lineVisible=!this.destroyed&&lineFade>0;
-        boundaryLine.visible=lineVisible;
-        const state=boundaryLine.userData;
-        if(state.coreMaterial)state.coreMaterial.opacity=lineVisible?lineFade*(critical ? .88 : .72):0;
-        if(state.glowMaterial)state.glowMaterial.opacity=lineVisible?lineFade*(critical ? .16 : .11):0;
-        if(state.hazeMaterial)state.hazeMaterial.opacity=lineVisible?lineFade*(critical ? .055 : .035):0;
-        if(state.coreMaterial)state.coreMaterial.color.setHex(critical?0xff514d:0xef4142);
-        if(state.glowMaterial)state.glowMaterial.color.setHex(critical?0xf04b4b:0xd9363d);
-        if(state.hazeMaterial)state.hazeMaterial.color.setHex(critical?0xee5552:0xc83c43);
-      }
-      if(!this.boundaryWarning.hidden&&this.boundaryWarningText){
-        const warningText=t(critical?'hud.boundaryCritical':'hud.boundaryWarning');
-        if(this.boundaryWarningText.textContent!==warningText)this.boundaryWarningText.textContent=warningText;
-        if(this.boundaryWarningDistance){
-          const distanceText=`${formatNumber(approach.clearance/1000,{minimumFractionDigits:1,maximumFractionDigits:1})} KM`;
-          if(this.boundaryWarningDistance.textContent!==distanceText)this.boundaryWarningDistance.textContent=distanceText;
-        }
-      }
-    }
-    if(this.ammo){
-      let seeker;
-      if(this.weaponSystem.missileFeedbackTimer>0&&this.weaponSystem.missileFeedbackKey)seeker=t(this.weaponSystem.missileFeedbackKey);
-      else if(this.weaponSystem.missiles[this.radar.mode]<=0)seeker=t('combat.noMissiles');
-      else if(this.weaponSystem.cooldown>0)seeker=t('combat.cooling',{seconds:formatNumber(this.weaponSystem.cooldown,{minimumFractionDigits:1,maximumFractionDigits:1})});
-      else if(this.radar.target&&!this.radar.targetInSensorRange)seeker=t('combat.sensorContactLost');
-      else if(this.radar.target&&!this.radar.inLockEnvelope)seeker=t('combat.outOfRange');
-      else if(this.radar.target&&this.radar.lockCueConfirmed)seeker=t('combat.locked');
-      else if(this.radar.target&&this.radar.lockCueTarget)seeker=t('combat.locking',{percent:Math.round(this.radar.lock*100)});
-      else if(this.radar.target)seeker=t('combat.aimAtSelected');
-      else seeker=t(this.radar.mode==='ground'?'combat.searchGround':'combat.searchAir');
-      this.ammo.textContent=seeker;
-      const acquiring=Boolean(this.radar.target&&this.radar.inLockEnvelope&&this.radar.lockCueTarget&&!this.radar.lockCueConfirmed);
-      const locked=Boolean(this.radar.target&&this.radar.lockCueConfirmed);
-      this.ammo.classList.toggle('acquiring',acquiring);
-      this.ammo.classList.toggle('locked',locked);
-      this.ammo.classList.toggle('out-of-range',Boolean(this.radar.target&&!this.radar.inLockEnvelope));
-      this.ammo.classList.toggle('sensor-lost',Boolean(this.radar.target&&!this.radar.targetInSensorRange));
-      this.ammo.classList.toggle('ground-target',this.radar.targetDomain==='ground');
-    }
-    if(this.missileType){
-      const profile=this.radar.mode==='ground'?MISSILE_PROFILES.playerGround:MISSILE_PROFILES.playerAir;
-      if(this.missileType.textContent!==profile.designation)this.missileType.textContent=profile.designation;
-    }
-    if(this.missileCount)this.missileCount.textContent=String(this.weaponSystem.missiles[this.radar.mode]).padStart(2,'0');
-    if(this.scoreEl)this.scoreEl.textContent=String(this.score).padStart(5,'0');
+    this.updateBoundaryVisual();
+    this.refreshHudState();
+    this.combatHud.update(this.hudState);
+  }
+  updateBoundaryVisual(){
+    const bounds=this.terrain.operationBounds??this._fallbackBoundaryBounds;
+    const rectangularClearance=Math.max(0,Math.min(
+      this.player.position.x-bounds.minX,
+      bounds.maxX-this.player.position.x,
+      this.player.position.z-bounds.minZ,
+      bounds.maxZ-this.player.position.z,
+    ));
+    const clearance=this.terrain.getBoundaryClearance?.(this.player.position.x,this.player.position.z)
+      ?? rectangularClearance;
+    const approach=this.terrain.getBoundaryApproach
+      ? this.terrain.getBoundaryApproach(this.player.position,this.playerVelocity,this._boundaryApproachScratch)
+      : getBoundaryApproach(this.player.position,this.playerVelocity,bounds,5_000,25,this._boundaryApproachScratch);
+    const critical=Boolean(approach&&approach.clearance<=1_500);
+    this.boundaryApproach=approach;
+    this.boundaryCritical=critical;
+    const boundaryLine=this.terrain.boundaryLine;
+    if(!boundaryLine)return;
+    const lineFade=1-THREE.MathUtils.smoothstep(clearance,8_000,22_000);
+    const lineVisible=!this.destroyed&&lineFade>0;
+    boundaryLine.visible=lineVisible;
+    const state=boundaryLine.userData;
+    if(state.coreMaterial)state.coreMaterial.opacity=lineVisible?lineFade*(critical ? .88 : .72):0;
+    if(state.glowMaterial)state.glowMaterial.opacity=lineVisible?lineFade*(critical ? .16 : .11):0;
+    if(state.hazeMaterial)state.hazeMaterial.opacity=lineVisible?lineFade*(critical ? .055 : .035):0;
+    if(state.coreMaterial)state.coreMaterial.color.setHex(critical?0xff514d:0xef4142);
+    if(state.glowMaterial)state.glowMaterial.color.setHex(critical?0xf04b4b:0xd9363d);
+    if(state.hazeMaterial)state.hazeMaterial.color.setHex(critical?0xee5552:0xc83c43);
   }
   getPlayerRadarWarningState(){
     let searching=false;

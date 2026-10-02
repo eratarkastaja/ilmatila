@@ -6,10 +6,13 @@ import { HostileFighterAI } from './hostile-fighter-ai.js';
 import { HelicopterAI } from './helicopter-ai.js';
 import { WingmanController } from './wingman-controller.js';
 import { AirWeaponAI } from './air-weapon-ai.js';
+import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
+
+const EMPTY_PLAYER_THREAT = Object.freeze({});
 
 /** Coordinates air units and advances their behavior in simulation order. */
 export class AirBattle {
-  constructor({ scene, player, aircraftAsset, mission, terrain, audio, fx, playerVelocity, getPlayerHeading, deployHostileCountermeasures, addHostileProjectile, addPlayerProjectile, onMissileLaunch, onWingmanRadio, difficulty = {}, random = Math.random }) {
+  constructor({ scene, player, aircraftAsset, mission, terrain, audio, fx, playerVelocity, getPlayerHeading, deployHostileCountermeasures, addHostileProjectile, addPlayerProjectile, onMissileLaunch, onWingmanRadio, difficulty = {}, random = createSeededRandom(DEFAULT_RANDOM_SEED), reinforcement = null }) {
     this.scene = scene;
     this.player = player;
     this.aircraftAssets = aircraftAsset;
@@ -26,6 +29,9 @@ export class AirBattle {
     this.onWingmanRadio = onWingmanRadio;
     this.difficulty = difficulty;
     this.random = random;
+    this.reinforcement = reinforcement;
+    this.reinforcementElapsed = 0;
+    this.reinforcementSpawned = false;
     this._playerForward = new THREE.Vector3();
     this._playerRight = new THREE.Vector3();
     this.enemies = [];
@@ -36,8 +42,8 @@ export class AirBattle {
     this.hostilesSpawned = false;
     this.spawnSystem = new AirSpawnSystem();
     this.hostileFighterAI = new HostileFighterAI(random);
-    this.helicopterAI = new HelicopterAI();
-    this.wingmanController = new WingmanController();
+    this.helicopterAI = new HelicopterAI(random);
+    this.wingmanController = new WingmanController(random);
     this.weaponAI = new AirWeaponAI(random);
     this.spawn();
   }
@@ -50,7 +56,14 @@ export class AirBattle {
     return this.spawnSystem.spawnHostiles(this, heading, playerForward, playerRight);
   }
 
-  update(dt, playerThreat = {}) {
+  update(dt, playerThreat = EMPTY_PLAYER_THREAT) {
+    if (this.hostilesSpawned && this.reinforcement?.scheduled && !this.reinforcementSpawned) {
+      this.reinforcementElapsed += Math.max(0, dt);
+      if (this.reinforcementElapsed >= this.reinforcement.delaySeconds) {
+        this.reinforcementSpawned = true;
+        this.spawnSystem.spawnReinforcements(this, this.reinforcement);
+      }
+    }
     const heading = this.currentPlayerHeading();
     const playerForward = forwardOfHeading(heading, this._playerForward);
     const playerRight = rightOfHeading(heading, this._playerRight);

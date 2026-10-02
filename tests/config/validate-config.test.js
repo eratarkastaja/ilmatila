@@ -28,6 +28,7 @@ describe('game configuration validation', () => {
     difficulties.hard.fighter.missile.minRange = difficulties.hard.fighter.missile.maxRange;
     difficulties.standard.player.chaff.radarMissileBreakChance = 1.4;
     difficulties.easy.player.chaff.count = 2.5;
+    difficulties.hard.player.weapons.gunRounds = 1200.5;
 
     const errors = validateGameConfig({ difficulties, missions: {} });
 
@@ -37,6 +38,7 @@ describe('game configuration validation', () => {
     expect(errors).toContain('difficulties.hard.fighter.missile.minRange must be less than maxRange');
     expect(errors).toContain('difficulties.standard.player.chaff.radarMissileBreakChance must be between 0 and 1');
     expect(errors).toContain('difficulties.easy.player.chaff.count must be an integer');
+    expect(errors).toContain('difficulties.hard.player.weapons.gunRounds must be null or an integer between 0 and 100000');
   });
 
   it('reports invalid mission fields, unreasonable values, and broken relationships', () => {
@@ -56,5 +58,20 @@ describe('game configuration validation', () => {
     expect(errors).toContain('missions.intercept.hostileStagingDistance must be between 1 and 100000');
     expect(errors).toContain('missions.support.hostileHelicopterMinimumSpawnDistance must not exceed hostileHelicopterSpawnDistance');
     expect(errors).toContain('missions.support.unlocks contains unknown mission "missing"');
+  });
+
+  it('validates optional objective selectors and mission variant reinforcement settings', () => {
+    const missions = structuredClone(MISSIONS);
+    missions.support.optionalObjectives[1].target.collection = 'friendlyGround';
+    missions.intercept.variants[0].reinforcement.probability = 1.5;
+    missions.training.variants[0].changes.optionalObjectives = [
+      { id: 'invalid', type: 'unknownObjective' },
+    ];
+
+    const errors = validateGameConfig({ difficulties: DIFFICULTY_PRESETS, missions });
+
+    expect(errors).toContain('missions.support.optionalObjectives[1].target.collection must be groundHostiles');
+    expect(errors).toContain('missions.intercept.variants[0].reinforcement.probability must be between 0 and 1');
+    expect(errors).toContain('missions.training.variants[0].changes.optionalObjectives[0].type is not a recognized optional objective type');
   });
 });

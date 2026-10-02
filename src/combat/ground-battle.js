@@ -5,10 +5,11 @@ import { GroundUnitAI } from './ground-unit-ai.js';
 import { GroundMovementAI } from './ground-movement-ai.js';
 import { GroundWeaponSystem } from './ground-weapon-system.js';
 import { GroundAirDefenseAI } from './ground-air-defense-ai.js';
+import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
 
 /** Owns battlefield state and coordinates ground-unit simulation updates. */
 export class GroundBattle {
-  constructor({ scene, player, playerVelocity, terrain, mission, audio, fx, difficulty = {}, enemies = [], addProjectile, addFriendlyProjectile }) {
+  constructor({ scene, player, playerVelocity, terrain, mission, audio, fx, difficulty = {}, enemies = [], addProjectile, addFriendlyProjectile, random = createSeededRandom(DEFAULT_RANDOM_SEED) }) {
     this.scene = scene;
     this.player = player;
     this.playerVelocity = playerVelocity;
@@ -17,6 +18,7 @@ export class GroundBattle {
     this.audio = audio;
     this.fx = fx;
     this.difficulty = difficulty;
+    this.random = random;
     this.enemies = enemies;
     this.addProjectile = addProjectile;
     this.addFriendlyProjectile = addFriendlyProjectile;
@@ -44,10 +46,10 @@ export class GroundBattle {
       ingressDistance + battlefieldIngressOffset,
     );
     this.spawnSystem = new GroundSpawnSystem();
-    this.unitAI = new GroundUnitAI();
+    this.unitAI = new GroundUnitAI(random);
     this.movementAI = new GroundMovementAI();
-    this.weaponAI = new GroundWeaponSystem();
-    this.airDefenseAI = new GroundAirDefenseAI();
+    this.weaponAI = new GroundWeaponSystem(random);
+    this.airDefenseAI = new GroundAirDefenseAI(random);
     this.spawn();
     this.groundUnits = [...this.friends, ...this.redUnits];
   }

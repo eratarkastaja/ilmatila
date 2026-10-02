@@ -2,6 +2,12 @@ import * as THREE from 'three';
 import { t } from '../ui/i18n.js';
 import { MISSILE_PROFILES } from './projectiles.js';
 
+const setClassIfChanged = (node, className, enabled) => {
+  if (node && node.classList.contains(className) !== Boolean(enabled)) {
+    node.classList.toggle(className, Boolean(enabled));
+  }
+};
+
 /** Owns radar contacts, search mode and the arcade-friendly weapon lock cue. */
 export class CombatRadar {
   constructor(player, audio) {
@@ -44,8 +50,9 @@ export class CombatRadar {
   }
 
   renderMode() {
-    this.screen?.classList.toggle('ground-mode', this.mode === 'ground');
-    if (this.modeIndicator) this.modeIndicator.textContent = t(this.mode === 'air' ? 'hud.airModeShort' : 'hud.groundModeShort');
+    setClassIfChanged(this.screen, 'ground-mode', this.mode === 'ground');
+    const modeText = t(this.mode === 'air' ? 'hud.airModeShort' : 'hud.groundModeShort');
+    if (this.modeIndicator && this.modeIndicator.textContent !== modeText) this.modeIndicator.textContent = modeText;
   }
 
   updateContacts(dt, playerHeading, { airFriendly, airHostile, groundFriendly, groundHostile }) {
@@ -161,7 +168,7 @@ export class CombatRadar {
     this.targetDomain = candidate ? (groundMode ? 'ground' : 'air') : null;
     const confirmed = Boolean(candidate && inBoresight && this.lock > 0.96);
     for (const track of this.tracks.values()) {
-      track.node?.classList.toggle('locked', Boolean(confirmed && track.node.classList.contains('target')));
+      setClassIfChanged(track.node, 'locked', Boolean(confirmed && track.node?.classList.contains('target')));
     }
 
     if (inBoresight && (!hadTarget || targetChanged)) this.audio?.playLockAcquire();
@@ -169,8 +176,8 @@ export class CombatRadar {
     if (confirmed && !wasConfirmed) this.audio?.playLockReady();
     this.lockCueTarget = inBoresight;
     this.lockCueConfirmed = confirmed;
-    this.crosshair?.classList.toggle('acquiring', Boolean(inBoresight && !confirmed));
-    this.crosshair?.classList.toggle('locked', confirmed);
+    setClassIfChanged(this.crosshair, 'acquiring', Boolean(inBoresight && !confirmed));
+    setClassIfChanged(this.crosshair, 'locked', confirmed);
   }
 
   clearLock() {

@@ -14,6 +14,15 @@ export const MISSION_PHASE = Object.freeze({
 
 const forward = new THREE.Vector3(0, 0, 1);
 const horizontal = new THREE.Vector3();
+const ROUTE_HUD_UPDATE_INTERVAL = 1 / 15;
+const setHiddenIfChanged = (node, hidden) => {
+  if (node && node.hidden !== hidden) node.hidden = hidden;
+};
+const setClassIfChanged = (node, className, enabled) => {
+  if (node && node.classList.contains(className) !== Boolean(enabled)) {
+    node.classList.toggle(className, Boolean(enabled));
+  }
+};
 
 /** Sortie progression from launch through ingress, tasking, recovery, and debrief. */
 export class MissionFlowSystem {
@@ -53,6 +62,7 @@ export class MissionFlowSystem {
     }
     this.navigationRadius = mission.navigationRadius ?? 850;
     this.extractionRadius = mission.extractionRadius ?? 1250;
+    this.routeHudElapsed = ROUTE_HUD_UPDATE_INTERVAL;
     this.phase = MISSION_PHASE.DEPARTURE;
     this.render();
   }
@@ -113,7 +123,10 @@ export class MissionFlowSystem {
       this.finish(MISSION_OUTCOME.COMPLETE);
     }
 
-    this.render();
+    this.routeHudElapsed += delta;
+    const updateRouteReadout = this.routeHudElapsed >= ROUTE_HUD_UPDATE_INTERVAL;
+    if (updateRouteReadout) this.routeHudElapsed %= ROUTE_HUD_UPDATE_INTERVAL;
+    this.render(updateRouteReadout);
   }
 
   enterIngress() {
@@ -159,7 +172,7 @@ export class MissionFlowSystem {
     return Math.hypot(point.x - this.player.position.x, point.z - this.player.position.z);
   }
 
-  render() {
+  render(updateRouteReadout = true) {
     const phaseTitle = t(`mission.phase.${this.phase}.title`);
     const phaseDetailKey = this.phase === MISSION_PHASE.CONTACT
       ? `mission.phase.contact.${this.contactDetected ? 'detected' : 'search'}`
@@ -172,12 +185,12 @@ export class MissionFlowSystem {
 
     const waypoint = this.waypoint;
     const routeVisible = Boolean(waypoint);
-    if (this.nodes.routeReadout) this.nodes.routeReadout.hidden = !routeVisible;
+    setHiddenIfChanged(this.nodes.routeReadout, !routeVisible);
     if (this.nodes.waypointCue) {
-      this.nodes.waypointCue.hidden = !routeVisible;
-      this.nodes.waypointCue.classList.toggle('return-route', this.phase === MISSION_PHASE.RTB);
+      setHiddenIfChanged(this.nodes.waypointCue, !routeVisible);
+      setClassIfChanged(this.nodes.waypointCue, 'return-route', this.phase === MISSION_PHASE.RTB);
     }
-    if (!routeVisible) return;
+    if (!routeVisible || !updateRouteReadout) return;
 
     const dx = waypoint.x - this.player.position.x;
     const dz = waypoint.z - this.player.position.z;
@@ -194,7 +207,7 @@ export class MissionFlowSystem {
     const altitudeNode = this.nodes.routeAltitude;
     if (altitudeNode) {
       const showAltitude = this.phase === MISSION_PHASE.NAVIGATION && this.ingressAltitudeAgl > 0;
-      altitudeNode.hidden = !showAltitude;
+      setHiddenIfChanged(altitudeNode, !showAltitude);
       if (showAltitude) {
         const altitude = formatNumber(Math.round(this.ingressAltitudeAgl * 3.28084));
         const requirement = t('mission.route.altitudeRequirement', { altitude });

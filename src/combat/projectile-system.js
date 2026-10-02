@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { randomVisual } from '../effects/visual-random.js';
+import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
 import { applyAirframeCondition } from './airframe-condition.js';
 import { estimateInterceptTime } from './ballistics.js';
 import { releaseMissile, updateMissileMotor } from './projectiles.js';
@@ -35,10 +37,10 @@ function turnDirection(current, desired, maxAngle, direction, axis) {
 export class ProjectileSystem {
   constructor({
     scene, player, playerShots = [], hostiles = [], decoys = [], collision, audio,
-    playerVelocity = stationaryVelocity, onPlayerDestroyed, onPlayerDamaged, onPlayerHit, onJetDestroyed,
+    playerVelocity = stationaryVelocity, onPlayerDestroyed, onPlayerDamaged, onPlayerHit, onPlayerMissileHit, onJetDestroyed,
     onUnitDestroyed, onFriendlyAircraftHit, addSpark, addWaterImpact, addExplosion, incomingDamageMultiplier = 1,
     hostileMissileTurnRate = HOSTILE_MISSILE_TURN_RATE, hostileMissileDamage = 62,
-    hostileMissileProximityRadius = 20, random = Math.random,
+    hostileMissileProximityRadius = 20, random = createSeededRandom(DEFAULT_RANDOM_SEED), visualRandom = randomVisual,
   }) {
     this.scene = scene;
     this.player = player;
@@ -51,6 +53,7 @@ export class ProjectileSystem {
     this.onPlayerDestroyed = onPlayerDestroyed;
     this.onPlayerDamaged = onPlayerDamaged;
     this.onPlayerHit = onPlayerHit;
+    this.onPlayerMissileHit = onPlayerMissileHit;
     this.onJetDestroyed = onJetDestroyed;
     this.onFriendlyAircraftHit = onFriendlyAircraftHit;
     this.onUnitDestroyed = onUnitDestroyed;
@@ -62,6 +65,7 @@ export class ProjectileSystem {
     this.addWaterImpact = addWaterImpact;
     this.addExplosion = addExplosion;
     this.random = random;
+    this.visualRandom = visualRandom;
     this.telemetry = null;
     this.incomingMissile = false;
     this.missileThreat = null;
@@ -80,6 +84,7 @@ export class ProjectileSystem {
     this._orientationDelta=new THREE.Quaternion();
     this._tracerDirection=new THREE.Vector3();
     this._impactPosition=new THREE.Vector3();
+    this._collisionQuery={ally:false,ballistic:false,canHitGround:false};
   }
 
   tryAcquireFlare(shot, targetPosition, decoys, team, source) {
@@ -169,6 +174,12 @@ export class ProjectileSystem {
     for(const shot of this.hostiles)this.recycleProjectile(shot);
     this.playerShots.length = 0;
     this.hostiles.length = 0;
+    this.incomingMissile = false;
+    this.missileThreat = null;
+    this.missileThreatDistance = Infinity;
+    this.missileThreatEta = Infinity;
+    this.missileThreatGrace = 0;
+    this.telemetry = null;
   }
 
   recycleProjectile(shot){
@@ -212,7 +223,7 @@ export class ProjectileSystem {
         const desiredDirection = aimPoint.sub(shot.mesh.position).normalize();
         const turnRate = shot.turnRate ?? (shot.targetDomain === 'ground' ? 1.5 : MISSILE_TURN_RATE);
         this.steerMissile(shot, desiredDirection, turnRate, missileSpeed, dt);
-        if (this.random() < .04) this.addSpark(shot.mesh.position);
+        if (this.visualRandom() < .04) this.addSpark(shot.mesh.position);
       }
       if (shot.homing) audio?.updateMissileFlight(shot.mesh.id, shot.mesh.position.distanceTo(player.position), dt);
       const previous = this._previousPosition.copy(shot.mesh.position);
@@ -223,11 +234,13 @@ export class ProjectileSystem {
         this.addSpark(shot.mesh.position);
         shot.life = 0;
       }
-      let impact = shot.life > 0
-        ? this.collision.findProjectileImpact(previous, shot.mesh.position, dt, {
-            ally: shot.ally, ballistic: shot.ballistic, canHitGround: shot.canHitGround,
-          })
-        : null;
+      let impact = null;
+      if(shot.life>0){
+        this._collisionQuery.ally=Boolean(shot.ally);
+        this._collisionQuery.ballistic=Boolean(shot.ballistic);
+        this._collisionQuery.canHitGround=Boolean(shot.canHitGround);
+        impact=this.collision.findProjectileImpact(previous,shot.mesh.position,dt,this._collisionQuery);
+      }
       if (!impact && shot.life > 0 && shot.homing && shot.target && !shot.decoyTarget) {
         impact = this.collision.findMissileProximityImpact(
           previous,
@@ -242,6 +255,7 @@ export class ProjectileSystem {
         const { target, hitInfo } = impact;
         const damage = shot.damage * (hitInfo.damage ?? 1);
         target.hp -= damage;
+        if (shot.missile && shot.owner === 'player') this.onPlayerMissileHit?.();
         if (target.mesh?.userData.airframeHealthRatio !== undefined) {
           applyAirframeCondition(target.mesh, target.hp, target.maxHp);
         }

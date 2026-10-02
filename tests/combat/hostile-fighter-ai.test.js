@@ -127,6 +127,95 @@ describe('HostileFighterAI radar tracking', () => {
     expect(ai.canLaunchMissile(enemy, 'radar')).toBe(true);
   });
 
+  it('coordinates Hard target assignments and tightens focus when the player has low energy', () => {
+    const ai = new HostileFighterAI(() => .5);
+    const player = { position: new THREE.Vector3(0, 300, 0) };
+    const closerWingman = { dead: false, mesh: { position: new THREE.Vector3(300, 300, 1000) } };
+    const lessThreatenedWingman = { dead: false, mesh: { position: new THREE.Vector3(-1200, 300, 900) } };
+    const enemy = makeHostile(new THREE.Vector3(0, 300, -5000));
+    const firstAttacker = { dead: false, engagementTarget: player };
+    const secondAttacker = { dead: false, engagementTarget: player };
+    const wingmanAttacker = { dead: false, engagementTarget: closerWingman };
+    const battle = {
+      player,
+      playerVelocity: new THREE.Vector3(0, 0, 235),
+      allies: [closerWingman, lessThreatenedWingman],
+      enemies: [enemy, firstAttacker, secondAttacker, wingmanAttacker],
+      friendlyGroundUnits: [],
+      difficulty: DIFFICULTY_PRESETS.hard,
+    };
+
+    expect(ai.selectEnemyEngagementTarget(battle, enemy, 5000).target).toBe(player);
+
+    battle.playerVelocity.set(0, 0, 410);
+    expect(ai.selectEnemyEngagementTarget(battle, enemy, 5000).target).toBe(lessThreatenedWingman);
+  });
+
+  it('does not use player energy after the player track is disrupted', () => {
+    const ai = new HostileFighterAI(() => .5);
+    const player = { position: new THREE.Vector3(0, 300, 0) };
+    const ally = { dead: false, mesh: { position: new THREE.Vector3(100, 300, 700) } };
+    const enemy = makeHostile(new THREE.Vector3(0, 300, -4000));
+    enemy.radarTrackDisruptionRemaining = 1;
+    const battle = {
+      player,
+      playerVelocity: new THREE.Vector3(0, 0, 100),
+      allies: [ally],
+      enemies: [enemy],
+      friendlyGroundUnits: [],
+      difficulty: DIFFICULTY_PRESETS.hard,
+    };
+
+    expect(ai.selectEnemyEngagementTarget(battle, enemy, 4000).target).toBe(ally);
+  });
+
+  it('breaks across a Hard missile crossing using its observed velocity', () => {
+    const ai = new HostileFighterAI(() => .5);
+    const enemy = makeHostile(new THREE.Vector3(0, 300, 0));
+    enemy.velocity.set(0, 0, 0);
+    const battle = { difficulty: DIFFICULTY_PRESETS.hard };
+
+    ai.beginEvasiveManeuver(
+      battle,
+      enemy,
+      new THREE.Vector3(100, 300, -200),
+      2,
+      new THREE.Vector3(-100, 0, 0),
+    );
+
+    expect(enemy.evasiveDirection).toBe(1);
+    expect(enemy.evasiveTimer).toBe(2);
+  });
+
+  it('holds player-targeted missiles while a Hard fighter is assigned to a wingman', () => {
+    const enemy = makeHostile(new THREE.Vector3(0, 300, -3000));
+    const wingman = { dead: false, mesh: { position: new THREE.Vector3(100, 300, 0) } };
+    const launchEnemyMissile = vi.fn();
+    enemy.engagementTarget = wingman;
+    enemy.targetRefreshTimer = 100;
+    enemy.missileClock = 0;
+    enemy.missilesFired = 0;
+    enemy.gunCooldown = 100;
+    enemy.tacticalManeuverCooldown = 100;
+    enemy.groundStrafeCooldown = 100;
+    const battle = makeBattle(enemy, vi.fn());
+    battle.difficulty = DIFFICULTY_PRESETS.hard;
+    battle.mission = {};
+    battle.friendlyGroundUnits = [];
+    battle.weaponAI.chooseHostileMissileSeeker = () => 'ir';
+    battle.weaponAI.launchEnemyMissile = launchEnemyMissile;
+
+    new HostileFighterAI(() => .5).updateJets(
+      battle,
+      1 / 60,
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(1, 0, 0),
+      { lockedTarget: null, incomingMissiles: [] },
+    );
+
+    expect(launchEnemyMissile).not.toHaveBeenCalled();
+  });
+
   it('turns an extending fighter back toward its selected air target', () => {
     const enemy = makeHostile(new THREE.Vector3(0, 300, 1000), 'extend');
     const ai = new HostileFighterAI(() => .99);

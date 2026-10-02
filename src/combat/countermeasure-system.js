@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { DIFFICULTY_PRESETS } from './difficulty.js';
+import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
+import { randomVisual } from '../effects/visual-random.js';
 
 const flareDecoyGeo = new THREE.SphereGeometry(.3, 8, 6);
 const flareDecoyMaterial = new THREE.MeshBasicMaterial({ color: '#fff0b4', toneMapped: false });
@@ -21,10 +23,10 @@ const flareParticleColor = new THREE.Color('#ffe4a0');
 const flareSmokeColor = new THREE.Color('#756458');
 const chaffParticleColor = new THREE.Color('#9aa9a7');
 
-function addFlareBundle(cloud, addTransientGlow, random = Math.random) {
+function addFlareBundle(cloud, addTransientGlow, visualRandom = randomVisual) {
   for (let i = 0; i < 3; i++) {
-    const offset = new THREE.Vector3((i - 1) * 1.35, (random() - .5) * .7, (random() - .5) * .8);
-    const scale = .82 + random() * .28;
+    const offset = new THREE.Vector3((i - 1) * 1.35, (visualRandom() - .5) * .7, (visualRandom() - .5) * .8);
+    const scale = .82 + visualRandom() * .28;
 
     const plume = new THREE.Mesh(flarePlumeGeo, flarePlumeMaterial);
     plume.position.copy(offset).addScaledVector(localForward, -1.1 * scale);
@@ -45,11 +47,11 @@ function addFlareBundle(cloud, addTransientGlow, random = Math.random) {
     core.scale.set(.78, .78, 1.05).multiplyScalar(scale);
     cloud.add(core);
 
-    const glow = addTransientGlow(cloud, '#fff0c0', 8.5 + random() * 2.5, .94);
+    const glow = addTransientGlow(cloud, '#fff0c0', 8.5 + visualRandom() * 2.5, .94);
     glow.position.copy(offset);
     glow.userData.baseSize = glow.scale.x;
     glow.userData.flareGlow = true;
-    glow.userData.flickerPhase = random() * Math.PI * 2;
+    glow.userData.flickerPhase = visualRandom() * Math.PI * 2;
   }
 }
 
@@ -64,7 +66,8 @@ export class CountermeasureSystem {
   constructor({
     scene, player, playerVelocity, fx, audio, decoys = [], playerShots = [], hostileShots = [],
     hostileAircraft = [], addTransientGlow, onInventoryChange = () => {}, initialCount = 12,
-    chaffConfig = DIFFICULTY_PRESETS.standard.player.chaff, random = Math.random,
+    chaffConfig = DIFFICULTY_PRESETS.standard.player.chaff,
+    random = createSeededRandom(DEFAULT_RANDOM_SEED), visualRandom = randomVisual,
   }) {
     this.scene = scene;
     this.player = player;
@@ -77,6 +80,7 @@ export class CountermeasureSystem {
     this.hostileAircraft = hostileAircraft;
     this.addTransientGlow = addTransientGlow;
     this.random = random;
+    this.visualRandom = visualRandom;
     this._drift=new THREE.Vector3();
     this._jitter=new THREE.Vector3();
     this._orientation=new THREE.Vector3();
@@ -145,7 +149,7 @@ export class CountermeasureSystem {
     const flareCloud = new THREE.Group();
     flareCloud.position.copy(this.player.position).addScaledVector(rear, 6);
     flareCloud.quaternion.setFromUnitVectors(localForward, this._orientation.copy(flareVelocity).normalize());
-    addFlareBundle(flareCloud, this.addTransientGlow, this.random);
+    addFlareBundle(flareCloud, this.addTransientGlow, this.visualRandom);
     this.scene.add(flareCloud);
     this.decoys.push({
       team: 'player', source: this.player, type: 'ir', mesh: flareCloud, position: flareCloud.position,
@@ -205,22 +209,22 @@ export class CountermeasureSystem {
     this._chaffOrigin.copy(this.player.position).addScaledVector(rear, 4);
     for (let i = 0; i < 14; i++) {
       const offset = this._jitter.set(
-        (this.random() - .5) * 8,
-        (this.random() - .5) * 5,
-        (this.random() - .5) * 8,
+        (this.visualRandom() - .5) * 8,
+        (this.visualRandom() - .5) * 5,
+        (this.visualRandom() - .5) * 8,
       );
       const velocity = this._chaffVelocity.copy(this.playerVelocity)
-        .addScaledVector(rear, 32 + this.random() * 36)
-        .addScaledVector(right, (this.random() - .5) * 38)
-        .addScaledVector(up, (this.random() - .5) * 24);
+        .addScaledVector(rear, 32 + this.visualRandom() * 36)
+        .addScaledVector(right, (this.visualRandom() - .5) * 38)
+        .addScaledVector(up, (this.visualRandom() - .5) * 24);
       this._chaffPosition.copy(this._chaffOrigin).add(offset);
       this.fx.emitParticle(
         this._chaffPosition,
         velocity,
         chaffParticleColor,
-        .8 + this.random() * .45,
-        1.1 + this.random() * .8,
-        .38 + this.random() * .2,
+        .8 + this.visualRandom() * .45,
+        1.1 + this.visualRandom() * .8,
+        .38 + this.visualRandom() * .2,
         0,
       );
     }
@@ -289,7 +293,7 @@ export class CountermeasureSystem {
       .addScaledVector(right, (this.random() - .5) * 18)
       .addScaledVector(up, 18);
     cloud.quaternion.setFromUnitVectors(localForward, this._orientation.copy(velocity).normalize());
-    addFlareBundle(cloud, this.addTransientGlow, this.random);
+    addFlareBundle(cloud, this.addTransientGlow, this.visualRandom);
     this.scene.add(cloud);
     this.decoys.push({
       team: 'enemy', source: enemy, type: 'ir', mesh: cloud, position: cloud.position,
@@ -323,18 +327,18 @@ export class CountermeasureSystem {
         decoy.trailClock -= dt;
         if (decoy.trailClock <= 0) {
           const drift = this._drift.copy(decoy.velocity).multiplyScalar(.055)
-            .add(this._jitter.set((this.random() - .5) * 5, this.random() * 6, (this.random() - .5) * 5));
-          const hotEmber = this.random() < .72;
+            .add(this._jitter.set((this.visualRandom() - .5) * 5, this.visualRandom() * 6, (this.visualRandom() - .5) * 5));
+          const hotEmber = this.visualRandom() < .72;
           this.fx?.emitParticle(
             decoy.position,
             drift,
             hotEmber ? flareParticleColor : flareSmokeColor,
-            hotEmber ? .22 + this.random() * .18 : .48 + this.random() * .28,
-            hotEmber ? .55 + this.random() * .8 : 1.1 + this.random() * .7,
+            hotEmber ? .22 + this.visualRandom() * .18 : .48 + this.visualRandom() * .28,
+            hotEmber ? .55 + this.visualRandom() * .8 : 1.1 + this.visualRandom() * .7,
             hotEmber ? .9 : .2,
             hotEmber ? .9 : .12,
           );
-          decoy.trailClock = .025 + this.random() * .055;
+          decoy.trailClock = .025 + this.visualRandom() * .055;
         }
         if (decoy.life <= 0) {
           decoy.active = false;

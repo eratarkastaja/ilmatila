@@ -80,8 +80,12 @@
 
           <div class="briefing-line">
             <span class="briefing-symbol">⌖</span>
-            <div><small id="briefing-code">QRA / QUICK REACTION ALERT</small><p id="briefing-copy">Four hostile fighters are approaching from the north. Intercept them with your flight. Friendly ground forces are engaging hostile units in the sector.</p></div>
+            <div><small id="briefing-code">QRA / QUICK REACTION ALERT</small><p id="briefing-copy">Four hostile fighters are approaching from the north. Intercept them with your flight. Friendly ground forces are engaging hostile units in the sector.</p><small id="briefing-variant" class="briefing-variant" hidden></small></div>
           </div>
+          <section id="briefing-optional-objectives" class="briefing-optional-objectives" data-optional-objectives aria-labelledby="briefing-optional-objectives-title" hidden>
+            <h2 id="briefing-optional-objectives-title" data-i18n="mission.optionalObjectives.title">OPTIONAL OBJECTIVES</h2>
+            <ul id="briefing-optional-objective-list" class="optional-objective-list"></ul>
+          </section>
 
           <div class="launch-actions">
             <button id="launch-mission" class="launch-button" type="button" aria-busy="false">
@@ -194,20 +198,44 @@
         <p id="debrief-outcome" class="debrief-outcome"></p>
         <p id="debrief-career-note" class="debrief-career-note" hidden></p>
         <div class="debrief-mission">
-          <div><small data-i18n="mission.debrief.mission">MISSION</small><strong id="debrief-mission"></strong></div>
+          <div><small data-i18n="mission.debrief.mission">MISSION</small><strong id="debrief-mission"></strong><small id="debrief-variant" class="debrief-variant" hidden></small></div>
           <div><small data-i18n="mission.debrief.difficulty">DIFFICULTY</small><strong id="debrief-difficulty"></strong></div>
         </div>
+        <section class="debrief-grade" aria-labelledby="debrief-grade-title">
+          <div class="debrief-grade-summary">
+            <div><small id="debrief-grade-title" data-i18n="mission.debrief.grade.title">SORTIE GRADE</small><strong id="debrief-grade-mark">—</strong></div>
+            <div class="debrief-grade-result">
+              <strong id="debrief-grade-score">—</strong>
+              <small data-i18n="mission.debrief.grade.scale">A 90+ · B 80+ · C 65+ · D 50+ · F below 50</small>
+            </div>
+          </div>
+          <dl class="debrief-grade-breakdown">
+            <div><dt data-i18n="mission.debrief.grade.mission">MISSION COMPLETION · 25</dt><dd id="debrief-grade-mission"></dd></div>
+            <div><dt data-i18n="mission.debrief.grade.survival">AIRCRAFT SURVIVAL · 20</dt><dd id="debrief-grade-survival"></dd></div>
+            <div><dt data-i18n="mission.debrief.grade.wingmenTitle">WINGMEN · 15</dt><dd id="debrief-grade-wingmen"></dd></div>
+            <div><dt data-i18n="mission.debrief.grade.accuracyTitle">CANNON ACCURACY · 15</dt><dd id="debrief-grade-accuracy"></dd></div>
+            <div><dt data-i18n="mission.debrief.grade.damageTitle">DAMAGE AVOIDANCE · 10</dt><dd id="debrief-grade-damage"></dd></div>
+            <div><dt data-i18n="mission.debrief.grade.efficiencyTitle">MISSILE EFFICIENCY · 15</dt><dd id="debrief-grade-efficiency"></dd></div>
+          </dl>
+        </section>
         <dl class="debrief-stats">
           <div><dt data-i18n="mission.debrief.duration">SORTIE TIME</dt><dd id="debrief-duration">00:00</dd></div>
+          <div><dt data-i18n="mission.debrief.kills">TOTAL KILLS</dt><dd id="debrief-kills">0</dd></div>
           <div><dt data-i18n="mission.debrief.airKills">HOSTILE AIRCRAFT</dt><dd id="debrief-air-kills">0</dd></div>
           <div><dt data-i18n="mission.debrief.groundKills">HOSTILE GROUND UNITS</dt><dd id="debrief-ground-kills">0</dd></div>
           <div><dt data-i18n="mission.debrief.accuracy">CANNON ACCURACY</dt><dd id="debrief-accuracy">—</dd></div>
           <div><dt data-i18n="mission.debrief.damage">DAMAGE TAKEN</dt><dd id="debrief-damage">0</dd></div>
           <div><dt data-i18n="mission.debrief.objectives">OBJECTIVES COMPLETED</dt><dd id="debrief-objectives">0 / 1</dd></div>
+          <div><dt data-i18n="mission.debrief.wingmen">WINGMEN RETURNED</dt><dd id="debrief-wingmen">0 / 0</dd></div>
           <div><dt data-i18n="mission.debrief.gunRounds">CANNON ROUNDS</dt><dd id="debrief-gun-rounds">0</dd></div>
-          <div><dt data-i18n="mission.debrief.missiles">GUIDED MISSILES</dt><dd id="debrief-missiles">0</dd></div>
+          <div><dt data-i18n="mission.debrief.missiles">GUIDED MISSILES FIRED</dt><dd id="debrief-missiles">0</dd></div>
+          <div><dt data-i18n="mission.debrief.missileHits">GUIDED MISSILES HIT</dt><dd id="debrief-missile-hits">0</dd></div>
           <div><dt data-i18n="mission.debrief.score">MISSION SCORE</dt><dd id="debrief-score">00000</dd></div>
         </dl>
+        <section id="debrief-optional-objectives" class="debrief-optional-objectives" data-optional-objectives aria-labelledby="debrief-optional-objectives-title" hidden>
+          <h3 id="debrief-optional-objectives-title" data-i18n="mission.optionalObjectives.debriefTitle">OPTIONAL OBJECTIVES</h3>
+          <ul id="debrief-optional-objective-list" class="optional-objective-list"></ul>
+        </section>
         <footer class="debrief-footer">
           <span data-i18n="mission.debrief.closed">SORTIE CLOSED</span>
           <button id="mission-debrief-return" type="button"><span data-i18n="mission.debrief.return">RETURN TO MISSION SELECTION</span><b>⌂</b></button>
@@ -250,7 +278,7 @@
         </div>
       </section>
       <section class="radar" data-i18n-aria-label="hud.radar"><div class="radar-screen" data-i18n-aria-label="hud.radarScreen"><i class="range-ring ring-inner"></i><i class="range-ring ring-middle"></i><i class="range-ring ring-outer"></i><i class="azimuth-line"></i><i class="ownship"></i><span class="radar-mode-indicator" id="radar-mode-indicator">AIR</span></div></section>
-      <section class="weapons"><div class="weapon-row"><i class="weapon-icon gun-icon"></i><div><small data-i18n="hud.gun">GAU-22/A · 25 mm</small><strong id="weapon">READY</strong></div></div><div class="weapon-row"><i class="weapon-icon missile-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path class="missile-fin" d="M10 12.2 5.6 16.9l4.4-1.1 2-2.3zm4 0 4.4 4.7-4.4-1.1-2-2.3z"/><path class="missile-body" d="M12 2.6c-1.3 2.1-2.5 4.7-2.5 7.8v5.1l2.5 4 2.5-4v-5.1c0-3.1-1.2-5.7-2.5-7.8z"/><path class="missile-detail" d="M10 10.2h4M10 16h4"/></svg></i><div><small id="missile-type">AIM-120C · AMRAAM</small><strong id="ammo">AIR SEARCH</strong></div><b class="ammo-count" id="missile-count">10</b><kbd>M</kbd></div><div class="weapon-row countermeasure-row flare-row"><i class="weapon-icon countermeasure-icon flare-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 1.8 13.3 10.7 22.2 12 13.3 13.3 12 22.2 10.7 13.3 1.8 12 10.7 10.7Z"/></svg></i><div><small data-i18n="hud.flare">FLARE</small><strong id="flare-count">20</strong></div><kbd>F</kbd></div><div class="weapon-row countermeasure-row chaff-row"><i class="weapon-icon countermeasure-icon chaff-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M4 5h2v2H4zm7-2h2v2h-2zm7 4h2v2h-2zm-11 6h2v2H7zm8 2h2v2h-2zm-4 5h2v2h-2z"/></svg></i><div><small data-i18n="hud.chaff">CHAFF</small><strong id="chaff-count">20</strong></div><kbd>C</kbd></div><div class="wingman-order-row"><small data-i18n="hud.wingmanOrder">WINGMAN ORDERS</small><b id="wingman-order">ATTACK</b></div><div class="hull-row"><div><small data-i18n="hud.airframeIntegrity">AIRFRAME</small><strong id="hull-value">100%</strong></div><i><b id="hull-fill"></b></i></div><div class="score-row"><span data-i18n="hud.score">MISSION SCORE</span><b id="score">00000</b></div></section>
+      <section class="weapons"><div class="weapon-row"><i class="weapon-icon gun-icon"></i><div><small data-i18n="hud.gun">GAU-22/A · 25 mm</small><strong id="weapon">READY</strong></div><b class="ammo-count" id="gun-ammo-count">∞</b></div><div class="weapon-row"><i class="weapon-icon missile-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path class="missile-fin" d="M10 12.2 5.6 16.9l4.4-1.1 2-2.3zm4 0 4.4 4.7-4.4-1.1-2-2.3z"/><path class="missile-body" d="M12 2.6c-1.3 2.1-2.5 4.7-2.5 7.8v5.1l2.5 4 2.5-4v-5.1c0-3.1-1.2-5.7-2.5-7.8z"/><path class="missile-detail" d="M10 10.2h4M10 16h4"/></svg></i><div><small id="missile-type">AIM-120C · AMRAAM</small><strong id="ammo">AIR SEARCH</strong></div><b class="ammo-count" id="missile-count">10</b><kbd>M</kbd></div><div class="weapon-row countermeasure-row flare-row"><i class="weapon-icon countermeasure-icon flare-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 1.8 13.3 10.7 22.2 12 13.3 13.3 12 22.2 10.7 13.3 1.8 12 10.7 10.7Z"/></svg></i><div><small data-i18n="hud.flare">FLARE</small><strong id="flare-count">20</strong></div><kbd>F</kbd></div><div class="weapon-row countermeasure-row chaff-row"><i class="weapon-icon countermeasure-icon chaff-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M4 5h2v2H4zm7-2h2v2h-2zm7 4h2v2h-2zm-11 6h2v2H7zm8 2h2v2h-2zm-4 5h2v2h-2z"/></svg></i><div><small data-i18n="hud.chaff">CHAFF</small><strong id="chaff-count">20</strong></div><kbd>C</kbd></div><div class="wingman-order-row"><small data-i18n="hud.wingmanOrder">WINGMAN ORDERS</small><b id="wingman-order">ATTACK</b></div><div class="hull-row"><div><small data-i18n="hud.airframeIntegrity">AIRFRAME</small><strong id="hull-value">100%</strong></div><i><b id="hull-fill"></b></i></div><div class="score-row"><span data-i18n="hud.score">MISSION SCORE</span><b id="score">00000</b></div></section>
       <div class="reticle-label"><span data-i18n="hud.area">AREA</span> <b id="area-name">PÄIJÄNNE</b> <span>›</span></div>
     </main>
     <section id="death-screen" class="death-screen" hidden aria-live="assertive" aria-labelledby="death-title">

@@ -1,6 +1,17 @@
 import { t } from '../ui/i18n.js';
 
 const TONE_PRIORITY = { info: 1, friendly: 2, success: 3, warning: 4, damage: 5 };
+const setTextIfChanged = (node, value) => {
+  if (node && node.textContent !== value) node.textContent = value;
+};
+const setHiddenIfChanged = (node, hidden) => {
+  if (node && node.hidden !== hidden) node.hidden = hidden;
+};
+const setClassIfChanged = (node, className, enabled) => {
+  if (node && node.classList.contains(className) !== Boolean(enabled)) {
+    node.classList.toggle(className, Boolean(enabled));
+  }
+};
 
 /** Owns short cockpit acknowledgements, hit cues and aircraft damage indication. */
 export class CombatFeedback {
@@ -32,24 +43,24 @@ export class CombatFeedback {
     this.messageTone = tone;
     this.messageTimer = duration;
     if (this.message) {
-      this.message.hidden = false;
-      this.message.dataset.tone = tone;
+      setHiddenIfChanged(this.message, false);
+      if (this.message.dataset.tone !== tone) this.message.dataset.tone = tone;
       const text = this.message.querySelector('b');
-      if (text) text.textContent = t(key, params);
+      setTextIfChanged(text, t(key, params));
     }
   }
 
   gunHit(destroyed = false) {
     this.hitTimer = destroyed ? .48 : .2;
-    this.hitMarker?.classList.toggle('kill', destroyed);
-    if (this.hitMarker) this.hitMarker.hidden = false;
+    setClassIfChanged(this.hitMarker, 'kill', destroyed);
+    setHiddenIfChanged(this.hitMarker, false);
   }
 
   damage(amount) {
     this.hull = Math.max(0, this.hull - amount);
     this.renderHull();
     this.damageTimer = Math.max(this.damageTimer, amount >= 30 ? .72 : .38);
-    this.hud?.classList.toggle('damage-critical', this.hull / this.maxHull <= .35);
+    setClassIfChanged(this.hud, 'damage-critical', this.hull / this.maxHull <= .35);
     if (this.damageToastCooldown <= 0) {
       this.notify(amount >= 30 ? 'combat.damageHeavy' : 'combat.damageTaken', 1.15, 'damage');
       this.damageToastCooldown = .8;
@@ -75,9 +86,9 @@ export class CombatFeedback {
     this.damageTimer = Math.max(0, this.damageTimer - dt);
     this.countermeasureTimer = Math.max(0, this.countermeasureTimer - dt);
     this.damageToastCooldown = Math.max(0, this.damageToastCooldown - dt);
-    if (this.message) this.message.hidden = this.messageTimer <= 0;
-    if (this.hitMarker) this.hitMarker.hidden = this.hitTimer <= 0;
-    this.hud?.classList.toggle('damage-hit', this.damageTimer > 0);
+    setHiddenIfChanged(this.message, this.messageTimer <= 0);
+    setHiddenIfChanged(this.hitMarker, this.hitTimer <= 0);
+    setClassIfChanged(this.hud, 'damage-hit', this.damageTimer > 0);
     if (this.countermeasureTimer <= 0) {
       this.activeCountermeasureRow?.classList.remove('dispensed');
       this.activeCountermeasureRow = null;
@@ -87,15 +98,16 @@ export class CombatFeedback {
   refreshLanguage() {
     if (!this.message || !this.messageKey || this.messageTimer <= 0) return;
     const text = this.message.querySelector('b');
-    if (text) text.textContent = t(this.messageKey, this.messageParams);
+    setTextIfChanged(text, t(this.messageKey, this.messageParams));
   }
 
   renderHull() {
     const percent = Math.round(100 * this.hull / this.maxHull);
-    if (this.hullValue) this.hullValue.textContent = `${String(percent).padStart(3, '0')}%`;
+    setTextIfChanged(this.hullValue, `${String(percent).padStart(3, '0')}%`);
     if (this.hullFill) {
-      this.hullFill.style.transform = `scaleX(${percent / 100})`;
-      this.hullFill.classList.toggle('critical', percent <= 35);
+      const transform = `scaleX(${percent / 100})`;
+      if (this.hullFill.style.transform !== transform) this.hullFill.style.transform = transform;
+      setClassIfChanged(this.hullFill, 'critical', percent <= 35);
     }
   }
 

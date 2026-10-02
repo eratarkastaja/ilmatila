@@ -63,28 +63,59 @@ export class AirSpawnSystem {
 
   spawnHostiles(battle, heading = battle.currentPlayerHeading(), playerForward = forwardOfHeading(heading), playerRight = rightOfHeading(heading)) {
     const hostileAircraftCount = (battle.mission.hostiles ?? 0) + (battle.mission.hostileHelicopters ?? 0);
-    if (battle.enemies.length || hostileAircraftCount <= 0) return false;
+    if (battle.hostilesSpawned || battle.enemies.length || hostileAircraftCount <= 0) return false;
     battle.hostilesSpawned = true;
-    const hostileCount = Math.max(0, battle.mission.hostiles ?? 0);
+    const spawned = this.spawnHostileWave(battle, battle.mission, heading, playerForward, playerRight);
+    battle.mission.deferredHostiles = false;
+    return spawned;
+  }
+
+  spawnReinforcements(battle, reinforcement) {
+    if (!reinforcement?.scheduled || reinforcement.hostiles <= 0) return false;
+    const mission = {
+      ...battle.mission,
+      hostiles: reinforcement.hostiles,
+      hostileHelicopters: 0,
+      hostileComposition: reinforcement.composition,
+      hostileSpawnDistance: reinforcement.spawnDistance ?? battle.mission.hostileSpawnDistance,
+      hostileMinimumSpawnDistance: reinforcement.minimumSpawnDistance
+        ?? battle.mission.hostileMinimumSpawnDistance,
+      hostileLateralSpacing: reinforcement.lateralSpacing ?? battle.mission.hostileLateralSpacing,
+      hostileEntry: reinforcement.entry ?? 'scramble',
+    };
+    const heading = battle.currentPlayerHeading();
+    return this.spawnHostileWave(
+      battle,
+      mission,
+      heading,
+      forwardOfHeading(heading),
+      rightOfHeading(heading),
+    );
+  }
+
+  spawnHostileWave(battle, mission, heading, playerForward, playerRight) {
+    const hostileCount = Math.max(0, mission.hostiles ?? 0);
     const altitudeOffsets = [-110, 95, -45, 145, -160, 65];
     const edgeMargin = getAircraftEdgeMargin(battle);
     const spawnMargin = Math.min(edgeMargin, 1200);
-    const lateralSpacing = battle.mission.hostileLateralSpacing ?? 560;
+    const lateralSpacing = mission.hostileLateralSpacing ?? 560;
     const maxLane = Math.max(0, (hostileCount - 1) * 0.5);
     const formation = chooseAirSpawnLayout(
       battle.player.position,
       playerForward,
       playerRight,
       battle.terrain,
-      battle.mission.hostileSpawnDistance ?? 12000,
-      battle.mission.hostileMinimumSpawnDistance ?? 10000,
+      mission.hostileSpawnDistance ?? 12000,
+      mission.hostileMinimumSpawnDistance ?? 10000,
       maxLane * lateralSpacing,
       maxLane * 90,
       spawnMargin,
     );
 
     for (let i = 0; i < hostileCount; i++) {
-      const aircraftVariant = i % 2 === 0 ? 'su27' : 'mig29';
+      const aircraftVariant = mission.hostileComposition?.length
+        ? mission.hostileComposition[i % mission.hostileComposition.length]
+        : i % 2 === 0 ? 'su27' : 'mig29';
       const jet = createFighter({
         enemy: true,
         aircraftAsset: battle.aircraftAssets?.hostiles,
@@ -127,14 +158,14 @@ export class AirSpawnSystem {
         // including larger test formations.
         lane: laneCoordinate || (i % 2 ? 1 : -1),
         altitudeOffset: altitudeOffsets[i % altitudeOffsets.length],
-        phase: 'staging',
+        phase: mission.hostileEntry === 'scramble' ? 'inbound' : 'staging',
         phaseClock: 0,
         detectedPlayerTimer: 0,
         radarTrackDisruptionRemaining: 0,
         chaffTrackReevaluationRemaining: 0,
         stagingLane: lane,
         stagingLateral: stagingOffset.dot(playerRight),
-        attackPattern: Math.floor(Math.random() * ENEMY_ATTACK_RUNS.length),
+        attackPattern: Math.floor(battle.random() * ENEMY_ATTACK_RUNS.length),
         gunCooldown: (battle.difficulty?.fighter?.gun?.cooldown ?? 2.2) + i * .45,
         burstClock: 0,
         burstShots: 0,
@@ -154,10 +185,10 @@ export class AirSpawnSystem {
         lastDefendedMissile: null,
         evasiveTimer: 0,
         evasiveDuration: 0,
-        evasiveDirection: Math.random() < 0.5 ? -1 : 1,
+        evasiveDirection: battle.random() < 0.5 ? -1 : 1,
         evasiveClimb: 0,
-        tacticalManeuverCooldown: 3 + Math.random() * 5,
-        groundStrafeCooldown: 8 + Math.random() * 8,
+        tacticalManeuverCooldown: 3 + battle.random() * 5,
+        groundStrafeCooldown: 8 + battle.random() * 8,
         targetRefreshTimer: 0,
         engagementTarget: null,
         engagementTargetDomain: 'air',
@@ -171,13 +202,14 @@ export class AirSpawnSystem {
         away:new THREE.Vector3(),separation:new THREE.Vector3(),lead:new THREE.Vector3(),leadOffset:new THREE.Vector3(),nose:new THREE.Vector3(),
       });
     }
-    this.spawnAttackHelicopters(battle, playerForward, playerRight, spawnMargin);
-    battle.mission.deferredHostiles = false;
-    return battle.enemies.length > 0;
+    if (mission.hostileHelicopters) {
+      this.spawnAttackHelicopters(battle, playerForward, playerRight, spawnMargin, mission);
+    }
+    return hostileCount > 0 || (mission.hostileHelicopters ?? 0) > 0;
   }
 
-  spawnAttackHelicopters(battle, playerForward, playerRight, spawnMargin) {
-    const count = battle.mission.hostileHelicopters ?? 0;
+  spawnAttackHelicopters(battle, playerForward, playerRight, spawnMargin, mission = battle.mission) {
+    const count = mission.hostileHelicopters ?? 0;
     if (!count) return;
     const lateralSpacing = battle.mission.hostileHelicopterLateralSpacing ?? 850;
     const formation = chooseAirSpawnLayout(
@@ -185,8 +217,8 @@ export class AirSpawnSystem {
       playerForward,
       playerRight,
       battle.terrain,
-      battle.mission.hostileHelicopterSpawnDistance ?? 9500,
-      battle.mission.hostileHelicopterMinimumSpawnDistance ?? 8500,
+      mission.hostileHelicopterSpawnDistance ?? 9500,
+      mission.hostileHelicopterMinimumSpawnDistance ?? 8500,
       (count - 1) * 0.5 * lateralSpacing,
       0,
       spawnMargin,
@@ -198,7 +230,7 @@ export class AirSpawnSystem {
         .addScaledVector(playerRight, (i - (count - 1) * 0.5) * lateralSpacing);
       clampToTheater(battle, mesh.position, spawnMargin);
       const ground = battle.terrain?.sampleHeight(mesh.position.x, mesh.position.z) ?? 0;
-      mesh.position.y = ground + (battle.mission.hostileHelicopterSpawnAltitude ?? 320) + i * 35;
+      mesh.position.y = ground + (mission.hostileHelicopterSpawnAltitude ?? 320) + i * 35;
       mesh.rotation.order = 'YXZ';
       mesh.rotation.y = wrapAngle(Math.atan2(-formation.direction.x, -formation.direction.z));
       mesh.scale.setScalar(0.88);

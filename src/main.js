@@ -12,9 +12,12 @@ import { GameAudio } from './audio/audio.js';
 import { SunEffects, SUN_DIRECTION } from './environment/sun.js';
 import { ATMOSPHERE } from './environment/atmosphere.js';
 import { MISSIONS } from './mission/missions.js';
+import { resolveMissionVariant } from './mission/mission-variants.js';
 import { CareerProgress } from './mission/progression.js';
 import { SortieController } from './game/sortie-controller.js';
 import { disposeMissilePool } from './combat/projectiles.js';
+import { createSortieSeed } from './combat/random.js';
+import { renderOptionalObjectives } from './ui/optional-objectives.js';
 import { formatPercent, getLanguage, initializeLanguagePicker, t } from './ui/i18n.js';
 import './ui/styles/base.css';
 import './ui/styles/hud.css';
@@ -43,6 +46,8 @@ pauseControlsReference.append(pauseControlsDescription);
 initializeLanguagePicker();
 const audio = new GameAudio();
 const missionCards = [...document.querySelectorAll('[data-mission]')];
+const briefingOptionalObjectiveList = document.querySelector('#briefing-optional-objective-list');
+const briefingVariant = document.querySelector('#briefing-variant');
 const careerProgress = new CareerProgress();
 menuDifficulty.value = careerProgress.difficulty;
 const urlParams = new URLSearchParams(location.search);
@@ -51,6 +56,7 @@ const telemetryMode = import.meta.env.DEV;
 const areaAliases = new Map([['vironlahti', 'virolahti']]);
 let selectedMissionId = Object.hasOwn(MISSIONS, urlParams.get('mission')) ? urlParams.get('mission') : 'patrol';
 if (!careerProgress.isUnlocked(selectedMissionId)) selectedMissionId = 'patrol';
+let plannedSortieSeed = null;
 let menuRadar = null;
 const theaterAreas = TERRAIN_AREAS;
 if (!menuTheater.options.length) {
@@ -112,6 +118,7 @@ const weather = {
   wind: new THREE.Vector3(5, 0.15, -3),
 };
 let sortie = null;
+let startMenuHideTimer = null;
 let menuStatusDescriptor = { key: 'menu.statusReady', params: {}, state: 'ready' };
 let launchProgressDescriptor = { progress: 0, titleKey: 'menu.launchButton', detailKey: 'menu.launchReadyStatus', params: {} };
 document.addEventListener('ilmatila:languagechange', () => {
@@ -188,7 +195,10 @@ function renderMissionProgress() {
 
 function selectMission(id) {
   if (!Object.hasOwn(MISSIONS, id) || !careerProgress.isUnlocked(id)) return false;
+  if (selectedMissionId !== id || plannedSortieSeed === null) plannedSortieSeed = createSortieSeed();
   selectedMissionId = id;
+  const baseMission = stressMode ? { ...MISSIONS[id], variants: [] } : MISSIONS[id];
+  const missionResolution = resolveMissionVariant(baseMission, plannedSortieSeed);
   menuRadar?.setMission(id);
   for (const card of missionCards) {
     const selected = card.dataset.mission === id;
@@ -198,6 +208,13 @@ function selectMission(id) {
   document.querySelector('#briefing-code').textContent = t(`mission.${id}.code`);
   document.querySelector('#briefing-copy').textContent = t(`mission.${id}.briefing`);
   document.querySelector('#theater-mission-name').textContent = t(`mission.${id}.title`).toUpperCase();
+  renderOptionalObjectives(briefingOptionalObjectiveList, missionResolution.mission.optionalObjectives);
+  if (briefingVariant) {
+    briefingVariant.hidden = !missionResolution.variant;
+    briefingVariant.textContent = missionResolution.variant
+      ? t('mission.briefing.variant', { name: t(missionResolution.variant.labelKey) })
+      : '';
+  }
   return true;
 }
 
@@ -426,15 +443,22 @@ function resetPlayerAirframeVisuals() {
   });
 }
 
+function clearStartMenuHideTimer() {
+  if (startMenuHideTimer !== null) clearTimeout(startMenuHideTimer);
+  startMenuHideTimer = null;
+}
+
 function returnToMenu() {
   if (!sortie?.started) return;
+  clearStartMenuHideTimer();
   resumeCapturePending = false;
   setResumeLockStatus();
   root.classList.remove('flight-active', 'flight-paused');
   if (pauseDialog.open) pauseDialog.close();
   if (missionDebriefDialog.open) missionDebriefDialog.close();
   sortie.dispose();
-  if (stressMode) delete window.__ilmatilaStress;
+  delete window.__ilmatilaStress;
+  delete window.__ilmatilaTelemetry;
   controls.resetMouseAim();
   controls.resetCameraZoom();
   controls.speed = 235;
@@ -464,6 +488,8 @@ function returnToMenu() {
   menuTheater.disabled = false;
   setLaunchProgress(0, 'menu.launchButton', 'menu.launchReadyStatus');
   updateMenuArea(terrain);
+  plannedSortieSeed = null;
+  selectMission(selectedMissionId);
   if (terrain.real) setMenuStatus('menu.statusAreaReady', 'ready', { area: terrain.label.toUpperCase() });
   else setMenuStatus('menu.statusTerrainError', 'warning');
   const nextUrl = new URL(location.href);
@@ -501,6 +527,10 @@ document.addEventListener('keydown', event => {
 
 launchButton.addEventListener('click', async () => {
   if (sortie?.started || sortie?.launchInProgress || launchButton.disabled) return;
+  if (plannedSortieSeed === null) {
+    plannedSortieSeed = createSortieSeed();
+    selectMission(selectedMissionId);
+  }
   // Pointer lock must be requested directly in the launch-button gesture;
   // waiting for the asynchronous terrain/model loads loses browser activation.
   let captureRequest;
@@ -515,6 +545,7 @@ launchButton.addEventListener('click', async () => {
     areaId: selectedArea.id,
     area: selectedArea,
     difficulty: careerProgress.difficulty,
+    seed: plannedSortieSeed,
   });
   if (!prepared) return;
   const locked = await Promise.resolve(captureRequest).then(Boolean, () => false);
@@ -541,7 +572,9 @@ const gunBoresightPoint = new THREE.Vector3();
 const gunReticleShift = new THREE.Vector2();
 const activeAircraft = [];
 const activeMissiles = [];
+const HUD_READOUT_INTERVAL = 1 / 15;
 let hasGunReticleShift = false;
+let hudReadoutElapsed = HUD_READOUT_INTERVAL;
 let previousAltitude = player.position.y;
 let needsMenuRender = true;
 const assets = new AssetRepository({
@@ -592,6 +625,8 @@ sortie = new SortieController({
   },
   onResetForFlight: () => {
     previousAltitude = player.position.y;
+    hudReadoutElapsed = HUD_READOUT_INTERVAL;
+    hasGunReticleShift = false;
     fx.reset();
     resetPlayerAirframeVisuals();
   },
@@ -610,7 +645,14 @@ sortie = new SortieController({
     setLaunchProgress(100, 'launch.flightReady', 'launch.enterCockpit');
     startMenu.classList.add('menu-leaving');
     setMenuStatus('launch.missionActive', 'active');
-    setTimeout(() => { if (sortie.started) startMenu.hidden = true; }, 460);
+    clearStartMenuHideTimer();
+    const activeCombat = sortie.combat;
+    const timer = setTimeout(() => {
+      if (startMenuHideTimer !== timer) return;
+      startMenuHideTimer = null;
+      if (sortie.started && sortie.combat === activeCombat) startMenu.hidden = true;
+    }, 460);
+    startMenuHideTimer = timer;
   },
   onPause: () => {
     root.classList.add('flight-paused');
@@ -689,13 +731,20 @@ function animate() {
       for (const shot of combat.hostiles) if (shot.missile) activeMissiles.push(shot);
     }
     fx.update(dt, activeAircraft, activeMissiles, terrain, weather, camera);
-    const altitude = Math.max(0, player.position.y - terrain.sampleHeight(player.position.x, player.position.z));
     const verticalSpeed = dt > 0 ? (player.position.y - previousAltitude) / dt : 0;
     previousAltitude = player.position.y;
-    speedEl.textContent = Math.round(controls.speed * 1.943).toString();
-    altitudeEl.textContent = Math.round(altitude * 3.28).toLocaleString(getLanguage() === 'fi' ? 'fi-FI' : 'en-US');
-    headingEl.textContent = String(Math.round(THREE.MathUtils.euclideanModulo(THREE.MathUtils.radToDeg(controls.heading), 360))).padStart(3, '0');
-    sortie.tacticalHud.update(controls, player, camera, combat, verticalSpeed, dt);
+    hudReadoutElapsed += dt;
+    if (hudReadoutElapsed >= HUD_READOUT_INTERVAL) {
+      hudReadoutElapsed %= HUD_READOUT_INTERVAL;
+      const speedText = Math.round(controls.speed * 1.943).toString();
+      const altitude = Math.max(0, player.position.y - terrain.sampleHeight(player.position.x, player.position.z));
+      const altitudeText = Math.round(altitude * 3.28).toLocaleString(getLanguage() === 'fi' ? 'fi-FI' : 'en-US');
+      const headingText = String(Math.round(THREE.MathUtils.euclideanModulo(THREE.MathUtils.radToDeg(controls.heading), 360))).padStart(3, '0');
+      if (speedEl.textContent !== speedText) speedEl.textContent = speedText;
+      if (altitudeEl.textContent !== altitudeText) altitudeEl.textContent = altitudeText;
+      if (headingEl.textContent !== headingText) headingEl.textContent = headingText;
+    }
+    sortie.tacticalHud.update(controls, player, camera, combat.hudState, verticalSpeed, dt);
     if (gunReticle) {
       // Project the aircraft's real nose axis into the chase view; pitch/bank
       // heuristics can otherwise misalign the reticle from the cannon rounds.
@@ -715,8 +764,14 @@ function animate() {
         gunReticleShift.x += (shiftX - gunReticleShift.x) * response;
         gunReticleShift.y += (shiftY - gunReticleShift.y) * response;
       }
-      gunReticle.style.setProperty('--aim-shift-x', `${gunReticleShift.x}px`);
-      gunReticle.style.setProperty('--aim-shift-y', `${gunReticleShift.y}px`);
+      const aimShiftX = `${gunReticleShift.x}px`;
+      const aimShiftY = `${gunReticleShift.y}px`;
+      if (gunReticle.style.getPropertyValue('--aim-shift-x') !== aimShiftX) {
+        gunReticle.style.setProperty('--aim-shift-x', aimShiftX);
+      }
+      if (gunReticle.style.getPropertyValue('--aim-shift-y') !== aimShiftY) {
+        gunReticle.style.setProperty('--aim-shift-y', aimShiftY);
+      }
     }
     // Let the cloud field drift across the camera slowly with the wind instead of locking it in place.
     clouds.position.x = player.position.x * 0.98 + weather.wind.x * clock.elapsedTime;
@@ -738,6 +793,7 @@ addEventListener('resize', () => {
 addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('pagehide', event => {
   if(event.persisted)return;
+  clearStartMenuHideTimer();
   sortie.dispose();
   fx.dispose();
   disposeMissilePool();

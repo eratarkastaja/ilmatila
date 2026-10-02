@@ -1,8 +1,13 @@
 import * as THREE from 'three';
 import { clampToTheater, getAircraftEdgeMargin, leadPoint, steerAircraft } from './air-combat-utils.js';
+import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
 
 /** Controls Mi-24 target selection, orbiting, and attack timing. */
 export class HelicopterAI {
+  constructor(random = createSeededRandom(DEFAULT_RANDOM_SEED)) {
+    this.random = random;
+  }
+
   updateAttackHelicopter(battle, enemy, dt, playerForward, playerRight) {
     enemy.phaseClock += dt;
     enemy.orbitPhase += dt * 0.075;
@@ -22,7 +27,7 @@ export class HelicopterAI {
         }
       }
       enemy.groundTarget = target;
-      enemy.targetRefreshTimer = 3.5 + Math.random() * 2.5;
+      enemy.targetRefreshTimer = 3.5 + this.random() * 2.5;
     }
 
     const target = enemy.groundTarget;
@@ -53,7 +58,7 @@ export class HelicopterAI {
       if (nose.dot(playerLead) > .68) {
         battle.weaponAI.fireHelicopterAirMissile(battle, enemy);
         enemy.airToAirMissilesRemaining--;
-        enemy.airMissileCooldown = 10 + Math.random() * 4;
+        enemy.airMissileCooldown = 10 + this.random() * 4;
       }
     }
 
@@ -63,7 +68,7 @@ export class HelicopterAI {
     const nose = enemy.direction.set(0, 0, 1).applyQuaternion(enemy.mesh.quaternion).normalize();
     if (range < 800 || range > 4700 || nose.dot(toTarget) < 0.45) return;
     battle.weaponAI.fireHelicopterRocketSalvo(battle, enemy, target, range);
-    enemy.rocketCooldown = 13 + Math.random() * 5;
+    enemy.rocketCooldown = 13 + this.random() * 5;
   }
 
   update(battle, enemy, dt, playerForward, playerRight) {

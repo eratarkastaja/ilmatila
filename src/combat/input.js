@@ -8,6 +8,7 @@ export class CombatInput {
     this.pointerTarget = pointerTarget;
     this.pressed = new Set();
     this.justPressed = new Set();
+    this._availableJustPressed = new Set();
     this.onKeyDown = event => {
       if (!GAME_ACTION_CODES.has(event.code)) return;
       if (event.ctrlKey || event.altKey || event.metaKey) {
@@ -48,13 +49,16 @@ export class CombatInput {
 
   consumeJustPressed() {
     const keys = this.justPressed;
-    this.justPressed = new Set();
+    this.justPressed = this._availableJustPressed;
+    this.justPressed.clear();
+    this._availableJustPressed = keys;
     return keys;
   }
 
   clear() {
     this.pressed.clear();
     this.justPressed.clear();
+    this._availableJustPressed.clear();
   }
 
   dispose() {

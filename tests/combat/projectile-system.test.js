@@ -312,7 +312,7 @@ describe('ProjectileSystem', () => {
   });
 
   it('lets an infrared missile take a fresh flare only when it is ahead of and separated from its target', () => {
-    const { system, player, scene, hostiles, decoys } = makeSystem();
+    const { system, player, scene, hostiles, decoys } = makeSystem({ random: () => 0 });
     player.position.set(0, 0, 1000);
     const flareMesh = new THREE.Group();
     flareMesh.position.set(0, 0, 800);
@@ -332,17 +332,14 @@ describe('ProjectileSystem', () => {
       damage: 1, warningClock: 2,
     };
     hostiles.push(missile);
-    const random = vi.spyOn(Math, 'random').mockReturnValue(0);
-
     system.update(.02);
 
-    random.mockRestore();
     expect(missile.decoyTarget).toBe(decoys[0]);
     expect(missile.velocity.length()).toBeGreaterThan(300);
   });
 
   it('does not let a flare pull an infrared missile from behind its seeker direction', () => {
-    const { system, player, scene, hostiles, decoys } = makeSystem();
+    const { system, player, scene, hostiles, decoys } = makeSystem({ random: () => 0 });
     player.position.set(0, 0, 0);
     const flareMesh = new THREE.Group();
     flareMesh.position.set(0, 0, 300);
@@ -363,11 +360,8 @@ describe('ProjectileSystem', () => {
       damage: 1, warningClock: 2,
     };
     hostiles.push(missile);
-    const random = vi.spyOn(Math, 'random').mockReturnValue(0);
-
     system.update(.02);
 
-    random.mockRestore();
     expect(missile.decoyTarget).toBeNull();
     expect(missile.velocity.length()).toBeGreaterThan(300);
   });

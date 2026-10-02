@@ -5,10 +5,14 @@ import {
   constrainWaypoint, contactOffset, getAircraftEdgeMargin, keepAircraftClear,
   leadPoint, steerAircraft, zeroVelocity,
 } from './air-combat-utils.js';
+import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
+
+const isHoldingFormation = order => order === 'regroup' || order === 'disengage' || order === 'rtb';
 
 /** Owns wingman orders, target selection, formation flight, and damage reactions. */
 export class WingmanController {
-  constructor() {
+  constructor(random = createSeededRandom(DEFAULT_RANDOM_SEED)) {
+    this.random = random;
     this._aft = new THREE.Vector3();
   }
 
@@ -20,7 +24,7 @@ export class WingmanController {
     for (const ally of battle.allies) {
       ally.target = null;
       ally.groundTarget = null;
-      if (['regroup', 'disengage', 'rtb'].includes(order)) {
+      if (isHoldingFormation(order)) {
         ally.threatTarget = null;
         ally.threatTimer = 0;
       }
@@ -50,7 +54,7 @@ export class WingmanController {
       ally.fireCooldown -= dt;
 
       ally.disengageTimer = Math.max(0, ally.disengageTimer - dt);
-      const holdFormation = ['regroup', 'disengage', 'rtb'].includes(battle.wingmanOrder);
+      const holdFormation = isHoldingFormation(battle.wingmanOrder);
       if (holdFormation) {
         ally.target = null;
         ally.groundTarget = null;
@@ -63,7 +67,7 @@ export class WingmanController {
           ally.target = this.selectAllyTarget(battle, ally);
           ally.groundTarget = ally.target ? null : this.selectAllyGroundTarget(battle, ally);
         }
-        ally.targetRefresh = ally.defensiveTimer > 0 ? .4 : 1.1 + Math.random() * .55;
+        ally.targetRefresh = ally.defensiveTimer > 0 ? .4 : 1.1 + this.random() * .55;
         if (ally.target && ally.target.mesh.position.distanceTo(ally.mesh.position) < 7800) {
           const relative = contactOffset.subVectors(ally.target.mesh.position, battle.player.position);
           const ahead = relative.dot(playerForward);
@@ -158,14 +162,14 @@ export class WingmanController {
         battle.weaponAI.fireAllyAirMissile(battle, ally, target);
         ally.airMissiles--;
         ally.airMissileCooldown = (battle.difficulty?.wingman?.airMissile?.cooldown ?? 5.2)
-          + Math.random() * 2.4;
+          + this.random() * 2.4;
       }
 
       if (groundTarget && ally.groundMissiles > 0 && ally.groundMissileCooldown <= 0
         && targetRange > 1550 && targetRange < 4400 && nose.dot(aim) > .955) {
         battle.weaponAI.fireAllyMaverick(battle, ally, target);
         ally.groundMissiles--;
-        ally.groundMissileCooldown = 5.5 + Math.random() * 3.5;
+        ally.groundMissileCooldown = 5.5 + this.random() * 3.5;
       }
 
       if (ally.burstShots > 0) {
@@ -181,9 +185,9 @@ export class WingmanController {
           }
         }
       } else if (gunSolution && ally.fireCooldown <= 0) {
-        ally.burstShots = groundTarget ? 7 + Math.floor(Math.random() * 4) : 8 + Math.floor(Math.random() * 5);
+        ally.burstShots = groundTarget ? 7 + Math.floor(this.random() * 4) : 8 + Math.floor(this.random() * 5);
         ally.burstClock = 0;
-        ally.fireCooldown = groundTarget ? 1.9 + Math.random() * 1.1 : .9 + Math.random() * .8;
+        ally.fireCooldown = groundTarget ? 1.9 + this.random() * 1.1 : .9 + this.random() * .8;
       }
     }
   }
@@ -216,7 +220,7 @@ export class WingmanController {
   }
 
   selectAllyTarget(battle, ally) {
-    if (['regroup', 'disengage', 'rtb'].includes(battle.wingmanOrder)) return null;
+    if (isHoldingFormation(battle.wingmanOrder)) return null;
     if (ally.threatTimer > 0 && ally.threatTarget && !ally.threatTarget.dead) return ally.threatTarget;
     let selected = null;
     let bestScore = Infinity;
@@ -241,7 +245,7 @@ export class WingmanController {
   }
 
   selectAllyGroundTarget(battle, ally) {
-    if (['regroup', 'disengage', 'rtb'].includes(battle.wingmanOrder)) return null;
+    if (isHoldingFormation(battle.wingmanOrder)) return null;
     const liveAirThreats = battle.enemies.some(enemy => !enemy.dead);
     let selected = null;
     let bestScore = Infinity;

@@ -19,7 +19,7 @@ Use `npm run build` to create the production site and `npm run preview` to serve
 
 ## Current game
 
-The available sorties are Combat Air Patrol, Intercept Flight, Close Air Support, and Training. Combat missions use a briefing, departure, navigation, contact, engagement, objective, return-to-base, extraction, and debrief flow. Intercept Flight is an air-only mission; Close Air Support pits Finnish defenders against advancing armor and two Mi-24 gunships. Difficulty affects hostile detection, combat behavior, and damage. Mission records and unlocks are stored locally in the browser.
+The available sorties are Combat Air Patrol, Intercept Flight, Close Air Support, and Training. Combat missions use a briefing, departure, navigation, contact, engagement, objective, return-to-base, extraction, and debrief flow. The briefing lists each sortie's optional objectives, and the debrief reports which were completed; optional objectives do not determine primary mission success. Intercept Flight is an air-only mission; Close Air Support pits Finnish defenders against advancing armor and two Mi-24 gunships. Difficulty affects hostile detection, combat behavior, and damage. Mission records and unlocks are stored locally in the browser.
 
 The player flies an F-35A representation using an included FlightGear F-35B visual model. Hostile flights use FlightGear Su-27-family and MiG-29 exterior models. Ground vehicles and the Mi-24 helicopter are low-detail, project-authored procedural models. These models are visual game assets, not exact engineering replicas.
 

@@ -5,6 +5,7 @@ export class ScoreSystem {
     this.airKills = 0;
     this.groundKills = 0;
     this.gunHits = 0;
+    this.playerMissileHits = 0;
     this.objectiveAwarded = false;
     this.missionCompletionAwarded = false;
   }
@@ -22,6 +23,10 @@ export class ScoreSystem {
 
   recordGunHit() {
     this.gunHits++;
+  }
+
+  recordPlayerMissileHit() {
+    this.playerMissileHits++;
   }
 
   awardObjectiveCompletion() {

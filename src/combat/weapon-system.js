@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { F35_GUN_MUZZLE_OFFSET, F35_GUN_TRACER_CLEARANCE } from '../aircraft/plane-models.js';
 import { createMissile, MISSILE_PROFILES } from './projectiles.js';
+import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
 import {
   GUN_PROJECTILE_GRAVITY,
   GUN_PROJECTILE_LIFETIME,
@@ -18,7 +19,7 @@ const tracerDirection=new THREE.Vector3();
 
 /** Owns trigger cadence, weapon selection gates, ammunition and launch feedback. */
 export class WeaponSystem {
-  constructor({ player, scene, fx, audio, radar, playerVelocity, addProjectile }) {
+  constructor({ player, scene, fx, audio, radar, playerVelocity, addProjectile, loadout = {}, random = createSeededRandom(DEFAULT_RANDOM_SEED) }) {
     this.player = player;
     this.scene = scene;
     this.fx = fx;
@@ -26,7 +27,13 @@ export class WeaponSystem {
     this.radar = radar;
     this.playerVelocity = playerVelocity;
     this.addProjectile = addProjectile;
-    this.missiles = { air: MISSILE_PROFILES.playerAir.count, ground: MISSILE_PROFILES.playerGround.count };
+    this.random = random;
+    this.missiles = {
+      air: loadout.airMissiles ?? MISSILE_PROFILES.playerAir.count,
+      ground: loadout.groundMissiles ?? MISSILE_PROFILES.playerGround.count,
+    };
+    this.gunAmmoCapacity = loadout.gunRounds ?? null;
+    this.gunAmmoRemaining = this.gunAmmoCapacity;
     this.cooldown = 0;
     this.gunClock = 0;
     this.gunRoundCount = 0;
@@ -38,6 +45,13 @@ export class WeaponSystem {
     this._up=new THREE.Vector3();
     this._muzzleOffset=new THREE.Vector3();
     this._start=new THREE.Vector3();
+    this._tracerOptions={
+      life:.14,
+      trailTime:.06,
+      gravity:GUN_PROJECTILE_GRAVITY,
+      ownerAircraft:this.player,
+      aircraftForwardClearance:F35_GUN_TRACER_CLEARANCE,
+    };
     this.missileFeedbackKey = null;
     this.missileFeedbackTimer = 0;
   }
@@ -45,15 +59,20 @@ export class WeaponSystem {
   update(dt, { gunFiring = false, missileRequested = false } = {}) {
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.missileFeedbackTimer = Math.max(0, this.missileFeedbackTimer - dt);
-    this.audio?.setGunFiring(gunFiring);
-    if (gunFiring) {
+    const canFireGun = this.gunAmmoRemaining === null || this.gunAmmoRemaining > 0;
+    this.audio?.setGunFiring(gunFiring && canFireGun);
+    if (gunFiring && canFireGun) {
       this.gunClock -= dt;
       let roundsThisFrame = 0;
       while (this.gunClock <= 0 && roundsThisFrame < 3) {
-        this.fireGun();
+        if (!this.fireGun()) {
+          this.gunClock = 0;
+          break;
+        }
         this.gunClock += 1 / GUN_ROUNDS_PER_SECOND;
         roundsThisFrame++;
       }
+      if (this.gunAmmoRemaining === 0) this.audio?.setGunFiring(false);
     } else {
       this.gunClock = 0;
     }
@@ -77,13 +96,14 @@ export class WeaponSystem {
   }
 
   fireGun() {
+    if (this.gunAmmoRemaining === 0) return false;
     const attitude = this.player.quaternion;
     const direction = this._direction.copy(forward).applyQuaternion(attitude).normalize();
     const right = this._right.copy(localRight).applyQuaternion(attitude).normalize();
     const up = this._up.copy(localUp).applyQuaternion(attitude).normalize();
     direction
-      .addScaledVector(right, (Math.random() - .5) * .0009)
-      .addScaledVector(up, (Math.random() - .5) * .0009)
+      .addScaledVector(right, (this.random() - .5) * .0009)
+      .addScaledVector(up, (this.random() - .5) * .0009)
       .normalize();
     const muzzleOffset = this._muzzleOffset.set(
       F35_GUN_MUZZLE_OFFSET.x,
@@ -91,7 +111,7 @@ export class WeaponSystem {
       F35_GUN_MUZZLE_OFFSET.z,
     ).applyQuaternion(attitude);
     const start = this._start.copy(this.player.position).add(muzzleOffset);
-    const tracer = this.gunRoundCount++ % 4 === 0;
+    const tracer = this.gunRoundCount % 4 === 0;
     const pool=tracer?this.freeTracerRounds:this.freeGunRounds;
     const shot=pool.pop()??{
       mesh:tracer?new THREE.Mesh(gunTracerRoundGeo,gunTracerRoundMaterial):new THREE.Object3D(),
@@ -113,15 +133,12 @@ export class WeaponSystem {
       // Keep the visible streak at the barrel opening while clipping any part
       // that has not yet cleared the airframe. Projectile physics still start
       // at the exact muzzle position.
-      this.fx?.addMovingTracer(start, velocity, '#ffd282', {
-        life: .14,
-        trailTime: .06,
-        gravity: GUN_PROJECTILE_GRAVITY,
-        ownerAircraft: this.player,
-        aircraftForwardClearance: F35_GUN_TRACER_CLEARANCE,
-      });
+      this.fx?.addMovingTracer(start, velocity, '#ffd282', this._tracerOptions);
     }
     this.addProjectile(shot);
+    this.gunRoundCount++;
+    if (this.gunAmmoRemaining !== null) this.gunAmmoRemaining--;
+    return true;
   }
 
   fireMissile() {
@@ -141,6 +158,8 @@ export class WeaponSystem {
     this.audio?.startMissileFlight(mesh.id);
     if (mesh.userData.engineFlame) mesh.userData.engineFlame.visible = true;
     this.addProjectile({
+      missile: true,
+      owner: 'player',
       mesh,
       velocity: direction.clone().multiplyScalar(missileProfile.speed),
       speed: missileProfile.speed,

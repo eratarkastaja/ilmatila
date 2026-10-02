@@ -23,10 +23,12 @@ The suite covers ballistics, boundary warnings, collision and hit tests, counter
 
 There are two useful lifecycle integration tests:
 
-- `tests/integration/combat-world-session.test.js` runs a real `CombatWorld` through training, RTB, debrief, disposal, and a second world, while checking listener cleanup and progression persistence.
-- `tests/integration/main-session.test.js` exercises app launch, completion, return to menu, a second launch, Escape unlocking without pausing, canvas-click recapture, P pause/resume, pointer-lock denial, and pause → quit confirmation → cleanup with browser APIs mocked. Resume remains paused until canvas ownership is confirmed.
+- `tests/integration/combat-world-session.test.js` runs a real `CombatWorld` through training, RTB, debrief, disposal, and ten consecutive world instances. It checks listener cleanup, fresh unit/radar/mission state, active pool cleanup, missile-audio stop, and progression persistence.
+- `tests/integration/main-session.test.js` exercises ten app-level launch → debrief → return cycles, checks pointer-lock release, telemetry-handle cleanup and menu-timer cancellation, and covers Escape unlock, canvas-click recapture, P pause/resume, pointer-lock denial, and pause → quit confirmation → cleanup with browser APIs mocked. Resume remains paused until canvas ownership is confirmed.
 
-The suite has focused hostile fighter radar-tracking and countermeasure tests, but little direct coverage of helicopter, wingman, and ground-unit tactical AI. The lifecycle test exercises pause → quit confirmation → cleanup. The highest-value broader integration boundary remains a real-browser run that combines actual terrain and aircraft loading, pointer lock/audio, WebGL rendering, and the second-launch lifecycle. No browser automation stack is configured in the repository. Repository-level tests do cover shared-load cancellation and terrain leases; the `SortieController`'s timeout and preparation race behavior is a narrower remaining boundary.
+`tests/integration/combat-scenarios.test.js` runs seeded 45-second air and ground engagements without a renderer, then follows a player missile from launch through guidance, impact, cleanup, and pool reuse. It checks target selection and ownership, ammunition use, once-only destruction, destroyed-unit inactivity, objective progress, and projectile cleanup across the real combat systems.
+
+The scenario tests give wingman and ground-unit AI direct combat integration coverage; helicopter behavior and wider tactical choices still have focused unit coverage. The highest-value broader integration boundary remains a real-browser run that combines actual terrain and aircraft loading, pointer lock/audio, WebGL rendering, and the second-launch lifecycle. No browser automation stack is configured in the repository. Repository-level tests do cover shared-load cancellation and terrain leases; the `SortieController`'s timeout and preparation race behavior is a narrower remaining boundary.
 
 ## What to test
 
@@ -34,6 +36,7 @@ The suite has focused hostile fighter radar-tracking and countermeasure tests, b
 - **Collision and projectiles:** Cover swept movement, near misses, impacts, ground/air/friendly targets, expiry, decoys, missile guidance, and exactly-once destruction/score effects. Include fast movement across boundaries and collisions.
 - **Radar and weapons:** Test air/ground mode, contact loss, selected targets, lock acquisition/loss, launch envelopes, ammunition, and feedback. Keep radar sensor range distinct from weapon launch range.
 - **Mission flow:** Cover phase ordering, delayed/deferred contact, objective activation, objective completion, RTB extraction, destruction, and abort behavior.
+- **Optional objectives:** Cover every configured condition's success, failure, and not-applicable cases; verify that the shared briefing/debrief renderer handles multiple definitions and that optional failures never change the primary outcome.
 - **AI behavior:** Assert visible state transitions, target choice, command response, and projectile outcomes. When randomness affects a case, control it locally rather than relying on one lucky draw.
 - **Async loading and aborts:** Test shared in-flight requests, one caller aborting while another remains, all callers aborting, failures, timeouts, and stale results. Verify that a result that is no longer current is released instead of installed or leaked.
 - **Resource cleanup:** Verify scene removal and disposal of owned geometry/materials/textures, while proving shared aircraft/terrain resources remain valid until their owner releases them. Check listeners, timers, pools, and late async completions.
@@ -64,9 +67,9 @@ The repository has no browser automation stack, so the pointer-lock security beh
 
 ## Randomness and determinism
 
-Production code currently calls `Math.random()` in combat AI, spawn setup, aim dispersion, countermeasures, effects, stress workloads, and audio variation. There is no injected or seeded random-number generator. Existing tests generally avoid asserting the exact result of a random choice.
+Each planned sortie gets one 32-bit seed when its mission is selected. The menu uses it to preview the authored variant and optional objectives; launch passes the same seed to `SortieController` and `CombatWorld`. `CombatWorld` creates the gameplay random stream from it and shares that stream with AI, spawns, weapons, countermeasures, and projectiles. Visual effects, audio variation, menu radar, and the stress workload use separate presentation randomness so their activity cannot change later gameplay rolls. Pass an explicit seed to `CombatWorld` in deterministic integration tests; inject a random function when testing one system's specific branch.
 
-For a test whose behavior depends on a random branch, prefer the injected random source where a system provides one; use explicit unit state and assert the resulting observable behavior. `ProjectileSystem`, hostile fighter AI, air-weapon AI, and countermeasures accept a random function, while other combat AI/spawn systems still use `Math.random` as migration continues. Do not let a global stub leak into other tests. Fully repeatable sorties still require broader RNG adoption.
+Mission variants and their reinforcement probability use a separate stream derived from the sortie seed and mission id, so choosing a variant does not consume simulation rolls. The same seed and mission therefore select the same authored variant and reinforcement outcome. The same seed, mission setup, frame steps, and player inputs should produce the same simulation state. Test observable state such as selected variant, spawned composition/positions, weapon use, projectiles, and damage. Do not stub global `Math.random()` to control gameplay randomness.
 
 ## Test quality
 

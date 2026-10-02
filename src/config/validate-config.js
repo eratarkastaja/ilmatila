@@ -7,14 +7,34 @@ const boolean = { type: 'boolean' };
 const array = item => ({ type: 'array', item });
 const optional = schema => ({ ...schema, optional: true });
 const object = shape => ({ type: 'object', shape });
+const ammoCapacity = { type: 'ammoCapacity' };
 const REQUIRED_DIFFICULTY_IDS = ['easy', 'standard', 'hard'];
 const REQUIRED_MISSION_IDS = ['intercept', 'patrol', 'support', 'training'];
+const OPTIONAL_OBJECTIVE_FIELDS = {
+  allWingmenSurvive: [],
+  noDamage: [],
+  destroyOptionalGroundTarget: ['target'],
+  completeBeforeTime: ['limitSeconds'],
+  preserveMissiles: ['minimumRemaining'],
+  protectFriendlyGroundUnit: ['target'],
+  interceptBeforeZone: ['target', 'zoneRadius'],
+};
+const OPTIONAL_OBJECTIVE_COLLECTIONS = {
+  destroyOptionalGroundTarget: 'groundHostiles',
+  protectFriendlyGroundUnit: 'friendlyGround',
+  interceptBeforeZone: 'airHostiles',
+};
 
 const difficultySchema = object({
   id: string,
   player: object({
     hull: number(1, 500),
     countermeasures: number(0, 100, true),
+    weapons: object({
+      airMissiles: number(0, 100, true),
+      groundMissiles: number(0, 100, true),
+      gunRounds: ammoCapacity,
+    }),
     chaff: object({
       count: number(0, 100, true),
       cooldown: number(.05, 120),
@@ -53,6 +73,10 @@ const difficultySchema = object({
     }),
     targeting: object({
       airPriorityRange: number(0, 100000),
+      focusFireLimit: optional(number(1, 12, true)),
+      lowEnergyFocusFireLimit: optional(number(1, 12, true)),
+      lowEnergySpeed: optional(number(0, 1000)),
+      lowEnergyAltitudeMargin: optional(number(0, 5000)),
       groundStrafe: object({ range: number(0, 50000), chance: number(0, 1), cooldown: number(.05, 120) }),
     }),
     missile: object({
@@ -100,6 +124,8 @@ const missionSchema = object({
   hostileLateralSpacing: optional(number(1, 20000)),
   hostileStagingDistance: optional(number(1, 100000)),
   openingDelay: optional(number(0, 300)),
+  hostileComposition: optional(array(string)),
+  hostileEntry: optional(string),
   wingmen: number(0, 10, true),
   groundBattle: boolean,
   groundPairs: number(0, 200, true),
@@ -116,10 +142,52 @@ const missionSchema = object({
   groundShilkaCount: optional(number(0, 100, true)),
   battlefieldIngressOffset: optional(number(0, 50000)),
   objective: { type: 'objective' },
+  optionalObjectives: optional(array({ type: 'optionalObjective' })),
+  variants: optional(array({ type: 'missionVariant' })),
+});
+
+const MISSION_VARIANT_CHANGE_FIELDS = new Set([
+  'navigationDistance', 'navigationRadius', 'ingressAltitudeAgl', 'departureDuration',
+  'hostiles', 'hostileSpawnDistance', 'hostileMinimumSpawnDistance', 'hostileLateralSpacing',
+  'hostileStagingDistance', 'openingDelay', 'hostileComposition', 'hostileEntry',
+  'groundPairs', 'groundTrucks', 'groundFriendlyTrucks', 'groundFrontSpan', 'convoyArea',
+  'hostileHelicopters', 'hostileHelicopterSpawnDistance', 'hostileHelicopterMinimumSpawnDistance',
+  'hostileHelicopterLateralSpacing', 'hostileHelicopterSpawnAltitude', 'groundIto90Count',
+  'groundShilkaCount', 'battlefieldIngressOffset', 'objective', 'optionalObjectives',
+]);
+
+const reinforcementSchema = object({
+  probability: number(0, 1),
+  delaySeconds: number(5, 600),
+  hostiles: number(1, 20, true),
+  composition: array(string),
+  spawnDistance: optional(number(1, 100000)),
+  minimumSpawnDistance: optional(number(1, 100000)),
+  lateralSpacing: optional(number(1, 20000)),
+  entry: optional(string),
 });
 
 function validateNode(value, schema, path, errors) {
   if (schema.optional && value === undefined) return;
+  if (schema.type === 'ammoCapacity') {
+    if (value === null) return;
+    if (!Number.isInteger(value) || value < 0 || value > 100000) {
+      errors.push(`${path} must be null or an integer between 0 and 100000`);
+    }
+    return;
+  }
+  if (schema.type === 'optionalObjective') {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      errors.push(`${path} must be an object`);
+    }
+    return;
+  }
+  if (schema.type === 'missionVariant') {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      errors.push(`${path} must be an object`);
+    }
+    return;
+  }
   if (schema.type === 'object') {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       errors.push(`${path} must be an object`);
@@ -180,6 +248,164 @@ function validateObjective(objective, path, errors) {
   if (objective.type === 'training') validateNode(objective.duration, number(1, 3600), `${path}.duration`, errors);
 }
 
+function validateOptionalObjectiveTarget(target, path, expectedCollection, errors) {
+  if (!target || typeof target !== 'object' || Array.isArray(target)) {
+    errors.push(`${path} must be an object`);
+    return;
+  }
+  const allowedKeys = ['collection', 'index', 'role', 'team', 'armed', 'labelKey'];
+  for (const key of Object.keys(target)) {
+    if (!allowedKeys.includes(key)) errors.push(`${path}.${key} is not a recognized target selector setting`);
+  }
+  if (target.collection !== expectedCollection) {
+    errors.push(`${path}.collection must be ${expectedCollection}`);
+  }
+  if (target.index !== undefined) validateNode(target.index, number(0, 500, true), `${path}.index`, errors);
+  if (target.role !== undefined) validateNode(target.role, string, `${path}.role`, errors);
+  if (target.team !== undefined) validateNode(target.team, string, `${path}.team`, errors);
+  if (target.armed !== undefined) validateNode(target.armed, boolean, `${path}.armed`, errors);
+  if (target.labelKey !== undefined) validateNode(target.labelKey, string, `${path}.labelKey`, errors);
+}
+
+function validateOptionalObjectives(objectives, path, errors) {
+  if (!Array.isArray(objectives)) {
+    errors.push(`${path} must be an array`);
+    return;
+  }
+  const ids = new Set();
+  objectives.forEach((objective, index) => {
+    const objectivePath = `${path}[${index}]`;
+    if (!objective || typeof objective !== 'object' || Array.isArray(objective)) {
+      errors.push(`${objectivePath} must be an object`);
+      return;
+    }
+    validateNode(objective.id, string, `${objectivePath}.id`, errors);
+    if (ids.has(objective.id)) errors.push(`${path} contains duplicate id "${objective.id}"`);
+    ids.add(objective.id);
+    const expectedFields = OPTIONAL_OBJECTIVE_FIELDS[objective.type];
+    if (!expectedFields) {
+      errors.push(`${objectivePath}.type is not a recognized optional objective type`);
+      return;
+    }
+    if (!('type' in objective)) errors.push(`${objectivePath}.type is required`);
+    const allowedFields = ['id', 'type', ...expectedFields];
+    for (const key of Object.keys(objective)) {
+      if (!allowedFields.includes(key)) errors.push(`${objectivePath}.${key} is not valid for ${objective.type}`);
+    }
+    for (const key of expectedFields) {
+      if (!(key in objective)) errors.push(`${objectivePath}.${key} is required`);
+    }
+    if (OPTIONAL_OBJECTIVE_COLLECTIONS[objective.type] && objective.target !== undefined) {
+      validateOptionalObjectiveTarget(
+        objective.target,
+        `${objectivePath}.target`,
+        OPTIONAL_OBJECTIVE_COLLECTIONS[objective.type],
+        errors,
+      );
+    }
+    if (objective.type === 'completeBeforeTime' && objective.limitSeconds !== undefined) {
+      validateNode(objective.limitSeconds, number(1, 3600), `${objectivePath}.limitSeconds`, errors);
+    }
+    if (objective.type === 'preserveMissiles' && objective.minimumRemaining !== undefined) {
+      validateNode(objective.minimumRemaining, number(0, 20, true), `${objectivePath}.minimumRemaining`, errors);
+    }
+    if (objective.type === 'interceptBeforeZone' && objective.zoneRadius !== undefined) {
+      validateNode(objective.zoneRadius, number(100, 100000), `${objectivePath}.zoneRadius`, errors);
+    }
+  });
+}
+
+function validateHostileComposition(composition, path, errors) {
+  if (composition !== undefined && Array.isArray(composition)) {
+    if (composition.length === 0) errors.push(`${path} must contain at least one aircraft type`);
+    composition.forEach((aircraft, index) => {
+      if (!['su27', 'mig29'].includes(aircraft)) {
+        errors.push(`${path}[${index}] must be su27 or mig29`);
+      }
+    });
+  }
+}
+
+function validateReinforcement(reinforcement, path, mission, changes, errors) {
+  validateNode(reinforcement, reinforcementSchema, path, errors);
+  if (!reinforcement || typeof reinforcement !== 'object' || Array.isArray(reinforcement)) return;
+  validateHostileComposition(reinforcement.composition, `${path}.composition`, errors);
+  if (reinforcement.entry !== undefined && !['staging', 'scramble'].includes(reinforcement.entry)) {
+    errors.push(`${path}.entry must be staging or scramble`);
+  }
+  const spawnDistance = reinforcement.spawnDistance
+    ?? changes.hostileSpawnDistance
+    ?? mission.hostileSpawnDistance;
+  const minimumSpawnDistance = reinforcement.minimumSpawnDistance
+    ?? changes.hostileMinimumSpawnDistance
+    ?? mission.hostileMinimumSpawnDistance;
+  if (spawnDistance !== undefined && minimumSpawnDistance !== undefined
+    && minimumSpawnDistance > spawnDistance) {
+    errors.push(`${path}.minimumSpawnDistance must not exceed spawnDistance`);
+  }
+}
+
+function validateMissionVariants(variants, path, mission, errors) {
+  if (!Array.isArray(variants)) {
+    errors.push(`${path} must be an array`);
+    return;
+  }
+  const ids = new Set();
+  variants.forEach((variant, index) => {
+    const variantPath = `${path}[${index}]`;
+    if (!variant || typeof variant !== 'object' || Array.isArray(variant)) {
+      errors.push(`${variantPath} must be an object`);
+      return;
+    }
+    const allowedKeys = ['id', 'labelKey', 'weight', 'changes', 'reinforcement'];
+    for (const key of Object.keys(variant)) {
+      if (!allowedKeys.includes(key)) errors.push(`${variantPath}.${key} is not a recognized variant setting`);
+    }
+    validateNode(variant.id, string, `${variantPath}.id`, errors);
+    if (ids.has(variant.id)) errors.push(`${path} contains duplicate id "${variant.id}"`);
+    ids.add(variant.id);
+    validateNode(variant.labelKey, string, `${variantPath}.labelKey`, errors);
+    validateNode(variant.weight, number(.001, 1000), `${variantPath}.weight`, errors);
+    if (!variant.changes || typeof variant.changes !== 'object' || Array.isArray(variant.changes)) {
+      errors.push(`${variantPath}.changes must be an object`);
+    } else {
+      const changes = variant.changes;
+      for (const key of Object.keys(changes)) {
+        if (!MISSION_VARIANT_CHANGE_FIELDS.has(key)) {
+          errors.push(`${variantPath}.changes.${key} is not allowed`);
+          continue;
+        }
+        if (key === 'objective') {
+          validateObjective(changes[key], `${variantPath}.changes.${key}`, errors);
+        } else {
+          validateNode(changes[key], missionSchema.shape[key], `${variantPath}.changes.${key}`, errors);
+        }
+      }
+      validateHostileComposition(changes.hostileComposition, `${variantPath}.changes.hostileComposition`, errors);
+      if (changes.hostileEntry !== undefined && !['staging', 'scramble'].includes(changes.hostileEntry)) {
+        errors.push(`${variantPath}.changes.hostileEntry must be staging or scramble`);
+      }
+      if (changes.optionalObjectives !== undefined) {
+        validateOptionalObjectives(changes.optionalObjectives, `${variantPath}.changes.optionalObjectives`, errors);
+      }
+      if (changes.objective?.type === 'support'
+        && (changes.groundBattle === false || (changes.groundPairs ?? mission.groundPairs) < 1)) {
+        errors.push(`${variantPath}.changes support objective requires ground pairs`);
+      }
+      const spawnDistance = changes.hostileSpawnDistance ?? mission.hostileSpawnDistance;
+      const minimumSpawnDistance = changes.hostileMinimumSpawnDistance ?? mission.hostileMinimumSpawnDistance;
+      if (spawnDistance !== undefined && minimumSpawnDistance !== undefined
+        && minimumSpawnDistance > spawnDistance) {
+        errors.push(`${variantPath}.changes.hostileMinimumSpawnDistance must not exceed hostileSpawnDistance`);
+      }
+    }
+    if (variant.reinforcement !== undefined) {
+      validateReinforcement(variant.reinforcement, `${variantPath}.reinforcement`, mission,
+        variant.changes && typeof variant.changes === 'object' ? variant.changes : {}, errors);
+    }
+  });
+}
+
 function validateDifficultyRelations(preset, path, errors) {
   const fighter = preset?.fighter;
   if (fighter?.gun && fighter.gun.burstMin > fighter.gun.burstMax) {
@@ -191,6 +417,11 @@ function validateDifficultyRelations(preset, path, errors) {
   if (fighter?.evasion?.evasiveClimb && fighter.evasion.evasiveClimb.min > fighter.evasion.evasiveClimb.max) {
     errors.push(`${path}.fighter.evasion.evasiveClimb.min must not exceed max`);
   }
+  if (fighter?.targeting?.focusFireLimit !== undefined
+    && fighter.targeting.lowEnergyFocusFireLimit !== undefined
+    && fighter.targeting.lowEnergyFocusFireLimit < fighter.targeting.focusFireLimit) {
+    errors.push(`${path}.fighter.targeting.lowEnergyFocusFireLimit must not be less than focusFireLimit`);
+  }
   if (preset?.wingman?.airMissile && preset.wingman.airMissile.minRange >= preset.wingman.airMissile.maxRange) {
     errors.push(`${path}.wingman.airMissile.minRange must be less than maxRange`);
   }
@@ -201,6 +432,14 @@ function validateMissionRelations(mission, key, validIds, errors) {
   if (!mission || typeof mission !== 'object' || Array.isArray(mission)) return;
   if (mission.id !== key) errors.push(`${path}.id must match its key`);
   validateObjective(mission.objective, `${path}.objective`, errors);
+  if (mission.optionalObjectives !== undefined) {
+    validateOptionalObjectives(mission.optionalObjectives, `${path}.optionalObjectives`, errors);
+  }
+  validateHostileComposition(mission.hostileComposition, `${path}.hostileComposition`, errors);
+  if (mission.hostileEntry !== undefined && !['staging', 'scramble'].includes(mission.hostileEntry)) {
+    errors.push(`${path}.hostileEntry must be staging or scramble`);
+  }
+  if (mission.variants !== undefined) validateMissionVariants(mission.variants, `${path}.variants`, mission, errors);
   for (const unlock of Array.isArray(mission.unlocks) ? mission.unlocks : []) {
     if (!validIds.has(unlock)) errors.push(`${path}.unlocks contains unknown mission "${unlock}"`);
     if (unlock === key) errors.push(`${path}.unlocks must not contain itself`);

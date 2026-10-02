@@ -37,13 +37,17 @@ export class CollisionSystem {
     const start = this._start.copy(this.lastCollisionPosition);
     const travel = this._travel.subVectors(position,start);
     const halfSize = this.terrain.worldSize / 2;
-    const bounds = this.terrain.operationBounds ?? { minX: -halfSize, maxX: halfSize, minZ: -halfSize, maxZ: halfSize };
-    if (position.x <= bounds.minX || position.x >= bounds.maxX
-      || position.z <= bounds.minZ || position.z >= bounds.maxZ) {
+    const bounds = this.terrain.operationBounds;
+    const minX = bounds?.minX ?? -halfSize;
+    const maxX = bounds?.maxX ?? halfSize;
+    const minZ = bounds?.minZ ?? -halfSize;
+    const maxZ = bounds?.maxZ ?? halfSize;
+    if (position.x <= minX || position.x >= maxX
+      || position.z <= minZ || position.z >= maxZ) {
       // End this sortie at the marked edge and keep the rendered aircraft on
       // the playable side, even when a fast frame crosses the boundary.
-      position.x = THREE.MathUtils.clamp(position.x, bounds.minX + 2, bounds.maxX - 2);
-      position.z = THREE.MathUtils.clamp(position.z, bounds.minZ + 2, bounds.maxZ - 2);
+      position.x = THREE.MathUtils.clamp(position.x, minX + 2, maxX - 2);
+      position.z = THREE.MathUtils.clamp(position.z, minZ + 2, maxZ - 2);
       this.lastCollisionPosition.copy(position);
       this.onPlayerBoundaryAbort('combat.collisionBoundary');
       return true;

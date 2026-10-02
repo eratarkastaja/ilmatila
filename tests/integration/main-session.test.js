@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import packageMetadata from '../../package.json';
 
 const harness = vi.hoisted(() => ({
@@ -115,8 +115,8 @@ vi.mock('../../src/input/controls.js', () => ({
 
 vi.mock('../../src/combat/world.js', () => ({
   CombatWorld: class {
-    constructor(scene, player, terrain, fx, aircraftAsset, mission, audio, onMissionEnd) {
-      Object.assign(this, { scene, player, terrain, fx, aircraftAsset, mission, audio, onMissionEnd });
+    constructor(scene, player, terrain, fx, aircraftAsset, mission, audio, onMissionEnd, _difficulty, _inputTarget, seed) {
+      Object.assign(this, { scene, player, terrain, fx, aircraftAsset, mission, audio, onMissionEnd, seed });
       this.destroyed = false;
       this.enemies = [];
       this.allies = [];
@@ -212,6 +212,7 @@ class MockElement {
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
   getAttribute(name) { return this.attributes.get(name) ?? null; }
   querySelector(selector) { return document.querySelector(`${selector}@${this.id ?? ''}`); }
+  closest() { return new MockElement(); }
   focus() {}
   showModal() { this.open = true; }
   close() { this.open = false; }
@@ -325,6 +326,8 @@ function pressPauseKey(document) {
 }
 
 describe('main game session lifecycle', () => {
+  afterEach(() => vi.restoreAllMocks());
+
   beforeEach(() => {
     harness.worlds.length = 0;
     harness.raf.length = 0;
@@ -333,9 +336,16 @@ describe('main game session lifecycle', () => {
 
   it('completes a sortie, saves career progress, returns to menu, and launches again cleanly', async () => {
     const document = await loadMain();
+    const window = globalThis.window;
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
     expect(document.querySelector('#menu-version').textContent).toBe(packageMetadata.version);
     await launch(document);
     const firstWorld = harness.worlds[0];
+    const menuHideTimerCall = setTimeoutSpy.mock.calls.findLastIndex(([, delay]) => delay === 460);
+    expect(menuHideTimerCall).toBeGreaterThanOrEqual(0);
+    const firstMenuHideTimer = setTimeoutSpy.mock.results[menuHideTimerCall].value;
+    expect(window.__ilmatilaTelemetry).toBeTruthy();
 
     expect(document.querySelector('#flight-hud').hidden).toBe(false);
     expect(document.querySelector('#game').classList.contains('flight-active')).toBe(true);
@@ -357,6 +367,9 @@ describe('main game session lifecycle', () => {
     expect(document.querySelector('#start-menu').hidden).toBe(false);
     expect(document.querySelector('#game').classList.contains('flight-active')).toBe(false);
     expect(harness.controls.enabled).toBe(false);
+    expect(document.pointerLockElement).toBe(null);
+    expect(clearTimeoutSpy).toHaveBeenCalledWith(firstMenuHideTimer);
+    expect(window.__ilmatilaTelemetry).toBeUndefined();
 
     await launch(document);
     expect(harness.worlds).toHaveLength(2);
@@ -366,6 +379,29 @@ describe('main game session lifecycle', () => {
     expect(document.querySelector('#flight-hud').hidden).toBe(false);
     expect(document.listenerRegistry.get('keydown').size).toBe(1);
     expect(document.listenerRegistry.get('ilmatila:languagechange').size).toBe(1);
+
+    for (let sortieIndex = 1; sortieIndex < 10; sortieIndex++) {
+      const world = harness.worlds[sortieIndex];
+      world.onMissionEnd('complete', {
+        missionId: 'training', difficulty: 'standard', score: 1250, accuracy: 0.8,
+        damageTaken: 0, missionTime: 90, outcome: 'complete',
+      });
+      expect(document.querySelector('#mission-debrief').open).toBe(true);
+      document.querySelector('#mission-debrief-return').dispatch('click');
+      expect(world.dispose).toHaveBeenCalledOnce();
+      expect(document.pointerLockElement).toBe(null);
+      expect(document.querySelector('#start-menu').hidden).toBe(false);
+      expect(window.__ilmatilaTelemetry).toBeUndefined();
+      expect(document.listenerRegistry.get('keydown').size).toBe(1);
+      expect(document.listenerRegistry.get('ilmatila:languagechange').size).toBe(1);
+      if (sortieIndex < 9) await launch(document);
+    }
+
+    expect(harness.worlds).toHaveLength(10);
+    expect(new Set(harness.worlds).size).toBe(10);
+    expect(harness.worlds[9]).not.toBe(firstWorld);
+    expect(harness.worlds.every(world => world.dispose.mock.calls.length === 1)).toBe(true);
+    expect(harness.audio.startEngine).toHaveBeenCalledTimes(10);
   });
 
   it('does not start a prepared sortie unless launch pointer lock is confirmed', async () => {
@@ -383,6 +419,33 @@ describe('main game session lifecycle', () => {
     expect(harness.controls.enabled).toBe(false);
     expect(document.querySelector('#start-menu').hidden).toBe(false);
     expect(harness.worlds[0].dispose).toHaveBeenCalledOnce();
+  });
+
+  it('shows the objectives and variant selected by the seed passed into the sortie', async () => {
+    const document = await loadMain();
+    await launch(document);
+    const { MISSIONS } = await import('../../src/mission/missions.js');
+    const { resolveMissionVariant } = await import('../../src/mission/mission-variants.js');
+    const { t } = await import('../../src/ui/i18n.js');
+    const world = harness.worlds[0];
+    const resolution = resolveMissionVariant(MISSIONS.training, world.seed);
+    const variantNode = document.querySelector('#briefing-variant');
+
+    expect(variantNode.hidden).toBe(false);
+    expect(variantNode.textContent).toBe(t('mission.briefing.variant', {
+      name: t(resolution.variant.labelKey),
+    }));
+    const rows = document.querySelector('#briefing-optional-objective-list').children;
+    expect(rows).toHaveLength(resolution.mission.optionalObjectives.length);
+    const timeObjective = resolution.mission.optionalObjectives.find(objective => objective.id === 'time-limit');
+    const timeDescription = rows[resolution.mission.optionalObjectives.indexOf(timeObjective)]
+      .children[0].children[1].textContent;
+    expect(timeDescription).toContain(String(timeObjective.limitSeconds));
+
+    const variantBeforeLanguageChange = variantNode.textContent;
+    document.dispatchEvent(new Event('ilmatila:languagechange'));
+    expect(variantNode.textContent).toBe(variantBeforeLanguageChange);
+    expect(harness.worlds[0].seed).toBe(world.seed);
   });
 
   it('resumes with one click after an application pause releases pointer lock programmatically', async () => {

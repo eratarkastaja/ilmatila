@@ -7,7 +7,7 @@ export class GroundSpawnSystem {
   spawn(battle) {
     // Keep the orthophoto unobstructed and place units only on mapped dry ground.
     if(!battle.mission.groundBattle)return;
-    let seed=54321; const rnd=()=>{seed=(seed*16807)%2147483647;return(seed-1)/2147483646;};
+    const rnd = battle.random;
     const finnishTypes=['leopard2','cv9030','pasi'];
     const russianTypes=['t72','bmp2','btr80'];
     const theaterHalf = (battle.terrain?.worldSize ?? 32000) * .5;

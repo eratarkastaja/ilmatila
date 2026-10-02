@@ -22,6 +22,45 @@ export const MISSIONS = {
     groundIto90Count: 0,
     groundShilkaCount: 0,
     objective: { type: 'clearAir' },
+    optionalObjectives: [
+      { id: 'wingmen-home', type: 'allWingmenSurvive' },
+      { id: 'lead-intercept', type: 'interceptBeforeZone', target: {
+        collection: 'airHostiles', index: 0, labelKey: 'mission.optionalTarget.leadFighter',
+      }, zoneRadius: 7200 },
+      { id: 'time-limit', type: 'completeBeforeTime', limitSeconds: 300 },
+    ],
+    variants: [
+      {
+        id: 'long-range-screen', labelKey: 'mission.variant.intercept.longRange', weight: 3,
+        changes: { hostileComposition: ['su27', 'mig29', 'su27', 'mig29'] },
+        reinforcement: {
+          probability: .12, delaySeconds: 70, hostiles: 1, composition: ['mig29'],
+          spawnDistance: 11800, minimumSpawnDistance: 10400, lateralSpacing: 700, entry: 'scramble',
+        },
+      },
+      {
+        id: 'rapid-scramble', labelKey: 'mission.variant.intercept.rapidScramble', weight: 1,
+        changes: {
+          hostiles: 5,
+          hostileComposition: ['mig29', 'su27', 'mig29', 'su27', 'mig29'],
+          hostileSpawnDistance: 13200,
+          hostileMinimumSpawnDistance: 11800,
+          hostileLateralSpacing: 1500,
+          hostileEntry: 'scramble',
+          optionalObjectives: [
+            { id: 'wingmen-home', type: 'allWingmenSurvive' },
+            { id: 'lead-intercept', type: 'interceptBeforeZone', target: {
+              collection: 'airHostiles', index: 0, labelKey: 'mission.optionalTarget.leadFighter',
+            }, zoneRadius: 7600 },
+            { id: 'time-limit', type: 'completeBeforeTime', limitSeconds: 330 },
+          ],
+        },
+        reinforcement: {
+          probability: .24, delaySeconds: 65, hostiles: 1, composition: ['su27'],
+          spawnDistance: 12000, minimumSpawnDistance: 10600, lateralSpacing: 700, entry: 'scramble',
+        },
+      },
+    ],
   },
   patrol: {
     id: 'patrol',
@@ -44,6 +83,41 @@ export const MISSIONS = {
     groundFrontSpan: 0,
     convoyArea: 0,
     objective: { type: 'clearAir' },
+    optionalObjectives: [
+      { id: 'wingmen-home', type: 'allWingmenSurvive' },
+      { id: 'no-damage', type: 'noDamage' },
+      { id: 'missile-reserve', type: 'preserveMissiles', minimumRemaining: 16 },
+    ],
+    variants: [
+      {
+        id: 'routine-patrol', labelKey: 'mission.variant.patrol.routine', weight: 3,
+        changes: { hostileComposition: ['su27', 'mig29'] },
+        reinforcement: {
+          probability: .18, delaySeconds: 62, hostiles: 1, composition: ['mig29'],
+          spawnDistance: 12200, minimumSpawnDistance: 10800, lateralSpacing: 700, entry: 'scramble',
+        },
+      },
+      {
+        id: 'border-scramble', labelKey: 'mission.variant.patrol.borderScramble', weight: 1,
+        changes: {
+          hostiles: 3,
+          hostileComposition: ['mig29', 'su27', 'mig29'],
+          hostileSpawnDistance: 14000,
+          hostileMinimumSpawnDistance: 12500,
+          hostileLateralSpacing: 1750,
+          hostileEntry: 'scramble',
+          optionalObjectives: [
+            { id: 'wingmen-home', type: 'allWingmenSurvive' },
+            { id: 'no-damage', type: 'noDamage' },
+            { id: 'missile-reserve', type: 'preserveMissiles', minimumRemaining: 15 },
+          ],
+        },
+        reinforcement: {
+          probability: .22, delaySeconds: 58, hostiles: 1, composition: ['su27'],
+          spawnDistance: 12400, minimumSpawnDistance: 11000, lateralSpacing: 700, entry: 'scramble',
+        },
+      },
+    ],
   },
   support: {
     id: 'support',
@@ -74,6 +148,56 @@ export const MISSIONS = {
     groundShilkaCount: 2,
     battlefieldIngressOffset: 5000,
     objective: { type: 'support' },
+    optionalObjectives: [
+      { id: 'wingmen-home', type: 'allWingmenSurvive' },
+      { id: 'destroy-logistics', type: 'destroyOptionalGroundTarget', target: {
+        collection: 'groundHostiles', role: 'logistics',
+        labelKey: 'mission.optionalTarget.hostileLogistics',
+      } },
+      { id: 'protect-friendly', type: 'protectFriendlyGroundUnit', target: {
+        collection: 'friendlyGround', role: 'defender',
+        labelKey: 'mission.optionalTarget.friendlyArmor',
+      } },
+      { id: 'missile-reserve', type: 'preserveMissiles', minimumRemaining: 12 },
+    ],
+    variants: [
+      {
+        id: 'armored-push', labelKey: 'mission.variant.support.armoredPush', weight: 3,
+        changes: {},
+        reinforcement: {
+          probability: .14, delaySeconds: 78, hostiles: 1, composition: ['mig29'],
+          spawnDistance: 12000, minimumSpawnDistance: 10600, lateralSpacing: 700, entry: 'scramble',
+        },
+      },
+      {
+        id: 'flank-pressure', labelKey: 'mission.variant.support.flankPressure', weight: 1,
+        changes: {
+          hostiles: 2,
+          hostileComposition: ['mig29', 'su27'],
+          hostileEntry: 'scramble',
+          groundPairs: 10,
+          groundTrucks: 14,
+          groundIto90Count: 1,
+          groundShilkaCount: 3,
+          optionalObjectives: [
+            { id: 'wingmen-home', type: 'allWingmenSurvive' },
+            { id: 'destroy-logistics', type: 'destroyOptionalGroundTarget', target: {
+              collection: 'groundHostiles', role: 'logistics',
+              labelKey: 'mission.optionalTarget.hostileLogistics',
+            } },
+            { id: 'protect-friendly', type: 'protectFriendlyGroundUnit', target: {
+              collection: 'friendlyGround', role: 'defender',
+              labelKey: 'mission.optionalTarget.friendlyArmor',
+            } },
+            { id: 'missile-reserve', type: 'preserveMissiles', minimumRemaining: 10 },
+          ],
+        },
+        reinforcement: {
+          probability: .2, delaySeconds: 72, hostiles: 1, composition: ['su27'],
+          spawnDistance: 12000, minimumSpawnDistance: 10600, lateralSpacing: 700, entry: 'scramble',
+        },
+      },
+    ],
   },
   training: {
     id: 'training',
@@ -90,5 +214,28 @@ export const MISSIONS = {
     groundFrontSpan: 0,
     convoyArea: 0,
     objective: { type: 'training', duration: 90 },
+    optionalObjectives: [
+      { id: 'wingmen-home', type: 'allWingmenSurvive' },
+      { id: 'no-damage', type: 'noDamage' },
+      { id: 'time-limit', type: 'completeBeforeTime', limitSeconds: 180 },
+    ],
+    variants: [
+      {
+        id: 'standard-course', labelKey: 'mission.variant.training.standard', weight: 3,
+        changes: {},
+      },
+      {
+        id: 'extended-course', labelKey: 'mission.variant.training.extended', weight: 1,
+        changes: {
+          objective: { type: 'training', duration: 110 },
+          navigationDistance: 6800,
+          optionalObjectives: [
+            { id: 'wingmen-home', type: 'allWingmenSurvive' },
+            { id: 'no-damage', type: 'noDamage' },
+            { id: 'time-limit', type: 'completeBeforeTime', limitSeconds: 210 },
+          ],
+        },
+      },
+    ],
   },
 };

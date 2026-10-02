@@ -1,14 +1,21 @@
 import * as THREE from 'three';
+import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
 import { MISSILE_PROFILES } from './projectiles.js';
 import {
   ENEMY_ATTACK_RUNS, constrainWaypoint, forward, getAircraftEdgeMargin,
   keepAircraftClear, leadPoint, rightOfHeading, steerAircraft, zeroVelocity,
 } from './air-combat-utils.js';
 
+const EMPTY_MISSILES = [];
+
 /** Runs hostile fighter engagement, target selection, and defensive maneuvers. */
 export class HostileFighterAI {
-  constructor(random = Math.random) {
+  constructor(random = createSeededRandom(DEFAULT_RANDOM_SEED)) {
     this.random = random;
+    this._engagementSelection = { target: null, domain: 'air' };
+    this._missileRelativePosition = new THREE.Vector3();
+    this._missileRelativeVelocity = new THREE.Vector3();
+    this._evasionRight = new THREE.Vector3();
   }
 
   updateJets(battle, dt, playerForward, playerRight, playerThreat) {
@@ -90,7 +97,7 @@ export class HostileFighterAI {
 
       let incomingMissile=null;
       let nearestIncomingMissile=3000*3000;
-      for(const missile of playerThreat.incomingMissiles??[]){
+      for(const missile of playerThreat.incomingMissiles??EMPTY_MISSILES){
         if(missile.target!==enemy||missile.life<=0)continue;
         const distanceSquared=missile.mesh.position.distanceToSquared(enemy.mesh.position);
         if(distanceSquared<nearestIncomingMissile){nearestIncomingMissile=distanceSquared;incomingMissile=missile;}
@@ -105,6 +112,7 @@ export class HostileFighterAI {
           enemy,
           incomingMissile.mesh.position,
           battle.difficulty?.fighter?.evasion?.missileDuration ?? 3.6,
+          battle.difficulty?.id === 'hard' ? incomingMissile.velocity : null,
         );
       }
 
@@ -140,20 +148,23 @@ export class HostileFighterAI {
 
       const canEngage = enemy.phase !== 'staging';
       if (enemy.targetRefreshTimer <= 0 || !enemy.engagementTarget || enemy.engagementTarget.dead) {
-        const selected = this.selectEnemyEngagementTarget(battle, enemy, range);
+        const selected = this.selectEnemyEngagementTarget(battle, enemy, range, this._engagementSelection);
         enemy.engagementTarget = selected?.target ?? null;
         enemy.engagementTargetDomain = selected?.domain ?? 'air';
         enemy.targetRefreshTimer = 1.15 + this.random() * .8;
       }
-      const engagement = enemy.burstShots > 0 && enemy.burstTarget && !enemy.burstTarget.dead
-        ? { target: enemy.burstTarget, domain: enemy.burstTargetDomain }
-        : { target: enemy.engagementTarget, domain: enemy.engagementTargetDomain };
-      const targetPosition = engagement.target === battle.player
+      const engagementTarget = enemy.burstShots > 0 && enemy.burstTarget && !enemy.burstTarget.dead
+        ? enemy.burstTarget
+        : enemy.engagementTarget;
+      const engagementDomain = enemy.burstShots > 0 && enemy.burstTarget && !enemy.burstTarget.dead
+        ? enemy.burstTargetDomain
+        : enemy.engagementTargetDomain;
+      const targetPosition = engagementTarget === battle.player
         ? playerPosition
-        : engagement.target?.mesh?.position;
-      const targetVelocity = engagement.target === battle.player
+        : engagementTarget?.mesh?.position;
+      const targetVelocity = engagementTarget === battle.player
         ? battle.playerVelocity
-        : engagement.target?.velocity ?? zeroVelocity;
+        : engagementTarget?.velocity ?? zeroVelocity;
       const engagementRange = targetPosition ? enemy.mesh.position.distanceTo(targetPosition) : Infinity;
       const gunLeadTime = battle.difficulty?.fighter?.gun?.leadTime ?? 4.5;
       const gunMaxRange = battle.difficulty?.fighter?.gun?.maxRange ?? 2200;
@@ -206,7 +217,7 @@ export class HostileFighterAI {
         * (105 + enemy.attackPattern * 45);
       waypoint.addScaledVector(enemy.attackRight, runOffset);
       const pursuitRange = Math.max(gunMaxRange * 2, missileMaxRange);
-      if (canEngage && engagement.domain === 'air' && engagement.target
+      if (canEngage && engagementDomain === 'air' && engagementTarget
         && engagementRange < pursuitRange && enemy.evasiveTimer <= 0) {
         const gunLead = leadPoint(
           enemy.mesh.position,
@@ -266,19 +277,19 @@ export class HostileFighterAI {
         ? leadPoint(enemy.mesh.position, targetPosition, targetVelocity, 720, gunLeadTime, enemy.lead, enemy.leadOffset)
           .sub(enemy.mesh.position).normalize()
         : enemy.lead.set(0, 0, 0);
-      const gunSolution = canEngage && engagement.target
-        && (engagement.domain !== 'ground' || enemy.groundStrafeCooldown <= 0 || enemy.burstShots > 0)
+      const gunSolution = canEngage && engagementTarget
+        && (engagementDomain !== 'ground' || enemy.groundStrafeCooldown <= 0 || enemy.burstShots > 0)
         && engagementRange > 450
-        && engagementRange < (engagement.domain === 'ground'
+        && engagementRange < (engagementDomain === 'ground'
           ? (battle.difficulty?.fighter?.targeting?.groundStrafe?.range ?? 6500)
           : (battle.difficulty?.fighter?.gun?.maxRange ?? 2200))
-        && enemyNose.dot(targetLead) > (engagement.domain === 'ground' ? .84 : (battle.difficulty?.fighter?.gun?.boresight ?? .88));
+        && enemyNose.dot(targetLead) > (engagementDomain === 'ground' ? .84 : (battle.difficulty?.fighter?.gun?.boresight ?? .88));
 
       if (enemy.burstShots > 0) {
         enemy.burstClock -= dt;
         if (enemy.burstClock <= 0) {
           if (gunSolution) {
-            battle.weaponAI.fireEnemy(battle, enemy, engagement.target, engagement.domain);
+            battle.weaponAI.fireEnemy(battle, enemy, engagementTarget, engagementDomain);
             enemy.burstShots--;
             enemy.burstClock = battle.difficulty?.fighter?.gun?.burstInterval ?? .095;
             if (enemy.burstShots <= 0) enemy.burstTarget = null;
@@ -287,17 +298,17 @@ export class HostileFighterAI {
           }
         }
       } else if (gunSolution && enemy.gunCooldown <= 0) {
-        const burstMin = engagement.domain === 'ground' ? 3 : (battle.difficulty?.fighter?.gun?.burstMin ?? 6);
-        const burstMax = engagement.domain === 'ground' ? 6 : (battle.difficulty?.fighter?.gun?.burstMax ?? 8);
+        const burstMin = engagementDomain === 'ground' ? 3 : (battle.difficulty?.fighter?.gun?.burstMin ?? 6);
+        const burstMax = engagementDomain === 'ground' ? 6 : (battle.difficulty?.fighter?.gun?.burstMax ?? 8);
         enemy.burstShots = burstMin + Math.floor(this.random() * (burstMax - burstMin + 1));
         enemy.burstClock = 0;
-        enemy.burstTarget = engagement.target;
-        enemy.burstTargetDomain = engagement.domain;
-        if (engagement.domain === 'ground') {
+        enemy.burstTarget = engagementTarget;
+        enemy.burstTargetDomain = engagementDomain;
+        if (engagementDomain === 'ground') {
           enemy.groundStrafeCooldown = (battle.difficulty?.fighter?.targeting?.groundStrafe?.cooldown ?? 14)
             + this.random() * ((battle.difficulty?.fighter?.targeting?.groundStrafe?.cooldown ?? 14) * .35);
         }
-        enemy.gunCooldown = (engagement.domain === 'ground'
+        enemy.gunCooldown = (engagementDomain === 'ground'
           ? (battle.difficulty?.fighter?.targeting?.groundStrafe?.cooldown ?? 14)
           : (battle.difficulty?.fighter?.gun?.cooldown ?? 1.65))
           + this.random() * (battle.difficulty?.fighter?.gun?.cooldownJitter ?? 1.2);
@@ -307,6 +318,7 @@ export class HostileFighterAI {
       const missileMinRange = battle.difficulty?.fighter?.missile?.minRange ?? 3000;
       const missileBoresight = battle.difficulty?.fighter?.missile?.boresight ?? .93;
       const missileSpeed = battle.difficulty?.fighter?.missile?.projectile?.speed ?? MISSILE_PROFILES.hostile.speed;
+      const assignedPlayerTarget = battle.difficulty?.id !== 'hard' || enemy.engagementTarget === battle.player;
       const toPlayer = leadPoint(
         enemy.mesh.position,
         playerPosition,
@@ -316,7 +328,7 @@ export class HostileFighterAI {
       )
         .sub(enemy.mesh.position).normalize();
       if (
-        enemy.missileClock <= 0 && enemy.missilesFired < missileCapacity && enemy.phase !== 'staging' &&
+        assignedPlayerTarget && enemy.missileClock <= 0 && enemy.missilesFired < missileCapacity && enemy.phase !== 'staging' &&
         range > missileMinRange && range < missileMaxRange && enemyNose.dot(toPlayer) > missileBoresight
       ) {
         const seeker = battle.weaponAI.chooseHostileMissileSeeker();
@@ -330,10 +342,28 @@ export class HostileFighterAI {
     }
   }
 
-  beginEvasiveManeuver(battle, enemy, threatPosition, duration) {
+  beginEvasiveManeuver(battle, enemy, threatPosition, duration, threatVelocity = null) {
     const offset = enemy.separation.subVectors(enemy.mesh.position, threatPosition);
-    const right = rightOfHeading(enemy.heading, enemy.away);
-    const side = offset.dot(right);
+    const right = rightOfHeading(enemy.heading, this._evasionRight);
+    let side = offset.dot(right);
+    if (threatVelocity && enemy.velocity) {
+      const relativeVelocity = this._missileRelativeVelocity.subVectors(threatVelocity, enemy.velocity);
+      const relativePosition = this._missileRelativePosition.subVectors(threatPosition, enemy.mesh.position);
+      const relativeSpeedSquared = relativeVelocity.lengthSq();
+      const closing = relativePosition.dot(relativeVelocity) < 0;
+      if (relativeSpeedSquared > 1 && closing) {
+        const timeToClosestPass = THREE.MathUtils.clamp(
+          -relativePosition.dot(relativeVelocity) / relativeSpeedSquared,
+          0,
+          3.5,
+        );
+        relativePosition.addScaledVector(relativeVelocity, timeToClosestPass);
+        const predictedPassSide = relativePosition.dot(right);
+        const missileCrossingRate = relativeVelocity.dot(right);
+        if (Math.abs(predictedPassSide) > 40) side = -predictedPassSide;
+        else if (Math.abs(missileCrossingRate) > 25) side = -missileCrossingRate;
+      }
+    }
     enemy.evasiveDirection = Math.abs(side) > 40 ? Math.sign(side) : (this.random() < .5 ? -1 : 1);
     enemy.evasiveTimer = Math.max(enemy.evasiveTimer, duration);
     enemy.evasiveDuration = Math.max(enemy.evasiveDuration ?? 0, duration);
@@ -342,29 +372,75 @@ export class HostileFighterAI {
     enemy.evasiveClimb = climbMin + this.random() * (climbMax - climbMin);
   }
 
-  selectEnemyEngagementTarget(battle, enemy, playerRange) {
-    const priorityRange = battle.difficulty?.fighter?.targeting?.airPriorityRange ?? 13000;
-    if (playerRange <= priorityRange && (enemy.radarTrackDisruptionRemaining ?? 0) <= 0) {
-      return { target: battle.player, domain: 'air' };
+  selectEnemyEngagementTarget(battle, enemy, playerRange, result) {
+    const selection = result ?? {};
+    const targeting = battle.difficulty?.fighter?.targeting;
+    const priorityRange = targeting?.airPriorityRange ?? 13000;
+    const playerTrackAvailable = playerRange <= priorityRange
+      && (enemy.radarTrackDisruptionRemaining ?? 0) <= 0;
+    if (playerTrackAvailable) {
+      const focusLimit = targeting?.focusFireLimit;
+      if (!focusLimit) {
+        selection.target = battle.player;
+        selection.domain = 'air';
+        return selection;
+      }
+
+      let otherPlayerAttackers = 0;
+      for (const other of battle.enemies ?? EMPTY_MISSILES) {
+        if (other === enemy || other.dead || other.kind === 'attack-helicopter') continue;
+        if (other.engagementTarget === battle.player) otherPlayerAttackers++;
+      }
+      const playerSpeed = battle.playerVelocity?.length?.() ?? Infinity;
+      const lowEnergy = playerSpeed <= (targeting.lowEnergySpeed ?? 0)
+        && battle.player.position.y <= enemy.mesh.position.y + (targeting.lowEnergyAltitudeMargin ?? 0);
+      const activeFocusLimit = lowEnergy
+        ? (targeting.lowEnergyFocusFireLimit ?? focusLimit)
+        : focusLimit;
+      if (otherPlayerAttackers < activeFocusLimit) {
+        selection.target = battle.player;
+        selection.domain = 'air';
+        return selection;
+      }
     }
 
     let nearestAlly = null;
     let nearestAllyRange = priorityRange;
+    let fewestAllyAttackers = Infinity;
+    const coordinateAirTargets = battle.difficulty?.id === 'hard' && targeting?.focusFireLimit > 0;
     for (const ally of battle.allies) {
       if (ally.dead) continue;
       const range = enemy.mesh.position.distanceTo(ally.mesh.position);
-      if (range < nearestAllyRange) {
+      if (range >= priorityRange) continue;
+      if (!coordinateAirTargets) {
+        if (range < nearestAllyRange) {
+          nearestAllyRange = range;
+          nearestAlly = ally;
+        }
+        continue;
+      }
+      let allyAttackers = 0;
+      for (const other of battle.enemies ?? EMPTY_MISSILES) {
+        if (other !== enemy && !other.dead && other.engagementTarget === ally) allyAttackers++;
+      }
+      if (allyAttackers < fewestAllyAttackers
+        || (allyAttackers === fewestAllyAttackers && range < nearestAllyRange)) {
+        fewestAllyAttackers = allyAttackers;
         nearestAllyRange = range;
         nearestAlly = ally;
       }
     }
-    if (nearestAlly) return { target: nearestAlly, domain: 'air' };
+    if (nearestAlly) {
+      selection.target = nearestAlly;
+      selection.domain = 'air';
+      return selection;
+    }
 
     // Ground strafing is opportunistic: aircraft contacts always take priority.
     if (enemy.groundStrafeCooldown <= 0
-      && this.random() < (battle.difficulty?.fighter?.targeting?.groundStrafe?.chance ?? .12)) {
+      && this.random() < (targeting?.groundStrafe?.chance ?? .12)) {
       let target = null;
-      let nearest = battle.difficulty?.fighter?.targeting?.groundStrafe?.range ?? 6500;
+      let nearest = targeting?.groundStrafe?.range ?? 6500;
       for (const unit of battle.friendlyGroundUnits) {
         if (unit.dead || unit.armed === false) continue;
         const range = enemy.mesh.position.distanceTo(unit.mesh.position);
@@ -373,9 +449,21 @@ export class HostileFighterAI {
           target = unit;
         }
       }
-      if (target) return { target, domain: 'ground' };
+      if (target) {
+        selection.target = target;
+        selection.domain = 'ground';
+        return selection;
+      }
     }
-    return null;
+    if (playerTrackAvailable) {
+      selection.target = battle.player;
+      selection.domain = 'air';
+      return selection;
+    }
+    if (!result) return null;
+    selection.target = null;
+    selection.domain = 'air';
+    return selection;
   }
 
   canLaunchMissile(enemy, seeker) {

@@ -43,7 +43,7 @@ export function coverageClearance(coverage, x, z) {
   return Math.max(0, (coverage.distance[index] / 3 - 0.5) * coverage.cellMeters);
 }
 
-export function coverageApproach(coverage, x, z, velocityX, velocityZ, warningRange = 5_000, minimumOutwardSpeed = 25) {
+export function coverageApproach(coverage, x, z, velocityX, velocityZ, warningRange = 5_000, minimumOutwardSpeed = 25, result) {
   const clearance = coverageClearance(coverage, x, z);
   if (clearance <= 0 || clearance > warningRange) return null;
 
@@ -55,7 +55,10 @@ export function coverageApproach(coverage, x, z, velocityX, velocityZ, warningRa
   outwardX /= length;
   outwardZ /= length;
   const outwardSpeed = velocityX * outwardX + velocityZ * outwardZ;
-  return outwardSpeed > minimumOutwardSpeed ? { clearance } : null;
+  if (outwardSpeed <= minimumOutwardSpeed) return null;
+  const approach = result ?? {};
+  approach.clearance = clearance;
+  return approach;
 }
 
 export function forEachCoverageEdge(coverage, visit) {

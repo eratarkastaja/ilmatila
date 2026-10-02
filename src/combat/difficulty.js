@@ -11,6 +11,7 @@ export const DIFFICULTY_PRESETS = deepFreeze({
     player: {
       hull: 135,
       countermeasures: 20,
+      weapons: { airMissiles: 10, groundMissiles: 10, gunRounds: null },
       chaff: {
         count: 20,
         cooldown: 1.4,
@@ -132,9 +133,10 @@ export const DIFFICULTY_PRESETS = deepFreeze({
     id: 'standard',
     player: {
       hull: 100,
-      countermeasures: 20,
+      countermeasures: 15,
+      weapons: { airMissiles: 10, groundMissiles: 10, gunRounds: 2000 },
       chaff: {
-        count: 20,
+        count: 15,
         cooldown: 1.7,
         radarTrackBreakChance: 0.5,
         radarMissileBreakChance: 0.56,
@@ -253,88 +255,93 @@ export const DIFFICULTY_PRESETS = deepFreeze({
   hard: {
     id: 'hard',
     player: {
-      hull: 88,
-      countermeasures: 20,
+      hull: 94,
+      countermeasures: 10,
+      weapons: { airMissiles: 6, groundMissiles: 6, gunRounds: 1200 },
       chaff: {
-        count: 20,
+        count: 10,
         cooldown: 2,
-        radarTrackBreakChance: 0.4,
-        radarMissileBreakChance: 0.46,
-        radarTrackDisruptionDuration: 2.4,
-        radarMissileDisruptionDuration: 2.8,
-        radarMissileEffectRange: 4600,
-        radarTrackReevaluationCooldown: 5.5,
+        radarTrackBreakChance: 0.42,
+        radarMissileBreakChance: 0.48,
+        radarTrackDisruptionDuration: 2.5,
+        radarMissileDisruptionDuration: 2.9,
+        radarMissileEffectRange: 4700,
+        radarTrackReevaluationCooldown: 5.4,
       },
-      incomingDamage: 1.25
+      incomingDamage: 1.12
     },
     fighter: {
-      health: 1.16,
-      aimSpread: 0.68,
-      openingDelayScale: 0.22,
-      passRangeScale: 1.32,
+      health: 1.08,
+      aimSpread: 0.82,
+      openingDelayScale: 0.3,
+      passRangeScale: 1.22,
       detection: {
         range: 5500,
-        reactionDelay: 1.8
+        reactionDelay: 2.4
       },
       gun: {
-        maxRange: 3500,
-        boresight: 0.58,
-        leadTime: 6.2,
-        cooldown: 0.42,
-        cooldownJitter: 0.28,
-        burstMin: 14,
-        burstMax: 18,
-        burstInterval: 0.055
+        maxRange: 3200,
+        boresight: 0.64,
+        leadTime: 5.5,
+        cooldown: 0.58,
+        cooldownJitter: 0.4,
+        burstMin: 10,
+        burstMax: 14,
+        burstInterval: 0.065
       },
       handling: {
-        attackTurnRate: 0.54,
-        defensiveTurnRate: 0.82,
-        defensivePitchRate: 0.4
+        attackTurnRate: 0.49,
+        defensiveTurnRate: 0.76,
+        defensivePitchRate: 0.36
       },
       evasion: {
-        lockChance: 0.72,
-        countermeasureChance: 0.92,
-        lockDuration: 3.5,
-        missileDuration: 4.1,
-        countermeasureFollowupChance: 0.68,
-        countermeasureCapacity: 6,
-        countermeasureCooldown: 2.3,
+        lockChance: 0.65,
+        countermeasureChance: 0.84,
+        lockDuration: 3.2,
+        missileDuration: 3.8,
+        countermeasureFollowupChance: 0.5,
+        countermeasureCapacity: 5,
+        countermeasureCooldown: 2.8,
         tacticalManeuver: {
-          cooldown: 5.2,
-          jitter: 2.8,
-          chance: 0.9,
-          range: 8600
+          cooldown: 6.5,
+          jitter: 3.2,
+          chance: 0.78,
+          range: 8000
         },
         evasiveClimb: {
-          min: 850,
-          max: 1550
+          min: 650,
+          max: 1200
         }
       },
       targeting: {
         airPriorityRange: 10500,
+        focusFireLimit: 2,
+        lowEnergyFocusFireLimit: 3,
+        lowEnergySpeed: 270,
+        lowEnergyAltitudeMargin: 250,
         groundStrafe: {
-          range: 7600,
-          chance: 0.3,
-          cooldown: 10
+          range: 7200,
+          chance: 0.23,
+          cooldown: 11
         }
       },
       missile: {
-        capacity: 6,
-        initialDelay: 1.6,
-        cooldown: 4.4,
-        cooldownJitter: 1.1,
-        minRange: 1500,
-        maxRange: 6100,
-        boresight: 0.68,
+        capacity: 5,
+        initialDelay: 2.8,
+        cooldown: 6.5,
+        cooldownJitter: 1.8,
+        minRange: 1900,
+        maxRange: 5800,
+        boresight: 0.75,
         leadTime: 12,
         projectile: {
-          speed: 475,
-          turnRate: 1.32,
-          burnTime: 11,
-          life: 19,
-          coastDrag: 0.045,
-          damage: 67,
-          proximityRadius: 36
+          speed: 430,
+          turnRate: 1.16,
+          burnTime: 10.5,
+          life: 18,
+          coastDrag: 0.055,
+          damage: 61,
+          proximityRadius: 31
         }
       }
     },

@@ -1,8 +1,13 @@
 import * as THREE from 'three';
 import { getGroundWeaponRange } from './ground-combat-utils.js';
+import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
 
 /** Selects ground contacts and coordinates unit movement and engagement updates. */
 export class GroundUnitAI {
+  constructor(random = createSeededRandom(DEFAULT_RANDOM_SEED)) {
+    this.random = random;
+  }
+
   update(battle, dt) {
     for(let listIndex=0;listIndex<2;listIndex++){
       const list=listIndex===0?battle.friends:battle.redUnits;
@@ -95,10 +100,10 @@ export class GroundUnitAI {
           // Realistic reload/burst pauses let the armoured line exchange fire
           // for a while instead of resolving the whole battle in seconds.
           unit.cool = weapon.includes('120') || weapon.includes('125')
-            ? 5.1 + Math.random() * 1.6
+            ? 5.1 + this.random() * 1.6
             : weapon.includes('30') || weapon.includes('14,5')
-              ? 2.8 + Math.random() * 1.25
-              : 2.2 + Math.random() * .9;
+              ? 2.8 + this.random() * 1.25
+              : 2.2 + this.random() * .9;
         }
       }else{
         unit.cool=Math.max(0,unit.cool-dt);

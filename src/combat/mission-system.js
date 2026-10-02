@@ -10,6 +10,7 @@ export class MissionSystem {
     this.getRemaining = getRemaining;
     this.remaining = { airRemaining: 0, groundRemaining: 0 };
     this.evaluation={elapsed:0,airRemaining:0,groundRemaining:0,destroyed:false,outcome:MISSION_OUTCOME.ACTIVE};
+    this._progressParams={elapsed:0,duration:0,remaining:0,airRemaining:0,airTotal:0,groundRemaining:0,groundTotal:0};
     this.nodes = nodes;
     this.elapsed = 0;
     this.deferCompletion = deferCompletion;
@@ -19,6 +20,8 @@ export class MissionSystem {
     this.missionComplete = false;
     this.missionFailed = false;
     this.noticeTimer = null;
+    this.noticeFrame = null;
+    this.noticeGeneration = 0;
     this.noticeDetailKey = `mission.complete.${this.mission.id}`;
     this.renderObjective();
   }
@@ -77,20 +80,21 @@ export class MissionSystem {
       return;
     }
     let progressText;
+    const params=this._progressParams;
     if (this.objective.type === 'training') {
       const duration = this.objective.duration ?? 90;
-      progressText = t('mission.progress.training', {
-        elapsed: Math.min(duration, Math.floor(this.elapsed)), duration,
-      });
+      params.elapsed=Math.min(duration,Math.floor(this.elapsed));
+      params.duration=duration;
+      progressText = t('mission.progress.training',params);
     } else if (this.objective.type === 'support') {
-      progressText = t('mission.progress.support', {
-        airRemaining: remaining.airRemaining,
-        airTotal: this.totals.air,
-        groundRemaining: remaining.groundRemaining,
-        groundTotal: this.totals.ground,
-      });
+      params.airRemaining=remaining.airRemaining;
+      params.airTotal=this.totals.air;
+      params.groundRemaining=remaining.groundRemaining;
+      params.groundTotal=this.totals.ground;
+      progressText = t('mission.progress.support',params);
     } else {
-      progressText = t('mission.progress.air', { remaining: remaining.airRemaining });
+      params.remaining=remaining.airRemaining;
+      progressText = t('mission.progress.air',params);
     }
     if(objectiveProgress.textContent!==progressText)objectiveProgress.textContent=progressText;
   }
@@ -144,10 +148,16 @@ export class MissionSystem {
     const notice = this.nodes.notice;
     if (!notice) return;
     if (this.noticeTimer !== null) clearTimeout(this.noticeTimer);
+    this.cancelNoticeFrame();
     notice.hidden = false;
     notice.classList.remove('visible');
     if (typeof requestAnimationFrame === 'function') {
-      requestAnimationFrame(() => notice.classList.add('visible'));
+      const generation = this.noticeGeneration;
+      this.noticeFrame = requestAnimationFrame(() => {
+        if (generation !== this.noticeGeneration) return;
+        this.noticeFrame = null;
+        notice.classList.add('visible');
+      });
     } else {
       notice.classList.add('visible');
     }
@@ -158,9 +168,18 @@ export class MissionSystem {
     }, duration);
   }
 
+  cancelNoticeFrame() {
+    this.noticeGeneration++;
+    if (this.noticeFrame !== null && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(this.noticeFrame);
+    }
+    this.noticeFrame = null;
+  }
+
   dispose() {
     if (this.noticeTimer !== null) clearTimeout(this.noticeTimer);
     this.noticeTimer = null;
+    this.cancelNoticeFrame();
     this.nodes.notice?.classList.remove('visible');
     if (this.nodes.notice) this.nodes.notice.hidden = true;
   }

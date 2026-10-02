@@ -96,8 +96,9 @@ describe('CountermeasureSystem', () => {
   it('deploys chaff from a separate finite inventory and respects its cooldown', () => {
     const { system, fx, audio } = makeCountermeasures({ random: () => 0 });
 
+    expect(system.chaff).toBe(15);
     expect(system.deployChaff()).toBe(true);
-    expect(system.chaff).toBe(19);
+    expect(system.chaff).toBe(14);
     expect(system.flares).toBe(12);
     expect(system.chaffCooldown).toBe(1.7);
     expect(system.cooldown).toBe(.85);
@@ -105,10 +106,10 @@ describe('CountermeasureSystem', () => {
     expect(audio.playChaffCountermeasure).toHaveBeenCalledOnce();
 
     expect(system.deployChaff()).toBe(false);
-    expect(system.chaff).toBe(19);
+    expect(system.chaff).toBe(14);
     system.tick(1.7);
     expect(system.deployChaff()).toBe(true);
-    expect(system.chaff).toBe(18);
+    expect(system.chaff).toBe(13);
   });
 
   it('cannot deploy chaff when its inventory is empty', () => {
