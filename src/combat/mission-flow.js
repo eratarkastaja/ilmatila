@@ -121,7 +121,8 @@ export class MissionFlowSystem {
     this.ingressReached = true;
     this.onIngress();
     this.onObjectiveActive();
-    this.setPhase(this.mission.hostiles > 0 ? MISSION_PHASE.CONTACT : MISSION_PHASE.OBJECTIVE);
+    const hostileAircraftCount = (this.mission.hostiles ?? 0) + (this.mission.hostileHelicopters ?? 0);
+    this.setPhase(hostileAircraftCount > 0 ? MISSION_PHASE.CONTACT : MISSION_PHASE.OBJECTIVE);
   }
 
   enterRtb() {

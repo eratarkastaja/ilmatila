@@ -9,6 +9,7 @@ import {
 import { formatNumber, t } from './i18n.js';
 
 const wrapHeading = degrees => THREE.MathUtils.euclideanModulo(degrees, 360);
+const MISSILE_CUE_FADE_SECONDS = 0.7;
 
 export class TacticalHud {
   constructor() {
@@ -23,6 +24,8 @@ export class TacticalHud {
     this.selectedTrackRange = document.querySelector('#selected-track-range');
     this.targetWorldPosition = new THREE.Vector3();
     this.missileApproachCue = document.querySelector('#missile-approach-cue');
+    this.missileCueActive = false;
+    this.missileCueFadeRemaining = 0;
     this.gunAimCue = document.querySelector('#gun-aim-cue');
     this.missionWaypointCue = document.querySelector('#mission-waypoint-cue');
     this.verticalSpeed = document.querySelector('#vertical-speed');
@@ -87,14 +90,26 @@ export class TacticalHud {
     const missileThreat = combat.projectileSystem?.missileThreat;
     const launchSource = combat.missileLaunchTimer > 0 ? combat.missileLaunchSource : null;
     const threatPosition = missileThreat?.mesh?.position ?? launchSource?.mesh?.position;
-    if (this.missileApproachCue && threatPosition && !combat.destroyed) {
-      this.placeWorldMarker(this.missileApproachCue, this.missileMarkerPosition.copy(threatPosition), camera);
-      const eta = combat.projectileSystem.missileThreatEta;
-      this.missileApproachCue.classList.toggle('urgent', Boolean(missileThreat && eta < 5.4));
-      this.missileApproachCue.classList.toggle('launch-detected', !missileThreat);
-    } else if (this.missileApproachCue) {
-      this.missileApproachCue.hidden = true;
-      this.missileApproachCue.classList.remove('urgent', 'launch-detected');
+    if (this.missileApproachCue) {
+      if (threatPosition && !combat.destroyed) {
+        this.placeWorldMarker(this.missileApproachCue, this.missileMarkerPosition.copy(threatPosition), camera);
+        const eta = combat.projectileSystem.missileThreatEta;
+        this.missileApproachCue.classList.toggle('urgent', Boolean(missileThreat && eta < 5.4));
+        this.missileApproachCue.classList.toggle('launch-detected', !missileThreat);
+        this.missileApproachCue.classList.add('visible');
+        this.missileCueActive = true;
+        this.missileCueFadeRemaining = 0;
+      } else {
+        if (this.missileCueActive) {
+          this.missileCueActive = false;
+          this.missileCueFadeRemaining = MISSILE_CUE_FADE_SECONDS;
+          this.missileApproachCue.classList.remove('visible', 'urgent', 'launch-detected');
+        }
+        if (this.missileCueFadeRemaining > 0) {
+          this.missileCueFadeRemaining = Math.max(0, this.missileCueFadeRemaining - dt);
+        }
+        if (this.missileCueFadeRemaining === 0) this.missileApproachCue.hidden = true;
+      }
     }
 
     const radar = combat.radar;
@@ -104,7 +119,10 @@ export class TacticalHud {
       if (this.selectedTrackPanel) this.selectedTrackPanel.hidden = true;
       return;
     }
-    const targetPosition = this.targetWorldPosition.copy(target.mesh.position);
+    const lastKnownBearing = !radar.targetInSensorRange && radar.hasLastKnownPosition;
+    const targetPosition = this.targetWorldPosition.copy(
+      lastKnownBearing ? radar.targetLastKnownPosition : target.mesh.position,
+    );
     if (radar.targetDomain === 'ground') targetPosition.y += (target.mesh.userData.vehicleSpec?.totalHeight ?? 2.5) * 0.5;
     this.placeWorldMarker(this.targetDesignator, targetPosition, camera);
     const range = targetPosition.distanceTo(player.position);
@@ -115,24 +133,27 @@ export class TacticalHud {
     const targetType = t(groundTarget ? 'combat.targetGround' : 'combat.targetAir');
     const platform = target.mesh.userData.platformName ?? target.label;
     const hostiles = (groundTarget ? combat.redUnits : combat.enemies)
-      .filter(unit => !unit.dead && combat.radar.tracks.has(unit.mesh));
+      .filter(unit => !unit.dead);
     const targetIndex = hostiles.indexOf(target);
     const targetNumber = targetIndex >= 0
       ? t('combat.targetNumber', { number: targetIndex + 1, total: hostiles.length })
       : targetType;
     if (this.targetCode) this.targetCode.textContent = platform ? `${targetNumber} · ${platform}` : targetNumber;
-    const trackState = !radar.inLockEnvelope
-      ? 'hud.trackOutOfEnvelope'
-      : radar.lockCueConfirmed
-        ? 'hud.trackLocked'
-        : radar.lockCueTarget
-          ? 'hud.trackAcquiring'
-          : 'hud.trackSelected';
+    const trackState = !radar.targetInSensorRange
+      ? 'hud.trackBearingOnly'
+      : !radar.inLockEnvelope
+        ? 'hud.trackOutOfEnvelope'
+        : radar.lockCueConfirmed
+          ? 'hud.trackLocked'
+          : radar.lockCueTarget
+            ? 'hud.trackAcquiring'
+            : 'hud.trackSelected';
     if (this.selectedTrackPanel) {
       this.selectedTrackPanel.hidden = false;
       this.selectedTrackPanel.classList.toggle('locked', radar.lockCueConfirmed);
       this.selectedTrackPanel.classList.toggle('acquiring', radar.lockCueTarget && !radar.lockCueConfirmed);
       this.selectedTrackPanel.classList.toggle('out-of-range', !radar.inLockEnvelope);
+      this.selectedTrackPanel.classList.toggle('sensor-lost', !radar.targetInSensorRange);
       this.selectedTrackPanel.style.setProperty('--track-progress', String(THREE.MathUtils.clamp(radar.lock, 0, 1)));
     }
     if (this.selectedTrackState) {
@@ -151,16 +172,19 @@ export class TacticalHud {
       this.selectedTrackRange.textContent = rangeText;
     }
     const label = this.targetDesignator.querySelector('small');
-    const lockText = !radar.inLockEnvelope
-      ? t('combat.outOfRange')
-      : radar.lockCueConfirmed
-        ? t('combat.locked')
-        : radar.lockCueTarget
-          ? t('combat.locking', { percent: Math.round(radar.lock * 100) })
-          : t('combat.aimAtSelected');
+    const lockText = !radar.targetInSensorRange
+      ? t('combat.sensorContactLost')
+      : !radar.inLockEnvelope
+        ? t('combat.outOfRange')
+        : radar.lockCueConfirmed
+          ? t('combat.locked')
+          : radar.lockCueTarget
+            ? t('combat.locking', { percent: Math.round(radar.lock * 100) })
+            : t('combat.aimAtSelected');
     if (label) label.textContent = `${lockText} · ${rangeText}`;
     this.targetDesignator.classList.toggle('ground-target', groundTarget);
     this.targetDesignator.classList.toggle('out-of-range', !radar.inLockEnvelope);
+    this.targetDesignator.classList.toggle('sensor-lost', !radar.targetInSensorRange);
     this.targetDesignator.classList.toggle('acquiring', radar.lockCueTarget && !radar.lockCueConfirmed);
     this.targetDesignator.classList.toggle('locked', radar.lockCueConfirmed);
     this.targetDesignator.style.setProperty('--lock-progress', `${THREE.MathUtils.clamp(radar.lock, 0, 1) * 100}%`);

@@ -50,8 +50,8 @@ export class CombatStressScenario {
       this.geometryBeforeCleanup=this.renderer.info.memory.geometries;
       const enemy=this.combat.enemies.find(unit=>!unit.dead);
       const ground=this.combat.redUnits.find(unit=>!unit.dead);
-      if(enemy)this.combat.killJet(enemy,false);
-      if(ground)this.combat.destroyUnit(ground);
+      if(enemy)this.combat.destructionSystem.destroyAircraft(enemy,false);
+      if(ground)this.combat.destructionSystem.destroyGroundUnit(ground);
       this.geometryAfterCleanup=this.renderer.info.memory.geometries;
     }
 
@@ -70,7 +70,7 @@ export class CombatStressScenario {
       effectPosition.copy(this.player.position).add(
         this._offset.set((Math.random() - .5) * 900, (Math.random() - .5) * 360, 300 + Math.random() * 1100),
       );
-      this.combat.addExplosion(effectPosition, .72 + Math.random() * .55);
+      this.combat.combatEffects.addExplosion(effectPosition, .72 + Math.random() * .55);
       this.effectClock -= .34;
     }
 
@@ -78,7 +78,7 @@ export class CombatStressScenario {
       effectPosition.copy(this.player.position).add(
         this._offset.set((Math.random() - .5) * 1100, (Math.random() - .5) * 420, 150 + Math.random() * 1000),
       );
-      this.combat.addSpark(effectPosition);
+      this.combat.combatEffects.addSpark(effectPosition);
       this.sparkClock -= .08;
     }
   }
@@ -102,6 +102,7 @@ export class CombatStressScenario {
       mesh,
       velocity: direction.clone().multiplyScalar(profile.speed),
       speed: profile.speed,
+      turnRate: profile.turnRate,
       life: profile.life,
       burnRemaining: profile.burnTime,
       coastDrag: profile.coastDrag,
@@ -148,7 +149,7 @@ export class CombatStressScenario {
       groundUnits: this.combat.friends.length + this.combat.redUnits.length,
       playerProjectiles: this.combat.playerShots.length,
       hostileProjectiles: this.combat.hostiles.length,
-      effects: this.combat.effects.length,
+      effects: this.combat.combatEffects.activeCount,
       destroyedAircraft: this.combat.enemies.reduce((count,unit)=>count+(unit.dead?1:0),0),
       destroyedGroundUnits: this.combat.redUnits.reduce((count,unit)=>count+(unit.dead?1:0),0),
       cleanupProbe: this.cleanupProbed,

@@ -12,15 +12,12 @@ const flareInnerPlumeMaterial = new THREE.MeshBasicMaterial({
   color: '#ffd16c', transparent: true, opacity: .9,
   blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false,
 });
-const chaffDecoyGeo = new THREE.TetrahedronGeometry(.18, 0);
-const chaffDecoyMaterial = new THREE.MeshBasicMaterial({ color: '#d9e2d8', transparent: true, opacity: .72, toneMapped: false });
 const localForward = new THREE.Vector3(0, 0, 1);
 const localRight = new THREE.Vector3(1, 0, 0);
 const localUp = new THREE.Vector3(0, 1, 0);
 const stationaryVelocity = new THREE.Vector3();
 const flareParticleColor = new THREE.Color('#ffe4a0');
 const flareSmokeColor = new THREE.Color('#756458');
-const chaffParticleColor = new THREE.Color('#c9d3ce');
 
 function addFlareBundle(cloud, addTransientGlow) {
   for (let i = 0; i < 3; i++) {
@@ -60,7 +57,7 @@ function disposeTransientMaterials(object) {
   });
 }
 
-/** Owns flare/chaff inventory, deployment, decoy motion and cleanup. */
+/** Owns flare inventory, deployment, decoy motion and cleanup. */
 export class CountermeasureSystem {
   constructor({
     scene, player, playerVelocity, fx, audio, decoys = [], playerShots = [], hostileShots = [],
@@ -119,34 +116,17 @@ export class CountermeasureSystem {
     addFlareBundle(flareCloud, this.addTransientGlow);
     this.scene.add(flareCloud);
     this.decoys.push({
-      team: 'player', type: 'ir', mesh: flareCloud, position: flareCloud.position,
+      team: 'player', source: this.player, type: 'ir', mesh: flareCloud, position: flareCloud.position,
       previousPosition: flareCloud.position.clone(),
       velocity: flareVelocity,
-      life: 2.7, maxLife: 2.7, active: true, age: 0, trailClock: 0,
-    });
-
-    const chaffCloud = new THREE.Group();
-    chaffCloud.position.copy(this.player.position).addScaledVector(rear, 4).addScaledVector(up, -1);
-    for (let i = 0; i < 18; i++) {
-      const piece = new THREE.Mesh(chaffDecoyGeo, chaffDecoyMaterial);
-      piece.position.set((Math.random() - .5) * 5, (Math.random() - .5) * 4, (Math.random() - .5) * 6);
-      piece.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-      chaffCloud.add(piece);
-    }
-    this.scene.add(chaffCloud);
-    this.decoys.push({
-      team: 'player', type: 'radar', mesh: chaffCloud, position: chaffCloud.position,
-      previousPosition: chaffCloud.position.clone(),
-      velocity: this.playerVelocity.clone().addScaledVector(rear, 62)
-        .addScaledVector(right, (Math.random() - .5) * 12).addScaledVector(up, -5),
-      life: 2.7, maxLife: 2.7, active: true, age: 0, trailClock: 0,
+      life: 2.7, maxLife: 2.7, active: true, age: 0, trailClock: 0, spoofChance: .62,
     });
     this.audio?.playCountermeasure();
     this.onInventoryChange();
     return true;
   }
 
-  deployHostile(enemy, seeker = null) {
+  deployHostile(enemy) {
     if (!enemy?.mesh || enemy.dead || enemy.countermeasures <= 0 || enemy.countermeasureCooldown > 0) return false;
     enemy.countermeasures--;
     enemy.countermeasureCooldown = (enemy.countermeasureCooldownBase ?? 4.5)
@@ -160,33 +140,20 @@ export class CountermeasureSystem {
     const rear = localForward.clone().negate().applyQuaternion(attitude).normalize();
     const right = localRight.clone().applyQuaternion(attitude).normalize();
     const up = localUp.clone().applyQuaternion(attitude).normalize();
-    const types = seeker ? [seeker] : ['ir', 'radar'];
-    for (const type of types) {
-      const cloud = new THREE.Group();
-      cloud.position.copy(enemy.mesh.position).addScaledVector(rear, type === 'ir' ? 6 : 4);
-      cloud.position.addScaledVector(up, type === 'ir' ? 1 : -1);
-      const velocity = (enemy.velocity ?? stationaryVelocity).clone()
-        .addScaledVector(rear, type === 'ir' ? 105 : 62)
-        .addScaledVector(right, (Math.random() - .5) * 18)
-        .addScaledVector(up, type === 'ir' ? 18 : -5);
-      if (type === 'ir') {
-        cloud.quaternion.setFromUnitVectors(localForward, this._orientation.copy(velocity).normalize());
-        addFlareBundle(cloud, this.addTransientGlow);
-      } else {
-        for (let i = 0; i < 18; i++) {
-          const piece = new THREE.Mesh(chaffDecoyGeo, chaffDecoyMaterial);
-          piece.position.set((Math.random() - .5) * 5, (Math.random() - .5) * 4, (Math.random() - .5) * 6);
-          piece.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-          cloud.add(piece);
-        }
-      }
-      this.scene.add(cloud);
-      this.decoys.push({
-        team: 'enemy', source: enemy, type, mesh: cloud, position: cloud.position,
-        previousPosition: cloud.position.clone(), velocity, life: 2.7, maxLife: 2.7,
-        active: true, age: 0, trailClock: 0, spoofChance: type === 'ir' ? .62 : .58,
-      });
-    }
+    const cloud = new THREE.Group();
+    cloud.position.copy(enemy.mesh.position).addScaledVector(rear, 6).addScaledVector(up, 1);
+    const velocity = (enemy.velocity ?? stationaryVelocity).clone()
+      .addScaledVector(rear, 105)
+      .addScaledVector(right, (Math.random() - .5) * 18)
+      .addScaledVector(up, 18);
+    cloud.quaternion.setFromUnitVectors(localForward, this._orientation.copy(velocity).normalize());
+    addFlareBundle(cloud, this.addTransientGlow);
+    this.scene.add(cloud);
+    this.decoys.push({
+      team: 'enemy', source: enemy, type: 'ir', mesh: cloud, position: cloud.position,
+      previousPosition: cloud.position.clone(), velocity, life: 2.7, maxLife: 2.7,
+      active: true, age: 0, trailClock: 0, spoofChance: .62,
+    });
     return true;
   }
 
@@ -199,45 +166,33 @@ export class CountermeasureSystem {
         decoy.previousPosition.copy(decoy.position);
         decoy.mesh.position.addScaledVector(decoy.velocity, dt);
         decoy.velocity.multiplyScalar(Math.exp(-.24 * dt));
-        if (decoy.type === 'radar') decoy.mesh.rotation.y += dt * .4;
         const progress = 1 - decoy.life / decoy.maxLife;
-        if (decoy.type === 'ir') {
-          decoy.mesh.scale.setScalar(1 - progress * .18);
-          for (const child of decoy.mesh.children) {
-            const flicker = .78 + Math.sin(decoy.age * 47 + (child.userData.flickerPhase ?? child.position.x)) * .22;
-            if (child.userData.flareGlow) {
-              child.material.opacity = (1 - progress) ** .72 * flicker;
-              child.scale.setScalar(child.userData.baseSize * (.78 + progress * .2) * flicker);
-            } else if (child.userData.flarePlume) {
-              child.scale.x = flicker;
-              child.scale.y = .72 + flicker * .28;
-            }
+        decoy.mesh.scale.setScalar(1 - progress * .18);
+        for (const child of decoy.mesh.children) {
+          const flicker = .78 + Math.sin(decoy.age * 47 + (child.userData.flickerPhase ?? child.position.x)) * .22;
+          if (child.userData.flareGlow) {
+            child.material.opacity = (1 - progress) ** .72 * flicker;
+            child.scale.setScalar(child.userData.baseSize * (.78 + progress * .2) * flicker);
+          } else if (child.userData.flarePlume) {
+            child.scale.x = flicker;
+            child.scale.y = .72 + flicker * .28;
           }
-          decoy.trailClock -= dt;
-          if (decoy.trailClock <= 0) {
-            const drift = this._drift.copy(decoy.velocity).multiplyScalar(.055)
-              .add(this._jitter.set((Math.random() - .5) * 5, Math.random() * 6, (Math.random() - .5) * 5));
-            const hotEmber = Math.random() < .72;
-            this.fx?.emitParticle(
-              decoy.position,
-              drift,
-              hotEmber ? flareParticleColor : flareSmokeColor,
-              hotEmber ? .22 + Math.random() * .18 : .48 + Math.random() * .28,
-              hotEmber ? .55 + Math.random() * .8 : 1.1 + Math.random() * .7,
-              hotEmber ? .9 : .2,
-              hotEmber ? .9 : .12,
-            );
-            decoy.trailClock = .025 + Math.random() * .055;
-          }
-        } else {
-          decoy.mesh.scale.setScalar(1 + progress * .72);
-          decoy.trailClock -= dt;
-          if (decoy.trailClock <= 0) {
-            const drift = this._drift.copy(decoy.velocity).multiplyScalar(.025)
-              .add(this._jitter.set((Math.random() - .5) * 9, (Math.random() - .5) * 6, (Math.random() - .5) * 9));
-            this.fx?.emitParticle(decoy.position, drift, chaffParticleColor, .34, 1.15 + Math.random() * .55, .58, .3);
-            decoy.trailClock = .11;
-          }
+        }
+        decoy.trailClock -= dt;
+        if (decoy.trailClock <= 0) {
+          const drift = this._drift.copy(decoy.velocity).multiplyScalar(.055)
+            .add(this._jitter.set((Math.random() - .5) * 5, Math.random() * 6, (Math.random() - .5) * 5));
+          const hotEmber = Math.random() < .72;
+          this.fx?.emitParticle(
+            decoy.position,
+            drift,
+            hotEmber ? flareParticleColor : flareSmokeColor,
+            hotEmber ? .22 + Math.random() * .18 : .48 + Math.random() * .28,
+            hotEmber ? .55 + Math.random() * .8 : 1.1 + Math.random() * .7,
+            hotEmber ? .9 : .2,
+            hotEmber ? .9 : .12,
+          );
+          decoy.trailClock = .025 + Math.random() * .055;
         }
         if (decoy.life <= 0) {
           decoy.active = false;

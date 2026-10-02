@@ -1,5 +1,5 @@
 /** Keyboard state scoped to one combat session. */
-const GAME_ACTION_CODES = new Set(['Space', 'KeyM', 'KeyR', 'KeyT', 'KeyC', 'Digit1', 'Digit2', 'Digit3', 'Digit4']);
+const GAME_ACTION_CODES = new Set(['Space', 'KeyM', 'KeyR', 'KeyT', 'KeyY', 'KeyF', 'Digit1', 'Digit2', 'Digit3', 'Digit4']);
 const MOUSE_ACTION_CODES = new Map([[0, 'MousePrimary'], [2, 'MouseSecondary']]);
 
 export class CombatInput {

@@ -6,8 +6,11 @@ import { releaseMissile, updateMissileMotor } from './projectiles.js';
 const forward = new THREE.Vector3(0, 0, 1);
 const stationaryVelocity = new THREE.Vector3();
 const localBulletAxis = new THREE.Vector3(0, 1, 0);
-const MISSILE_TURN_RATE = 1.9;
+const MISSILE_TURN_RATE = .78;
 const HOSTILE_MISSILE_TURN_RATE = 1.18;
+const FLARE_SEEKER_RANGE = 1150;
+const FLARE_TARGET_SEPARATION = 520;
+const FLARE_SEEKER_COSINE = Math.cos(THREE.MathUtils.degToRad(55));
 const _up=new THREE.Vector3(0,1,0);
 const _right=new THREE.Vector3(1,0,0);
 
@@ -69,8 +72,61 @@ export class ProjectileSystem {
     this._targetStart=new THREE.Vector3();
     this._steeringDirection=new THREE.Vector3();
     this._steeringAxis=new THREE.Vector3();
+    this._previousDirection=new THREE.Vector3();
+    this._flareOffset=new THREE.Vector3();
+    this._seekerDirection=new THREE.Vector3();
+    this._orientationDelta=new THREE.Quaternion();
     this._tracerDirection=new THREE.Vector3();
     this._impactPosition=new THREE.Vector3();
+  }
+
+  tryAcquireFlare(shot, targetPosition, decoys, team, source) {
+    if (shot.seeker !== 'ir') return null;
+    const missileDirection = this._seekerDirection.copy(shot.velocity).normalize();
+    const targetRange = this._targetOffset.subVectors(targetPosition, shot.mesh.position).length();
+    let nearest = FLARE_SEEKER_RANGE;
+    let candidate = null;
+    for (const decoy of decoys) {
+      if (!decoy.active || decoy.team !== team || decoy.source !== source || decoy.type !== 'ir'
+        || shot.decoyAttempts?.has(decoy)) continue;
+      if (decoy.position.distanceTo(targetPosition) > FLARE_TARGET_SEPARATION) continue;
+      const flareOffset = this._flareOffset.subVectors(decoy.position, shot.mesh.position);
+      const range = flareOffset.length();
+      if (range >= nearest || range + 45 >= targetRange) continue;
+      if (range > 0 && missileDirection.dot(flareOffset.multiplyScalar(1 / range)) < FLARE_SEEKER_COSINE) continue;
+      nearest = range;
+      candidate = decoy;
+    }
+    if (!candidate) return null;
+
+    shot.decoyAttempts ??= new Set();
+    shot.decoyAttempts.add(candidate);
+    const ageRatio = THREE.MathUtils.clamp(candidate.age / candidate.maxLife, 0, 1);
+    const remainingHeat = 1 - ageRatio;
+    const attractionChance = (candidate.spoofChance ?? .62) * (.25 + remainingHeat * .75);
+    return Math.random() < attractionChance ? candidate : null;
+  }
+
+  steerMissile(shot, desiredDirection, turnRate, speed, dt) {
+    const previousDirection = this._previousDirection.copy(shot.velocity);
+    const hasVelocity = previousDirection.lengthSq() > 1e-8;
+    if (hasVelocity) previousDirection.normalize();
+    const direction = turnDirection(
+      shot.velocity,
+      desiredDirection,
+      turnRate * dt,
+      this._steeringDirection,
+      this._steeringAxis,
+    );
+    shot.velocity.copy(direction).multiplyScalar(speed);
+    if (hasVelocity) {
+      // Rotate from the missile's current attitude. Rebuilding a quaternion
+      // from world-forward each frame can roll-flip when the flight path
+      // passes through the antiparallel singularity.
+      shot.mesh.quaternion.premultiply(this._orientationDelta.setFromUnitVectors(previousDirection, direction));
+    } else {
+      shot.mesh.quaternion.setFromUnitVectors(forward, direction);
+    }
   }
 
   addPlayerProjectile(projectile) {
@@ -126,20 +182,9 @@ export class ProjectileSystem {
       if (shot.homing && shot.guidanceActive && shot.target && !shot.target.dead) {
         if (shot.decoyTarget && !shot.decoyTarget.active) shot.decoyTarget = null;
         if (!shot.decoyTarget && shot.seeker) {
-          let nearest = 1250;
-          let candidate = null;
-          for (const decoy of decoys) {
-            if (!decoy.active || decoy.team !== 'enemy' || decoy.source !== shot.target || decoy.type !== shot.seeker || shot.decoyAttempts.has(decoy)) continue;
-            const distance = shot.mesh.position.distanceTo(decoy.position);
-            if (distance < nearest) {
-              nearest = distance;
-              candidate = decoy;
-            }
-          }
-          if (candidate) {
-            shot.decoyAttempts.add(candidate);
-            if (Math.random() < candidate.spoofChance) shot.decoyTarget = candidate;
-          }
+          shot.decoyTarget = this.tryAcquireFlare(
+            shot, shot.target.mesh.position, decoys, 'enemy', shot.target,
+          );
         }
         const missileSpeed = shot.speed ?? (shot.targetDomain === 'ground' ? 270 : 350);
         let aimPoint;
@@ -152,10 +197,8 @@ export class ProjectileSystem {
           aimPoint = this._aimPoint.copy(shot.target.mesh.position).addScaledVector(targetVelocity, leadTime);
         }
         const desiredDirection = aimPoint.sub(shot.mesh.position).normalize();
-        const turnRate = shot.targetDomain === 'ground' ? 1.5 : MISSILE_TURN_RATE;
-        const direction = turnDirection(shot.velocity, desiredDirection, turnRate * dt,this._steeringDirection,this._steeringAxis);
-        shot.velocity.copy(direction).multiplyScalar(missileSpeed);
-        shot.mesh.quaternion.setFromUnitVectors(forward, direction);
+        const turnRate = shot.turnRate ?? (shot.targetDomain === 'ground' ? 1.5 : MISSILE_TURN_RATE);
+        this.steerMissile(shot, desiredDirection, turnRate, missileSpeed, dt);
         if (Math.random() < .04) this.addSpark(shot.mesh.position);
       }
       if (shot.homing) audio?.updateMissileFlight(shot.mesh.id, shot.mesh.position.distanceTo(player.position), dt);
@@ -275,15 +318,7 @@ export class ProjectileSystem {
         if (shot.guidanceActive) {
           if (shot.decoyTarget && !shot.decoyTarget.active) shot.decoyTarget = null;
           if (!shot.decoyTarget) {
-            let nearest = 1250;
-            for (const decoy of decoys) {
-              if (!decoy.active || decoy.team !== 'player' || decoy.type !== shot.seeker) continue;
-              const distance = shot.mesh.position.distanceTo(decoy.position);
-              if (distance < nearest) {
-                nearest = distance;
-                shot.decoyTarget = decoy;
-              }
-            }
+            shot.decoyTarget = this.tryAcquireFlare(shot, player.position, decoys, 'player', player);
           }
           const aimTarget = shot.decoyTarget ? shot.decoyTarget.position : player.position;
           const targetVelocity = shot.decoyTarget?.velocity ?? this.playerVelocity ?? stationaryVelocity;
@@ -294,9 +329,7 @@ export class ProjectileSystem {
           const wanted = this._targetOffset.subVectors(aimPoint, shot.mesh.position).normalize();
           const turnRate = shot.turnRate ?? this.hostileMissileTurnRate;
           const energyFactor = shot.motorBurning ? 1 : (shot.coastTurnScale ?? .72);
-          const direction = turnDirection(shot.velocity, wanted, turnRate * energyFactor * dt, this._steeringDirection, this._steeringAxis);
-          shot.velocity.copy(direction).multiplyScalar(missileSpeed);
-          if (shot.velocity.lengthSq() > 1) shot.mesh.quaternion.setFromUnitVectors(forward,this._tracerDirection.copy(shot.velocity).normalize());
+          this.steerMissile(shot, wanted, turnRate * energyFactor, missileSpeed, dt);
         }
         audio?.updateMissileFlight(shot.mesh.id, distanceToPlayer, dt);
         shot.mesh.position.addScaledVector(shot.velocity, dt);

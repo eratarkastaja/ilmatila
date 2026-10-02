@@ -118,7 +118,7 @@ describe('combat radar target and lock logic', () => {
 
   it('uses ground contacts in ground mode and rejects contacts beyond weapon lock range', () => {
     const { radar, indicator } = setupRadar();
-    const hostileVehicle = makeContact(0, 0, 5400);
+    const hostileVehicle = makeContact(0, 0, 7400);
     radar.toggleMode();
     radar.updateContacts(0.016, 0, {
       airFriendly: [], airHostile: [], groundFriendly: [], groundHostile: [hostileVehicle],

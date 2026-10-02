@@ -8,6 +8,7 @@ function makeSystem(overrides = {}) {
   const player = { position: new THREE.Vector3() };
   const playerShots = [];
   const hostiles = [];
+  const decoys = [];
   const hooks = {
     onPlayerDestroyed: vi.fn(),
     onJetDestroyed: vi.fn(),
@@ -37,13 +38,13 @@ function makeSystem(overrides = {}) {
     player,
     playerShots,
     hostiles,
-    decoys: [],
+    decoys,
     collision,
     audio,
     ...hooks,
     ...overrides,
   });
-  return { system, scene, player, playerShots, hostiles, enemies, hooks, audio };
+  return { system, scene, player, playerShots, hostiles, decoys, enemies, hooks, audio };
 }
 
 describe('ProjectileSystem', () => {
@@ -129,5 +130,148 @@ describe('ProjectileSystem', () => {
     expect(hooks.addExplosion).toHaveBeenCalledOnce();
     expect(hostiles).toHaveLength(0);
     expect(player.position).toEqual(new THREE.Vector3());
+  });
+
+  it('keeps radar guided air-to-air missiles on their target when only a flare is released', () => {
+    const { system, scene, playerShots, decoys, enemies } = makeSystem();
+    const targetMesh = new THREE.Object3D();
+    targetMesh.position.set(0, 0, 1000);
+    scene.add(targetMesh);
+    const target = { mesh: targetMesh, velocity: new THREE.Vector3(), dead: false, hp: 10 };
+    enemies.push(target);
+    const flareMesh = new THREE.Group();
+    flareMesh.position.set(0, 0, 800);
+    scene.add(flareMesh);
+    const flare = {
+      team: 'enemy', source: target, type: 'ir', mesh: flareMesh, position: flareMesh.position,
+      previousPosition: flareMesh.position.clone(), velocity: new THREE.Vector3(),
+      life: 2.7, maxLife: 2.7, active: true, age: 0, spoofChance: 1,
+    };
+    decoys.push(flare);
+    const missileMesh = new THREE.Object3D();
+    scene.add(missileMesh);
+    const missile = {
+      homing: true, seeker: 'radar', target, targetDomain: 'air',
+      mesh: missileMesh, velocity: new THREE.Vector3(0, 0, 650), speed: 650,
+      life: 5, burnRemaining: 2, coastDrag: .07, motorBurning: true, guidanceActive: true,
+      decoyTarget: null, decoyAttempts: new Set(), damage: 1,
+    };
+    playerShots.push(missile);
+
+    system.update(.02);
+
+    expect(missile.decoyTarget).toBeNull();
+    expect(missile.velocity.length()).toBeGreaterThan(600);
+  });
+
+  it('limits air-to-air missile turns smoothly while preserving flight speed', () => {
+    const { system, scene, playerShots, enemies } = makeSystem();
+    const targetMesh = new THREE.Object3D();
+    targetMesh.position.set(1000, 0, 0);
+    scene.add(targetMesh);
+    const target = { mesh: targetMesh, velocity: new THREE.Vector3(), dead: false, hp: 10 };
+    enemies.push(target);
+    const mesh = new THREE.Object3D();
+    scene.add(mesh);
+    const missile = {
+      homing: true, seeker: 'radar', target, targetDomain: 'air',
+      mesh, velocity: new THREE.Vector3(0, 0, 650), speed: 650, turnRate: .78,
+      life: 5, burnRemaining: 2, coastDrag: .07, motorBurning: true, guidanceActive: true,
+      decoyTarget: null, decoyAttempts: new Set(), damage: 1,
+    };
+    const initialDirection = missile.velocity.clone().normalize();
+    playerShots.push(missile);
+
+    system.update(.1);
+
+    expect(initialDirection.angleTo(missile.velocity)).toBeLessThanOrEqual(.78 * .1 + 1e-8);
+    expect(missile.velocity.length()).toBeCloseTo(650, 6);
+    expect(mesh.position.length()).toBeGreaterThan(64);
+  });
+
+  it('continues missile coasting after motor burnout instead of freezing in place', () => {
+    const { system, scene, playerShots, enemies } = makeSystem();
+    const targetMesh = new THREE.Object3D();
+    targetMesh.position.set(0, 0, 1000);
+    scene.add(targetMesh);
+    const target = { mesh: targetMesh, velocity: new THREE.Vector3(), dead: false, hp: 10 };
+    enemies.push(target);
+    const mesh = new THREE.Object3D();
+    scene.add(mesh);
+    const missile = {
+      homing: true, seeker: 'radar', target, targetDomain: 'air',
+      mesh, velocity: new THREE.Vector3(0, 0, 650), speed: 650, turnRate: .78,
+      life: 5, burnRemaining: .01, coastDrag: .07, motorBurning: true, guidanceActive: true,
+      decoyTarget: null, decoyAttempts: new Set(), damage: 1,
+    };
+    playerShots.push(missile);
+
+    system.update(.02);
+
+    expect(missile.motorBurning).toBe(false);
+    expect(missile.guidanceActive).toBe(false);
+    expect(mesh.position.length()).toBeGreaterThan(12);
+    expect(missile.velocity.length()).toBeGreaterThan(640);
+  });
+
+  it('lets an infrared missile take a fresh flare only when it is ahead of and separated from its target', () => {
+    const { system, player, scene, hostiles, decoys } = makeSystem();
+    player.position.set(0, 0, 1000);
+    const flareMesh = new THREE.Group();
+    flareMesh.position.set(0, 0, 800);
+    scene.add(flareMesh);
+    decoys.push({
+      team: 'player', source: player, type: 'ir', mesh: flareMesh, position: flareMesh.position,
+      previousPosition: flareMesh.position.clone(), velocity: new THREE.Vector3(),
+      life: 2.7, maxLife: 2.7, active: true, age: 0, spoofChance: 1,
+    });
+    const missileMesh = new THREE.Object3D();
+    scene.add(missileMesh);
+    const missile = {
+      projectile: true, missile: true, seeker: 'ir', mesh: missileMesh,
+      velocity: new THREE.Vector3(0, 0, 305), speed: 305,
+      life: 8, burnRemaining: 4, coastDrag: .12, motorBurning: true, guidanceActive: true,
+      guidanceAfterBurnout: true, turnRate: .8, targetDomain: 'air', decoyTarget: null,
+      damage: 1, warningClock: 2,
+    };
+    hostiles.push(missile);
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    system.update(.02);
+
+    random.mockRestore();
+    expect(missile.decoyTarget).toBe(decoys[0]);
+    expect(missile.velocity.length()).toBeGreaterThan(300);
+  });
+
+  it('does not let a flare pull an infrared missile from behind its seeker direction', () => {
+    const { system, player, scene, hostiles, decoys } = makeSystem();
+    player.position.set(0, 0, 0);
+    const flareMesh = new THREE.Group();
+    flareMesh.position.set(0, 0, 300);
+    scene.add(flareMesh);
+    decoys.push({
+      team: 'player', source: player, type: 'ir', mesh: flareMesh, position: flareMesh.position,
+      previousPosition: flareMesh.position.clone(), velocity: new THREE.Vector3(),
+      life: 2.7, maxLife: 2.7, active: true, age: 0, spoofChance: 1,
+    });
+    const missileMesh = new THREE.Object3D();
+    missileMesh.position.set(0, 0, 1200);
+    scene.add(missileMesh);
+    const missile = {
+      projectile: true, missile: true, seeker: 'ir', mesh: missileMesh,
+      velocity: new THREE.Vector3(0, 0, 305), speed: 305,
+      life: 8, burnRemaining: 4, coastDrag: .12, motorBurning: true, guidanceActive: true,
+      guidanceAfterBurnout: true, turnRate: .8, targetDomain: 'air', decoyTarget: null,
+      damage: 1, warningClock: 2,
+    };
+    hostiles.push(missile);
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    system.update(.02);
+
+    random.mockRestore();
+    expect(missile.decoyTarget).toBeNull();
+    expect(missile.velocity.length()).toBeGreaterThan(300);
   });
 });

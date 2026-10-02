@@ -5,12 +5,12 @@ import { createAfterburnerFlame } from '../aircraft/plane.js';
 // missiles to steer indefinitely or across an entire theater.
 export const MISSILE_PROFILES = {
   playerAir: {
-    designation: 'AIM-120C · AMRAAM', count: 6, damage: 5, seeker: 'radar',
-    speed: 600, burnTime: 10.5, life: 15, coastDrag: 0.1, proximityRadius: 24, proximityDamage: .8,
+    designation: 'AIM-120C · AMRAAM', count: 6, damage: 5, seeker: 'radar', maxLaunchRange: 12000,
+    speed: 650, burnTime: 14, life: 20, coastDrag: 0.07, turnRate: .78, proximityRadius: 24, proximityDamage: .8,
   },
   playerGround: {
-    designation: 'AGM-65D · MAVERICK', count: 4, damage: 9, seeker: 'ir',
-    speed: 400, burnTime: 11.5, life: 14, coastDrag: 0.16, proximityRadius: 17, proximityDamage: .82,
+    designation: 'AGM-65D · MAVERICK', count: 10, damage: 9, seeker: 'ir', maxLaunchRange: 6800,
+    speed: 440, burnTime: 14, life: 18, coastDrag: 0.11, turnRate: 1.05, proximityRadius: 17, proximityDamage: .82,
   },
   hostile: { speed: 305, burnTime: 10, life: 15, coastDrag: 0.1 },
 };

@@ -13,6 +13,10 @@ function emptyState() {
   };
 }
 
+function nonNegativeFinite(value) {
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
 function readState(storage) {
   try {
     const parsed = JSON.parse(storage?.getItem(STORAGE_KEY) ?? 'null');
@@ -78,14 +82,17 @@ export class CareerProgress {
   }
 
   recordMission(result) {
-    const mission = MISSIONS[result.missionId];
-    if (!mission) return { newRecord: false, unlocked: [] };
+    const missionId = result?.missionId;
+    if (typeof missionId !== 'string' || !Object.hasOwn(MISSIONS, missionId)) {
+      return { newRecord: false, unlocked: [] };
+    }
+    const mission = MISSIONS[missionId];
     const difficulty = VALID_DIFFICULTIES.has(result.difficulty) ? result.difficulty : this.difficulty;
     const entry = {
-      score: Math.max(0, Math.round(result.score ?? 0)),
-      accuracy: Math.max(0, Math.min(1, result.accuracy ?? 0)),
-      damageTaken: Math.max(0, result.damageTaken ?? 0),
-      missionTime: Math.max(0, result.missionTime ?? 0),
+      score: Math.round(nonNegativeFinite(result.score)),
+      accuracy: Math.min(1, nonNegativeFinite(result.accuracy)),
+      damageTaken: nonNegativeFinite(result.damageTaken),
+      missionTime: nonNegativeFinite(result.missionTime),
       completed: result.outcome === 'complete',
     };
     const previous = this.getBest(mission.id, difficulty);

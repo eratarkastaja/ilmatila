@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { t } from '../ui/i18n.js';
+import { MISSILE_PROFILES } from './projectiles.js';
 
 /** Owns radar contacts, search mode and the arcade-friendly weapon lock cue. */
 export class CombatRadar {
@@ -7,19 +8,20 @@ export class CombatRadar {
     this.player = player;
     this.audio = audio;
     this.mode = 'air';
-    // F-35 sensor fusion gives an earlier search track; weapons retain their
-    // existing lock envelope so the extra awareness is not extra missile range.
-    // Air picture acquisition reaches well beyond the enemy's visual/sensor
-    // reaction envelope; weapon lock range remains deliberately shorter.
-    this.airRange = 14000;
-    this.airLockRange = 8500;
-    this.groundRange = 6000;
+    // Search sensors reach beyond the weapon envelopes, while launch ranges
+    // stay in sync with the missile profiles.
+    this.airRange = 27000;
+    this.airLockRange = MISSILE_PROFILES.playerAir.maxLaunchRange;
+    this.groundRange = 11000;
     this.range = this.airRange;
-    this.groundLockRange = 5200;
+    this.groundLockRange = MISSILE_PROFILES.playerGround.maxLaunchRange;
     this.target = null;
     this.targetDomain = null;
+    this.targetLastKnownPosition = new THREE.Vector3();
+    this.hasLastKnownPosition = false;
     this.lock = 0;
     this.inLockEnvelope = false;
+    this.targetInSensorRange = false;
     this.lockCueTarget = false;
     this.lockCueConfirmed = false;
     this.tracks = new Map();
@@ -87,6 +89,10 @@ export class CombatRadar {
       track.age = 0;
       track.domain = domain;
       track.team = team;
+      if (this.target?.mesh === mesh) {
+        this.targetLastKnownPosition.copy(mesh.position);
+        this.hasLastKnownPosition = true;
+      }
       const selected = this.target?.mesh === mesh;
       const className = selected
         ? `radar-contact ${domain} ${team}${this.lockCueConfirmed ? ' target locked' : ' target'}`
@@ -99,7 +105,7 @@ export class CombatRadar {
     }
   }
 
-  cycleTarget(enemies, groundHostiles) {
+  cycleTarget(enemies, groundHostiles, direction = 1) {
     const groundMode = this.mode === 'ground';
     const candidates = (groundMode ? groundHostiles : enemies).filter(contact => {
       if (contact.dead || !this.tracks.has(contact.mesh)) return false;
@@ -108,12 +114,19 @@ export class CombatRadar {
     if (!candidates.length) return false;
 
     const currentIndex = candidates.indexOf(this.target);
-    const next = candidates[(currentIndex + 1) % candidates.length];
+    const step = direction < 0 ? -1 : 1;
+    const nextIndex = currentIndex < 0
+      ? (step > 0 ? 0 : candidates.length - 1)
+      : THREE.MathUtils.euclideanModulo(currentIndex + step, candidates.length);
+    const next = candidates[nextIndex];
     if (next !== this.target) {
       this.target = next;
       this.targetDomain = groundMode ? 'ground' : 'air';
+      this.targetLastKnownPosition.copy(next.mesh.position);
+      this.hasLastKnownPosition = true;
       this.lock = 0;
       this.inLockEnvelope = false;
+      this.targetInSensorRange = true;
       this.lockCueTarget = false;
       this.lockCueConfirmed = false;
       this.crosshair?.classList.remove('locked', 'acquiring');
@@ -129,20 +142,20 @@ export class CombatRadar {
     const boresight = groundMode ? 0.55 : 0.88;
     let candidate = this.target;
 
-    // Only the pilot may select a track. Keep it selected while it remains on
-    // radar, even when it is outside the weapon's boresight.
-    if (!candidate || candidate.dead || !candidates.includes(candidate)
-      || !this.tracks.has(candidate.mesh)
-      || candidate.mesh.position.distanceTo(this.player.position)>this.range) candidate = null;
+    // Keep the pilot's selection after contact loss so the HUD can show its
+    // bearing. It remains ineligible for weapon lock outside sensor range.
+    if (!candidate || candidate.dead || !candidates.includes(candidate)) candidate = null;
 
     const targetChanged = candidate !== this.target;
     const hadTarget = this.lockCueTarget;
     const wasConfirmed = this.lockCueConfirmed && !targetChanged;
     if (targetChanged) this.lock = 0;
     this.target = candidate;
+    if (!candidate) this.hasLastKnownPosition = false;
     const offset = candidate ? this._lockOffset.copy(candidate.mesh.position).sub(this.player.position) : null;
     const distance = offset?.length() ?? Infinity;
-    this.inLockEnvelope = Boolean(candidate && distance <= maxRange);
+    this.targetInSensorRange = Boolean(candidate && distance <= this.range);
+    this.inLockEnvelope = Boolean(candidate && this.targetInSensorRange && distance <= maxRange);
     const inBoresight = Boolean(this.inLockEnvelope && distance > 0 && forward.dot(offset.normalize()) > boresight);
     this.lock = THREE.MathUtils.damp(this.lock, inBoresight ? 1 : 0, inBoresight ? 2.8 : 4, dt);
     this.targetDomain = candidate ? (groundMode ? 'ground' : 'air') : null;
@@ -163,8 +176,10 @@ export class CombatRadar {
   clearLock() {
     this.target = null;
     this.targetDomain = null;
+    this.hasLastKnownPosition = false;
     this.lock = 0;
     this.inLockEnvelope = false;
+    this.targetInSensorRange = false;
     this.lockCueTarget = false;
     this.lockCueConfirmed = false;
     this.crosshair?.classList.remove('locked', 'acquiring');

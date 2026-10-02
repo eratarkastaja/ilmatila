@@ -144,6 +144,7 @@ export class WeaponSystem {
       mesh,
       velocity: direction.clone().multiplyScalar(missileProfile.speed),
       speed: missileProfile.speed,
+      turnRate: missileProfile.turnRate,
       life: missileProfile.life,
       burnRemaining: missileProfile.burnTime,
       coastDrag: missileProfile.coastDrag,
@@ -171,6 +172,10 @@ export class WeaponSystem {
     }
     if (!this.radar.target || this.radar.target.dead) {
       this.showFeedback('combat.aimAtHostile', 1.5);
+      return false;
+    }
+    if (!this.radar.targetInSensorRange) {
+      this.showFeedback('combat.sensorReacquire', 1.5);
       return false;
     }
     if (!this.radar.inLockEnvelope) {

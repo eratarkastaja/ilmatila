@@ -37,17 +37,16 @@ function makeCountermeasures() {
 }
 
 describe('CountermeasureSystem', () => {
-  it('deploys a flare/chaff pair, spends one charge and applies cooldown', () => {
+  it('deploys one flare, spends one charge and applies cooldown', () => {
     const { system, scene, decoys, audio, onInventoryChange } = makeCountermeasures();
 
     expect(system.deployPlayer()).toBe(true);
 
     expect(system.countermeasures).toBe(11);
     expect(system.cooldown).toBe(.85);
-    expect(decoys.map(decoy => [decoy.team, decoy.type])).toEqual([
-      ['player', 'ir'], ['player', 'radar'],
-    ]);
-    expect(scene.children).toHaveLength(2);
+    expect(decoys.map(decoy => [decoy.team, decoy.type])).toEqual([['player', 'ir']]);
+    expect(decoys[0].source).toBe(system.player);
+    expect(scene.children).toHaveLength(1);
     expect(audio.playCountermeasure).toHaveBeenCalledOnce();
     expect(onInventoryChange).toHaveBeenCalledOnce();
   });
@@ -63,11 +62,11 @@ describe('CountermeasureSystem', () => {
     system.countermeasures = 0;
     expect(system.deployPlayer()).toBe(false);
 
-    expect(decoys).toHaveLength(4);
+    expect(decoys).toHaveLength(2);
     expect(audio.playWeaponNoLock).toHaveBeenCalledTimes(2);
   });
 
-  it('deploys only the decoy type requested by hostile missile seeker and starts evasive action', () => {
+  it('deploys a flare and starts evasive action for a hostile aircraft', () => {
     const { system, decoys, scene } = makeCountermeasures();
     const enemy = {
       mesh: new THREE.Object3D(),
@@ -78,7 +77,7 @@ describe('CountermeasureSystem', () => {
     };
     enemy.mesh.position.set(100, 100, 100);
 
-    expect(system.deployHostile(enemy, 'ir')).toBe(true);
+    expect(system.deployHostile(enemy)).toBe(true);
 
     expect(enemy.countermeasures).toBe(1);
     expect(enemy.countermeasureCooldown).toBeGreaterThanOrEqual(4.5);

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { loadCombatAircraft } from '../aircraft/plane.js';
-import { createTerrain, disposeTerrain } from '../environment/terrain.js';
+import { createTerrain, createTerrainLease, disposeTerrain } from '../environment/terrain.js';
 
 function disposeAircraftAsset(asset) {
   const geometries = new Set();
@@ -22,7 +22,7 @@ function disposeAircraftAsset(asset) {
   for (const material of materials) material.dispose();
 }
 
-/** Shares in-flight aircraft and theater loads, including per-caller progress. */
+/** Shares in-flight loads and gives each terrain caller an idempotent dispose lease. */
 export class AssetRepository {
   constructor({ onAircraftLoaded, terrainAnisotropy = 4 } = {}) {
     this.onAircraftLoaded = onAircraftLoaded;
@@ -134,8 +134,8 @@ export class AssetRepository {
         subscribers: new Set(),
         controller: new AbortController(),
         settled: false,
-        claimed: false,
         value: null,
+        leaseReferences: 0,
         promise: null,
       };
       task.promise = createTerrain({
@@ -149,7 +149,13 @@ export class AssetRepository {
           for (const listener of task.listeners.values()) this.notifyProgress(listener, progress, detail, 'terrain');
         },
       }).then(value => {
+        task.settled = true;
         task.value = value;
+        task.leaseReferences = task.subscribers.size;
+        if (task.leaseReferences === 0) {
+          disposeTerrain(task.value);
+          task.value = null;
+        }
         return value;
       }).finally(() => {
         task.settled = true;
@@ -164,18 +170,25 @@ export class AssetRepository {
 
     return new Promise((resolve, reject) => {
       let active = true;
-      const release = () => {
+      const releaseTerrainReference = () => {
+        if (task.leaseReferences <= 0) return;
+        task.leaseReferences -= 1;
+        if (task.leaseReferences === 0 && task.value) {
+          disposeTerrain(task.value);
+          task.value = null;
+        }
+      };
+      const release = ({ transferTerrain = false } = {}) => {
         if (!active) return;
         active = false;
         task.subscribers.delete(subscriber);
         task.listeners.delete(subscriber);
         signal?.removeEventListener('abort', onAbort);
-        if (!task.settled && task.subscribers.size === 0) {
+        if (task.settled && task.value && !transferTerrain) {
+          releaseTerrainReference();
+        } else if (!task.settled && task.subscribers.size === 0) {
           if (this.terrainTasks.get(areaId) === task) this.terrainTasks.delete(areaId);
           task.controller.abort();
-        } else if (task.settled && task.subscribers.size === 0 && !task.claimed && task.value) {
-          disposeTerrain(task.value);
-          task.value = null;
         }
       };
       const onAbort = () => {
@@ -186,9 +199,9 @@ export class AssetRepository {
       signal?.addEventListener('abort', onAbort, { once: true });
       task.promise.then(value => {
         if (!active) return;
-        task.claimed = true;
-        release();
-        resolve(value);
+        const lease = createTerrainLease(value, releaseTerrainReference);
+        release({ transferTerrain: true });
+        resolve(lease);
       }, error => {
         if (!active) return;
         release();

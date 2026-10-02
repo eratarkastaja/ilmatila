@@ -5,16 +5,15 @@ import { AssetRepository } from './assets/asset-repository.js';
 import { makeClouds } from './environment/clouds.js';
 import { MenuRadar } from './ui/menu-radar.js';
 import { FlightControls } from './input/controls.js';
-import { CombatWorld, disposeCombatEffectResources } from './combat/world.js';
+import { disposeCombatEffectResources } from './combat/world.js';
 import { createPreviewTerrain, disposeTerrain, TERRAIN_AREAS } from './environment/terrain.js';
 import { FlightFX } from './effects/fx.js';
 import { GameAudio } from './audio/audio.js';
-import { TacticalHud } from './ui/hud.js';
 import { SunEffects, SUN_DIRECTION } from './environment/sun.js';
 import { ATMOSPHERE } from './environment/atmosphere.js';
 import { MISSIONS } from './mission/missions.js';
 import { CareerProgress } from './mission/progression.js';
-import { CombatStressScenario } from './performance/stress-scenario.js';
+import { SortieController } from './game/sortie-controller.js';
 import { disposeMissilePool } from './combat/projectiles.js';
 import { formatPercent, getLanguage, initializeLanguagePicker, t } from './ui/i18n.js';
 import './ui/styles/base.css';
@@ -111,13 +110,7 @@ const weather = {
   contrailFullAltitude: 6800,
   wind: new THREE.Vector3(5, 0.15, -3),
 };
-let combat = null;
-let stressScenario = null;
-let tacticalHud = null;
-let gameStarted = false;
-let gamePaused = false;
-let launchInProgress = false;
-let aircraftAsset = null;
+let sortie = null;
 let menuStatusDescriptor = { key: 'menu.statusReady', params: {}, state: 'ready' };
 let launchProgressDescriptor = { progress: 0, titleKey: 'menu.launchButton', detailKey: 'menu.launchReadyStatus', params: {} };
 document.addEventListener('ilmatila:languagechange', () => {
@@ -156,17 +149,6 @@ function renderLaunchProgress() {
 function setLaunchProgress(progress, titleKey, detailKey, params = {}) {
   launchProgressDescriptor = { progress, titleKey, detailKey, params };
   renderLaunchProgress();
-}
-
-function withTimeout(promise, milliseconds, reason, onTimeout) {
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => {
-      onTimeout?.();
-      reject(new Error(reason));
-    }, milliseconds);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 function ensureTerrainLoaded(areaId, onProgress, signal) {
@@ -249,9 +231,9 @@ async function loadTerrainForMenu(requestedId) {
   const requestId = ++terrainRequest;
   menuTerrainController?.abort();
   const requestedArea = theaterAreas.find(area => area.id === requestedId);
-  if (!requestedArea || gameStarted) return;
+  if (!requestedArea || sortie?.started) return;
   if (requestedId === loadedAreaId) {
-    if (!launchInProgress && terrain.real) {
+    if (!sortie?.launchInProgress && terrain.real) {
       launchButton.disabled = false;
       launchButton.setAttribute('aria-busy', 'false');
       setLaunchProgress(0, 'menu.launchButton', 'menu.launchReadyStatus');
@@ -261,7 +243,7 @@ async function loadTerrainForMenu(requestedId) {
   }
   const controller = new AbortController();
   menuTerrainController = controller;
-  if (!launchInProgress) {
+  if (!sortie?.launchInProgress) {
     launchButton.disabled = true;
     launchButton.setAttribute('aria-busy', 'true');
     setLaunchProgress(1, 'menu.loadingAreaTitle', 'terrain.fetchingArea');
@@ -269,10 +251,10 @@ async function loadTerrainForMenu(requestedId) {
   }
   try {
     const replacement = await ensureTerrainLoaded(requestedId, (progress, detail = {}) => {
-      if (requestId !== terrainRequest || controller.signal.aborted || launchInProgress) return;
+      if (requestId !== terrainRequest || controller.signal.aborted || sortie?.launchInProgress) return;
       setLaunchProgress(progress * 100, 'menu.loadingAreaTitle', detail.key ?? 'terrain.fetchingArea', detail.params ?? {});
     }, controller.signal);
-    if (requestId !== terrainRequest || gameStarted) {
+    if (requestId !== terrainRequest || sortie?.started) {
       if (replacement !== terrain) disposeTerrain(replacement);
       return;
     }
@@ -280,7 +262,7 @@ async function loadTerrainForMenu(requestedId) {
     loadedAreaId = replacement.id;
     needsMenuRender = true;
     updateMenuArea(terrain);
-    if (!launchInProgress) {
+    if (!sortie?.launchInProgress) {
       launchButton.disabled = false;
       launchButton.setAttribute('aria-busy', 'false');
       setLaunchProgress(0, 'menu.launchButton', 'menu.launchReadyStatus');
@@ -289,7 +271,7 @@ async function loadTerrainForMenu(requestedId) {
   } catch (error) {
     if (controller.signal.aborted) return;
     console.error('Theater terrain failed to load.', error);
-    if (requestId === terrainRequest && !gameStarted && !launchInProgress) {
+    if (requestId === terrainRequest && !sortie?.started && !sortie?.launchInProgress) {
       launchButton.disabled = false;
       launchButton.setAttribute('aria-busy', 'false');
       setLaunchProgress(0, 'menu.launchButton', 'menu.launchReadyStatus');
@@ -320,12 +302,15 @@ for (const card of missionCards) card.addEventListener('click', () => selectMiss
 const creditsDialog = document.querySelector('#credits-dialog');
 const pauseDialog = document.querySelector('#pause-dialog');
 const pauseMainPanel = document.querySelector('#pause-main-panel');
+const pauseConfirmPanel = document.querySelector('#pause-confirm-panel');
 const pauseControlsPanel = document.querySelector('#pause-controls-panel');
 const missionDebriefDialog = document.querySelector('#mission-debrief');
 const resumeFlightButton = document.querySelector('#resume-flight');
 const showFlightControlsButton = document.querySelector('#show-flight-controls');
 const backToPauseButton = document.querySelector('#back-to-pause');
 const quitToMenuButton = document.querySelector('#quit-to-menu');
+const cancelQuitToMenuButton = document.querySelector('#cancel-quit-to-menu');
+const confirmQuitToMenuButton = document.querySelector('#confirm-quit-to-menu');
 const missionDebriefReturnButton = document.querySelector('#mission-debrief-return');
 document.querySelector('#open-credits').addEventListener('click', () => creditsDialog.showModal());
 document.querySelector('#close-credits').addEventListener('click', () => creditsDialog.close());
@@ -335,58 +320,48 @@ creditsDialog.addEventListener('click', event => {
 });
 
 function pauseFlight() {
-  if (!gameStarted || gamePaused || !combat || combat.destroyed) return;
-  gamePaused = true;
-  root.classList.add('flight-paused');
-  controls.setEnabled(false);
-  controls.keys.clear();
-  controls.resetMouseAim();
-  combat.clearInput();
-  audio.setPaused(true);
-  pauseControlsPanel.hidden = true;
-  pauseMainPanel.hidden = false;
-  pauseDialog.setAttribute('aria-labelledby', 'pause-title');
-  pauseDialog.setAttribute('aria-describedby', 'pause-description');
-  pauseDialog.showModal();
-  resumeFlightButton.focus({ preventScroll: true });
+  sortie?.pause();
 }
 
 function showPauseControls() {
-  if (!gamePaused) return;
+  if (!sortie?.paused) return;
   pauseMainPanel.hidden = true;
+  pauseConfirmPanel.hidden = true;
   pauseControlsPanel.hidden = false;
   pauseDialog.setAttribute('aria-labelledby', 'pause-controls-title');
   pauseDialog.setAttribute('aria-describedby', 'pause-controls-description');
   backToPauseButton.focus({ preventScroll: true });
 }
 
-function returnToPauseOptions(focus = true) {
+function returnToPauseOptions(focus = true, focusTarget = showFlightControlsButton) {
+  pauseConfirmPanel.hidden = true;
   pauseControlsPanel.hidden = true;
   pauseMainPanel.hidden = false;
   pauseDialog.setAttribute('aria-labelledby', 'pause-title');
   pauseDialog.setAttribute('aria-describedby', 'pause-description');
-  if (focus && gamePaused) showFlightControlsButton.focus({ preventScroll: true });
+  if (focus && sortie?.paused) focusTarget.focus({ preventScroll: true });
+}
+
+function confirmMissionInterruption() {
+  if (!sortie?.paused) return;
+  pauseMainPanel.hidden = true;
+  pauseControlsPanel.hidden = true;
+  pauseConfirmPanel.hidden = false;
+  pauseDialog.setAttribute('aria-labelledby', 'pause-confirm-title');
+  pauseDialog.setAttribute('aria-describedby', 'pause-confirm-description');
+  cancelQuitToMenuButton.focus({ preventScroll: true });
 }
 
 document.addEventListener('pointerlockchange', () => {
   // Escape releases pointer lock before the page receives its key event in
   // some browsers. Use that release to open pause immediately; the key handler
   // below also covers browsers that deliver the key event first.
-  if (!gameStarted || gamePaused || !controls.enabled || controls.pointerLockActive) return;
+  if (!sortie?.started || sortie.paused || !controls.enabled || controls.pointerLockActive) return;
   pauseFlight();
 });
 
 function resumeFlight() {
-  if (!gamePaused) return;
-  gamePaused = false;
-  root.classList.remove('flight-paused');
-  if (pauseDialog.open) pauseDialog.close();
-  controls.keys.clear();
-  controls.resetMouseAim();
-  combat?.clearInput();
-  controls.setEnabled(true);
-  controls.requestMouseCapture();
-  audio.setPaused(false);
+  sortie?.resume();
 }
 
 function resetPlayerAirframeVisuals() {
@@ -399,22 +374,12 @@ function resetPlayerAirframeVisuals() {
 }
 
 function returnToMenu() {
-  if (!gameStarted) return;
-  gamePaused = false;
+  if (!sortie?.started) return;
   root.classList.remove('flight-active', 'flight-paused');
   if (pauseDialog.open) pauseDialog.close();
   if (missionDebriefDialog.open) missionDebriefDialog.close();
-  audio.setPaused(false);
-  audio.setGunFiring(false);
-  audio.stopEngine(true);
-  combat?.dispose();
-  stressScenario?.stop();
-  stressScenario = null;
+  sortie.dispose();
   if (stressMode) delete window.__ilmatilaStress;
-  combat = null;
-  tacticalHud = null;
-  controls.setEnabled(false);
-  controls.keys.clear();
   controls.resetMouseAim();
   controls.resetCameraZoom();
   controls.speed = 235;
@@ -434,12 +399,10 @@ function returnToMenu() {
   clouds.position.set(0, 0, 0);
   fx.reset();
   previousAltitude = player.position.y;
-  gameStarted = false;
   flightHud.hidden = true;
   document.querySelector('#death-screen').hidden = true;
   startMenu.hidden = false;
   startMenu.classList.remove('menu-leaving');
-  launchInProgress = false;
   launchButton.disabled = false;
   menuDifficulty.disabled = false;
   launchButton.setAttribute('aria-busy', 'false');
@@ -459,7 +422,9 @@ function returnToMenu() {
 resumeFlightButton.addEventListener('click', () => resumeFlight());
 showFlightControlsButton.addEventListener('click', showPauseControls);
 backToPauseButton.addEventListener('click', () => returnToPauseOptions());
-quitToMenuButton.addEventListener('click', returnToMenu);
+quitToMenuButton.addEventListener('click', confirmMissionInterruption);
+cancelQuitToMenuButton.addEventListener('click', () => returnToPauseOptions(true, quitToMenuButton));
+confirmQuitToMenuButton.addEventListener('click', returnToMenu);
 missionDebriefReturnButton.addEventListener('click', returnToMenu);
 missionDebriefDialog.addEventListener('cancel', event => event.preventDefault());
 pauseDialog.addEventListener('cancel', event => {
@@ -468,13 +433,13 @@ pauseDialog.addEventListener('cancel', event => {
   event.preventDefault();
 });
 document.addEventListener('keydown', event => {
-  if (event.code !== 'Escape' || event.repeat || !gameStarted || combat?.destroyed) return;
+  if (event.code !== 'Escape' || event.repeat || !sortie?.started || sortie.combat?.destroyed) return;
   if (missionDebriefDialog.open) {
     event.preventDefault();
     event.stopPropagation();
     return;
   }
-  if (gamePaused) {
+  if (sortie.paused) {
     event.preventDefault();
     event.stopPropagation();
     return;
@@ -485,170 +450,18 @@ document.addEventListener('keydown', event => {
 }, { capture: true });
 
 launchButton.addEventListener('click', async () => {
-  if (gameStarted || launchInProgress || launchButton.disabled) return;
+  if (sortie?.started || sortie?.launchInProgress || launchButton.disabled) return;
   // Pointer lock must be requested directly in the launch-button gesture;
   // waiting for the asynchronous terrain/model loads loses browser activation.
   controls.requestMouseCapture();
-  const supersededMenuTerrain = menuTerrainController;
-  terrainRequest++;
-  menuTerrainController = null;
-  launchInProgress = true;
-  launchButton.disabled = true;
-  menuDifficulty.disabled = true;
-  launchButton.setAttribute('aria-busy', 'true');
-  menuTheater.disabled = true;
-
   const selectedArea = theaterAreas.find(area => area.id === selectedAreaId) ?? theaterAreas[0];
-  let aircraftProgress = aircraftAsset ? 1 : assets.aircraftProgress;
-  let terrainProgress = terrain.real && terrain.id === selectedAreaId ? 1 : 0;
-  let terrainDetail = terrainProgress ? { key: 'terrain.ready' } : { key: 'launch.terrainWaiting' };
-  const updateProgress = () => {
-    const percent = 5 + aircraftProgress * 27 + terrainProgress * 63;
-    const aircraftText = aircraftProgress >= 1
-      ? { key: 'launch.aircraftReady' }
-      : { key: 'launch.aircraftProgress', params: { percent: Math.round(aircraftProgress * 100) } };
-    const titleKey = aircraftProgress < 1 ? 'launch.loadingAircraft'
-      : terrainProgress < 1 ? 'launch.loadingTerrain'
-        : 'launch.preparingFlight';
-    setLaunchProgress(percent, titleKey, 'launch.progressSummary', { aircraft: aircraftText, terrain: terrainDetail });
-  };
-
-  updateProgress();
-  setMenuStatus('menu.statusPreparingArea', 'loading', { area: selectedArea.label.toUpperCase() });
-  const terrainLoadController = new AbortController();
-  const aircraftLoadController = new AbortController();
-  let pendingTerrain = null;
-  let launchFailed = false;
-  try {
-    const terrainRequestPromise = ensureTerrainLoaded(selectedAreaId, (progress, detail) => {
-      terrainProgress = progress;
-      terrainDetail = detail;
-      updateProgress();
-    }, terrainLoadController.signal);
-    const terrainPromise = withTimeout(
-      terrainRequestPromise,
-      90000,
-      'Terrain data load timed out',
-      () => terrainLoadController.abort(),
-    ).then(
-      value => ({ status: 'ready', value }),
-      error => ({ status: 'failed', error }),
-    );
-    // Register the launch as a subscriber before aborting a stale menu load.
-    supersededMenuTerrain?.abort();
-    void terrainRequestPromise.then(replacement => {
-      if (launchFailed) {
-        if (replacement !== terrain) disposeTerrain(replacement);
-      } else {
-        pendingTerrain = replacement;
-      }
-    }, () => {});
-    const aircraftPromise = withTimeout(
-      assets.ensureAircraftLoaded(progress => {
-        aircraftProgress = progress;
-        updateProgress();
-      }, aircraftLoadController.signal),
-      25000,
-      'Aircraft model load timed out',
-      () => aircraftLoadController.abort(),
-    );
-    const [terrainResult, asset] = await Promise.all([terrainPromise, aircraftPromise]);
-
-    if (terrainResult.status !== 'ready') throw terrainResult.error;
-    const replacement = terrainResult.value;
-    if (!replacement.real) throw new Error('Selected theater terrain is not a real map package');
-    installTerrain(replacement);
-    pendingTerrain = null;
-    loadedAreaId = replacement.id;
-    updateMenuArea(replacement);
-    player.position.y = replacement.sampleHeight(player.position.x, player.position.z) + PLAYER_START_AGL;
-    previousAltitude = player.position.y;
-    terrainProgress = 1;
-
-    setLaunchProgress(96, 'launch.buildingMission', 'launch.systemsStarting');
-    setMenuStatus('launch.finalizingArea', 'loading');
-    await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
-    fx.reset();
-    resetPlayerAirframeVisuals();
-
-    const mission = stressMode
-      ? {
-          ...MISSIONS[selectedMissionId],
-          deferredHostiles: false,
-          hostiles: 36,
-          hostileSpawnDistance: 6900,
-          hostileLateralSpacing: 420,
-          openingDelay: 0,
-          wingmen: 8,
-          groundBattle: true,
-          groundPairs: 14,
-          groundTrucks: 24,
-          groundFrontSpan: 11800,
-          convoyArea: 11600,
-        }
-      : MISSIONS[selectedMissionId];
-    const nextCombat = new CombatWorld(scene, player, terrain, fx, asset, mission, audio, (outcome, result) => {
-      const careerUpdate = careerProgress.recordMission({ ...result, outcome });
-      renderMissionProgress();
-      const note = document.querySelector('#debrief-career-note');
-      const messages = [];
-      if (careerUpdate.newRecord) messages.push(t('mission.debrief.newBest'));
-      if (careerUpdate.unlocked.length) {
-        const names = careerUpdate.unlocked.map(id => t(`mission.${id}.title`)).join(', ');
-        messages.push(t('mission.debrief.unlocked', { missions: names }));
-      }
-      note.textContent = messages.join(' · ');
-      note.hidden = messages.length === 0;
-      gamePaused = true;
-      root.classList.add('flight-paused');
-      controls.setEnabled(false);
-      controls.keys.clear();
-      combat?.clearInput();
-      audio.setPaused(true);
-      if (pauseDialog.open) pauseDialog.close();
-      document.querySelector('#death-screen').hidden = true;
-      if (!missionDebriefDialog.open) missionDebriefDialog.showModal();
-      missionDebriefReturnButton.focus({ preventScroll: true });
-    }, careerProgress.difficulty, renderer.domElement);
-    const nextHud = new TacticalHud();
-    const nextUrl = new URL(location.href);
-    nextUrl.searchParams.set('mission', selectedMissionId);
-    nextUrl.searchParams.set('area', selectedAreaId);
-    history.replaceState(null, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
-
-    combat = nextCombat;
-    if (stressMode) {
-      stressScenario = new CombatStressScenario({ combat, scene, player, renderer });
-      window.__ilmatilaStress = stressScenario;
-    }
-    tacticalHud = nextHud;
-    gameStarted = true;
-    root.classList.add('flight-active');
-    root.classList.remove('flight-paused');
-    launchInProgress = false;
-    controls.resetMouseAim();
-    controls.setEnabled(true);
-    audio.startEngine();
-    flightHud.hidden = false;
-    setLaunchProgress(100, 'launch.flightReady', 'launch.enterCockpit');
-    startMenu.classList.add('menu-leaving');
-    setMenuStatus('launch.missionActive', 'active');
-    setTimeout(() => { if (gameStarted) startMenu.hidden = true; }, 460);
-  } catch (error) {
-    console.error('Mission launch failed.', error);
-    launchFailed = true;
-    controls.setEnabled(false);
-    if (pendingTerrain && pendingTerrain !== terrain) disposeTerrain(pendingTerrain);
-    terrainLoadController.abort();
-    aircraftLoadController.abort();
-    launchInProgress = false;
-    launchButton.disabled = false;
-    menuDifficulty.disabled = false;
-    launchButton.setAttribute('aria-busy', 'false');
-    menuTheater.disabled = false;
-    setLaunchProgress(0, 'launch.startFlight', 'launch.loadingFailed');
-    setMenuStatus('launch.couldNotPrepare', 'error');
-  }
+  const prepared = await sortie.prepare({
+    missionId: selectedMissionId,
+    areaId: selectedArea.id,
+    area: selectedArea,
+    difficulty: careerProgress.difficulty,
+  });
+  if (prepared) sortie.start();
 });
 
 const clock = new THREE.Clock();
@@ -669,7 +482,6 @@ const assets = new AssetRepository({
     const aircraftVisual = createFighter({ aircraftAsset: aircraftAssets.player });
     for (const child of [...aircraftVisual.children]) player.add(child);
     Object.assign(player.userData, aircraftVisual.userData);
-    aircraftAsset = aircraftAssets;
     needsMenuRender = true;
   },
 });
@@ -678,22 +490,117 @@ menuRadar = new MenuRadar({
   missionId: selectedMissionId,
 });
 
+sortie = new SortieController({
+  assets,
+  ensureTerrainLoaded,
+  getTerrain: () => terrain,
+  installTerrain,
+  scene,
+  player,
+  fx,
+  audio,
+  controls,
+  renderer,
+  difficulty: careerProgress.difficulty,
+  playerStartAgl: PLAYER_START_AGL,
+  stressMode,
+  onPrepareStart: () => {
+    const supersededMenuTerrain = menuTerrainController;
+    terrainRequest++;
+    menuTerrainController = null;
+    launchButton.disabled = true;
+    menuDifficulty.disabled = true;
+    launchButton.setAttribute('aria-busy', 'true');
+    menuTheater.disabled = true;
+    return supersededMenuTerrain;
+  },
+  onProgress: setLaunchProgress,
+  onStatus: setMenuStatus,
+  onTerrainReady: replacement => {
+    loadedAreaId = replacement.id;
+    updateMenuArea(replacement);
+    needsMenuRender = true;
+  },
+  onResetForFlight: () => {
+    previousAltitude = player.position.y;
+    fx.reset();
+    resetPlayerAirframeVisuals();
+  },
+  onStart: () => {
+    const nextUrl = new URL(location.href);
+    nextUrl.searchParams.set('mission', selectedMissionId);
+    nextUrl.searchParams.set('area', selectedAreaId);
+    history.replaceState(null, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+    if (stressMode) window.__ilmatilaStress = sortie.stressScenario;
+    root.classList.add('flight-active');
+    root.classList.remove('flight-paused');
+    flightHud.hidden = false;
+    setLaunchProgress(100, 'launch.flightReady', 'launch.enterCockpit');
+    startMenu.classList.add('menu-leaving');
+    setMenuStatus('launch.missionActive', 'active');
+    setTimeout(() => { if (sortie.started) startMenu.hidden = true; }, 460);
+  },
+  onPause: () => {
+    root.classList.add('flight-paused');
+    pauseConfirmPanel.hidden = true;
+    pauseControlsPanel.hidden = true;
+    pauseMainPanel.hidden = false;
+    pauseDialog.setAttribute('aria-labelledby', 'pause-title');
+    pauseDialog.setAttribute('aria-describedby', 'pause-description');
+    pauseDialog.showModal();
+    resumeFlightButton.focus({ preventScroll: true });
+  },
+  onResume: () => {
+    root.classList.remove('flight-paused');
+    if (pauseDialog.open) pauseDialog.close();
+  },
+  onFinish: (outcome, result) => {
+    const careerUpdate = careerProgress.recordMission({ ...result, outcome });
+    renderMissionProgress();
+    const note = document.querySelector('#debrief-career-note');
+    const messages = [];
+    if (careerUpdate.newRecord) messages.push(t('mission.debrief.newBest'));
+    if (careerUpdate.unlocked.length) {
+      const names = careerUpdate.unlocked.map(id => t(`mission.${id}.title`)).join(', ');
+      messages.push(t('mission.debrief.unlocked', { missions: names }));
+    }
+    note.textContent = messages.join(' · ');
+    note.hidden = messages.length === 0;
+    root.classList.add('flight-paused');
+    if (pauseDialog.open) pauseDialog.close();
+    document.querySelector('#death-screen').hidden = true;
+    if (!missionDebriefDialog.open) missionDebriefDialog.showModal();
+    missionDebriefReturnButton.focus({ preventScroll: true });
+  },
+  onPrepareFailure: error => {
+    console.error('Mission launch failed.', error);
+    launchButton.disabled = false;
+    menuDifficulty.disabled = false;
+    launchButton.setAttribute('aria-busy', 'false');
+    menuTheater.disabled = false;
+    setLaunchProgress(0, 'launch.startFlight', 'launch.loadingFailed');
+    setMenuStatus('launch.couldNotPrepare', 'error');
+  },
+});
+
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.04);
   if (!startMenu.hidden) menuRadar.update(dt);
-  if (gameStarted && !gamePaused && combat) {
+  const combat = sortie.combat;
+  if (sortie.started && !sortie.paused && combat) {
+    const stressScenario = sortie.stressScenario;
     stressScenario?.recordFrame(performance.now());
     if (!combat.destroyed) {
       controls.update(dt);
       audio.updateEngine(controls.speed, Boolean(player.userData.boosting), dt);
       combat.update(dt);
-      if (!gamePaused) {
+      if (!sortie.paused) {
         stressScenario?.update(dt);
         combat.checkPlayerCollision(dt);
       }
     } else {
-      combat.updateEffects(dt);
+      combat.combatEffects.update(dt);
     }
     terrain.updateDetailPosition?.(player.position.x, player.position.z);
     activeAircraft.length = 0;
@@ -712,7 +619,7 @@ function animate() {
     speedEl.textContent = Math.round(controls.speed * 1.943).toString();
     altitudeEl.textContent = Math.round(altitude * 3.28).toLocaleString(getLanguage() === 'fi' ? 'fi-FI' : 'en-US');
     headingEl.textContent = String(Math.round(THREE.MathUtils.euclideanModulo(THREE.MathUtils.radToDeg(controls.heading), 360))).padStart(3, '0');
-    tacticalHud.update(controls, player, camera, combat, verticalSpeed, dt);
+    sortie.tacticalHud.update(controls, player, camera, combat, verticalSpeed, dt);
     if (gunReticle) {
       // Project the aircraft's real nose axis into the chase view; pitch/bank
       // heuristics can otherwise misalign the reticle from the cannon rounds.
@@ -739,7 +646,7 @@ function animate() {
     clouds.position.x = player.position.x * 0.98 + weather.wind.x * clock.elapsedTime;
     clouds.position.z = player.position.z * 0.98 + weather.wind.z * clock.elapsedTime;
   }
-  if (gameStarted || needsMenuRender) {
+  if (sortie.started || needsMenuRender) {
     sunEffects.update(camera);
     renderer.render(scene, camera);
     needsMenuRender = false;
@@ -755,8 +662,7 @@ addEventListener('resize', () => {
 addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('pagehide', event => {
   if(event.persisted)return;
-  stressScenario?.stop();
-  combat?.dispose();
+  sortie.dispose();
   fx.dispose();
   disposeMissilePool();
   disposeCombatEffectResources();

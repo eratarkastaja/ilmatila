@@ -2,6 +2,8 @@
 
 ILMATILA is an independent browser-based air-combat game by ERÄGAMES. The current source version is **0.1.0-alpha.11**. It is an alpha build: missions, combat, progression, aircraft handling, radar, and weapons are playable, while balance and mission pacing remain under development. The simulation is fictional and is not intended for real-world training or operational use.
 
+**[Play ILMATILA in your browser](https://eratarkastaja.github.io/ilmatila/).**
+
 The interface supports English and Finnish. The game runs in a modern browser with WebGL and needs no API key at runtime.
 
 ## Run locally
@@ -37,7 +39,7 @@ Flight controls are shown in the mission menu and in the pause menu's **Show Con
 | T | Cycle detected hostile radar tracks |
 | M | Fire a missile when the selected target is in range and locked |
 | R | Switch radar between air and ground modes |
-| C | Deploy flares and chaff |
+| F | Deploy flares |
 | 1 / 2 / 3 / 4 | Order wingmen: attack / defend / regroup / disengage |
 | Move mouse | Steer the aircraft |
 | Left / right mouse button | Fire cannon / launch a missile |

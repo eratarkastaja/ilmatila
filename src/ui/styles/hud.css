@@ -1089,6 +1089,10 @@
   --target-color: #70dfa0;
 }
 
+.target-designator.sensor-lost {
+  --target-color: #ffad62;
+}
+
 .target-designator.acquiring i,.target-designator.locked i {
   opacity: 1;
 }
@@ -1326,6 +1330,10 @@
   --track-accent: #d0c38f;
 }
 
+.selected-track-panel.sensor-lost {
+  --track-accent: #ffad62;
+}
+
 .selected-track-copy {
   display: grid;
   min-width: 0;
@@ -1456,7 +1464,13 @@
   transform: translate(-50%,-50%);
   pointer-events: none;
   filter: drop-shadow(0 1px 2px #07100f);
-  transition: color .18s ease,filter .18s ease;
+  opacity: 0;
+  transition: opacity .7s ease-out,color .18s ease,filter .18s ease;
+}
+
+.missile-approach-cue.visible {
+  opacity: 1;
+  transition-duration: .12s,.18s,.18s;
 }
 
 .missile-approach-cue[hidden] {
@@ -2033,6 +2047,9 @@
 }
 
 @media (prefers-reduced-motion:reduce) {
+  .missile-approach-cue {
+    transition-duration: 0s;
+  }
   .mission-complete.visible {
     animation: none;
     transform: translate(-50%);
@@ -2094,6 +2111,10 @@
 
 .weapon-row:nth-child(2) strong.out-of-range {
   color: #aeb8ad;
+}
+
+.weapon-row:nth-child(2) strong.sensor-lost {
+  color: #ffad62;
 }
 
 .weapon-row:nth-child(2) strong.ground-target.locked {

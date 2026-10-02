@@ -17,6 +17,7 @@ const TILE_PIXELS = 320;
 const ORTHO_GRID = 8;
 const DETAIL_WINDOW_TILES = 3;
 let terrainIndexPromise;
+const terrainLeaseDisposers = new WeakMap();
 
 export const TERRAIN_AREAS = [
   { id: 'paijanne', label: 'Päijänne' },
@@ -209,6 +210,23 @@ export function createPreviewTerrain() {
 
 export function disposeTerrain(terrain) {
   if (!terrain?.mesh) return;
+  if (terrainLeaseDisposers.has(terrain)) {
+    const releaseLease = terrainLeaseDisposers.get(terrain);
+    terrainLeaseDisposers.set(terrain, null);
+    releaseLease?.();
+    return;
+  }
+  disposeTerrainResources(terrain);
+}
+
+/** Returns a caller-owned handle to a terrain resource shared by the repository. */
+export function createTerrainLease(terrain, release) {
+  const lease = { ...terrain };
+  terrainLeaseDisposers.set(lease, release);
+  return lease;
+}
+
+function disposeTerrainResources(terrain) {
   terrain.detailStreamer?.dispose();
   terrain.mesh.removeFromParent();
   const geometries = new Set();

@@ -9,6 +9,7 @@ function makeSystem(overrides = {}) {
     mode: 'air',
     target: null,
     targetDomain: 'air',
+    targetInSensorRange: false,
     inLockEnvelope: false,
     lockCueConfirmed: false,
   };
@@ -50,6 +51,7 @@ describe('WeaponSystem', () => {
     const { system, radar, shots, audio, scene, target } = makeSystem();
     radar.target = target;
     radar.targetDomain = 'air';
+    radar.targetInSensorRange = true;
     radar.inLockEnvelope = true;
     radar.lockCueConfirmed = true;
 
@@ -78,6 +80,18 @@ describe('WeaponSystem', () => {
 
     expect(shots).toHaveLength(0);
     expect(audio.playWeaponNoLock).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects a stale lock after the target leaves sensor range', () => {
+    const { system, radar, shots } = makeSystem();
+    radar.target = { dead: false };
+    radar.targetInSensorRange = false;
+    radar.inLockEnvelope = true;
+    radar.lockCueConfirmed = true;
+
+    expect(system.requestMissile()).toBe(false);
+    expect(system.missileFeedbackKey).toBe('combat.sensorReacquire');
+    expect(shots).toHaveLength(0);
   });
 
   it('fires gun rounds on trigger cadence and resets cadence when released', () => {

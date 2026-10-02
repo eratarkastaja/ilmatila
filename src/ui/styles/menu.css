@@ -1219,7 +1219,13 @@
   gap: 0 17px;
 }
 
-.pause-main-panel[hidden],.pause-controls-panel[hidden] {
+.pause-confirm-panel {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 0 17px;
+}
+
+.pause-main-panel[hidden],.pause-confirm-panel[hidden],.pause-controls-panel[hidden] {
   display: none;
 }
 
@@ -1244,6 +1250,16 @@
 .pause-mark b {
   position: relative;
   font: 700 17px Rajdhani,sans-serif;
+}
+
+.pause-warning-mark {
+  border-color: #d7ae756b;
+  color: #f0c991;
+  background: #2b2117;
+}
+
+.pause-warning-mark i {
+  border-color: #d7ae7535;
 }
 
 .pause-copy {
@@ -1296,6 +1312,10 @@
   margin-top: 22px;
 }
 
+.pause-confirm-actions {
+  margin-top: 18px;
+}
+
 .pause-actions button {
   display: flex;
   width: 100%;
@@ -1333,6 +1353,22 @@
   border-color: #b4d7c27a;
   color: #edf5ee;
   background: #142421;
+}
+
+.pause-actions .pause-quit-confirm {
+  border-color: #c87b687a;
+  color: #efb7a9;
+  background: #241715;
+}
+
+.pause-actions .pause-quit-confirm:hover {
+  border-color: #e69a86;
+  color: #ffe1d7;
+  background: #34201c;
+}
+
+.pause-actions .pause-quit-confirm b {
+  color: #efb7a9;
 }
 
 .pause-quit b {
@@ -1960,6 +1996,10 @@
     padding: 23px 19px 20px;
   }
   .pause-main-panel {
+    grid-template-columns: 38px 1fr;
+    gap: 0 12px;
+  }
+  .pause-confirm-panel {
     grid-template-columns: 38px 1fr;
     gap: 0 12px;
   }
