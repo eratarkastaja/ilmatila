@@ -61,8 +61,9 @@ export class AirWeaponAI {
       proximityRadius: 25,
       warningClock: 0,
       decoyTarget: null,
+      target: battle.player,
     });
-    battle.onMissileLaunch?.(enemy, mesh);
+    battle.onMissileLaunch?.(enemy, mesh, 'ir');
     battle.audio?.playMissileLaunch();
     battle.audio?.startMissileFlight(mesh.id);
   }
@@ -240,7 +241,11 @@ export class AirWeaponAI {
     });
   }
 
-  launchEnemyMissile(battle, enemy) {
+  chooseHostileMissileSeeker() {
+    return Math.random() < .5 ? 'ir' : 'radar';
+  }
+
+  launchEnemyMissile(battle, enemy, seeker = this.chooseHostileMissileSeeker()) {
     const direction = forward.clone().applyQuaternion(enemy.mesh.quaternion).normalize();
     const start = enemy.mesh.position.clone().addScaledVector(direction, 5);
     const missileProfile = MISSILE_PROFILES.hostile;
@@ -258,7 +263,6 @@ export class AirWeaponAI {
     mesh.quaternion.setFromUnitVectors(forward, aim);
     battle.scene.add(mesh);
     if (mesh.userData.engineFlame) mesh.userData.engineFlame.visible = true;
-    const seeker = Math.random() < .5 ? 'ir' : 'radar';
     battle.addHostileProjectile({
       projectile: true,
       missile: true,
@@ -280,8 +284,9 @@ export class AirWeaponAI {
       proximityRadius: battle.difficulty?.fighter?.missile?.projectile?.proximityRadius ?? 20,
       warningClock: 0,
       decoyTarget: null,
+      target: battle.player,
     });
-    battle.onMissileLaunch?.(enemy, mesh);
+    battle.onMissileLaunch?.(enemy, mesh, seeker);
     battle.audio?.playMissileLaunch();
     battle.audio?.startMissileFlight(mesh.id);
   }

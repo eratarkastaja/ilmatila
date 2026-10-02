@@ -26,6 +26,8 @@ describe('game configuration validation', () => {
     difficulties.easy.player.hull = '135';
     difficulties.standard.fighter.health = 99;
     difficulties.hard.fighter.missile.minRange = difficulties.hard.fighter.missile.maxRange;
+    difficulties.standard.player.chaff.radarMissileBreakChance = 1.4;
+    difficulties.easy.player.chaff.count = 2.5;
 
     const errors = validateGameConfig({ difficulties, missions: {} });
 
@@ -33,6 +35,8 @@ describe('game configuration validation', () => {
     expect(errors).toContain('difficulties.hard.fighter.detection.range must be a finite number');
     expect(errors).toContain('difficulties.standard.fighter.health must be between 0.1 and 5');
     expect(errors).toContain('difficulties.hard.fighter.missile.minRange must be less than maxRange');
+    expect(errors).toContain('difficulties.standard.player.chaff.radarMissileBreakChance must be between 0 and 1');
+    expect(errors).toContain('difficulties.easy.player.chaff.count must be an integer');
   });
 
   it('reports invalid mission fields, unreasonable values, and broken relationships', () => {

@@ -284,6 +284,9 @@ export class ProjectileSystem {
       const previous = this._previousPosition.copy(shot.mesh.position);
       if (shot.missile) {
         updateMissileMotor(shot, dt);
+        if (shot.seeker === 'radar') {
+          shot.chaffDisruptedRemaining = Math.max(0, (shot.chaffDisruptedRemaining ?? 0) - dt);
+        }
         const distanceToPlayer = shot.mesh.position.distanceTo(player.position);
         const decoyingAway = Boolean(shot.decoyTarget?.active && shot.decoyTarget.position.distanceToSquared(player.position) > distanceToPlayer ** 2);
         if (!decoyingAway && distanceToPlayer < 9000) {
@@ -315,7 +318,7 @@ export class ProjectileSystem {
             shot.warningClock = 1.05;
           }
         }
-        if (shot.guidanceActive) {
+        if (shot.guidanceActive && (shot.seeker !== 'radar' || (shot.chaffDisruptedRemaining ?? 0) <= 0)) {
           if (shot.decoyTarget && !shot.decoyTarget.active) shot.decoyTarget = null;
           if (!shot.decoyTarget) {
             shot.decoyTarget = this.tryAcquireFlare(shot, player.position, decoys, 'player', player);

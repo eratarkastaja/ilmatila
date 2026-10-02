@@ -24,7 +24,7 @@ The suite covers ballistics, boundary warnings, collision and hit tests, counter
 There are two useful lifecycle integration tests:
 
 - `tests/integration/combat-world-session.test.js` runs a real `CombatWorld` through training, RTB, debrief, disposal, and a second world, while checking listener cleanup and progression persistence.
-- `tests/integration/main-session.test.js` exercises app launch, completion, return to menu, a second launch, and launch failure/retry with the browser/rendering dependencies mocked. Its quit-cleanup case currently clicks the pause-menu quit control without first pausing, so it does not reach the confirmation/cleanup path and fails; it does not yet protect interrupted-sortie cleanup.
+- `tests/integration/main-session.test.js` exercises app launch, completion, return to menu, a second launch, launch failure/retry, and the pause → quit confirmation → cleanup path with the browser/rendering dependencies mocked.
 
 The current suite has little direct coverage of hostile fighter, helicopter, wingman, and ground-unit tactical AI. It also needs a correctly exercised pause → quit confirmation → cleanup case. The highest-value broader integration boundary is a real-browser run that combines actual terrain and aircraft loading, pointer lock/audio, WebGL rendering, and the second-launch lifecycle. No browser automation stack is configured today. Repository-level tests do cover shared-load cancellation and terrain leases; the `SortieController`'s timeout and preparation race behavior is a narrower remaining boundary.
 

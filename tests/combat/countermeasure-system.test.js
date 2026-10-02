@@ -2,16 +2,18 @@ import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { CountermeasureSystem } from '../../src/combat/countermeasure-system.js';
 
-function makeCountermeasures() {
+function makeCountermeasures({ hostileAircraft = [], hostileShots: initialHostileShots = [], random, chaffConfig } = {}) {
   const scene = new THREE.Scene();
   const player = { position: new THREE.Vector3(0, 100, 0), quaternion: new THREE.Quaternion() };
   const decoys = [];
   const playerShots = [];
-  const hostileShots = [];
+  const hostileShots = initialHostileShots;
   const fx = { emitParticle: vi.fn() };
   const audio = {
     playWeaponNoLock: vi.fn(),
     playCountermeasure: vi.fn(),
+    playChaffCountermeasure: vi.fn(),
+    playCountermeasureUnavailable: vi.fn(),
   };
   const addTransientGlow = (parent, color, size, opacity) => {
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({ color, opacity, transparent: true }));
@@ -30,10 +32,13 @@ function makeCountermeasures() {
     decoys,
     playerShots,
     hostileShots,
+    hostileAircraft,
     addTransientGlow,
     onInventoryChange,
+    random,
+    chaffConfig,
   });
-  return { system, scene, player, decoys, playerShots, hostileShots, fx, audio, onInventoryChange };
+  return { system, scene, player, decoys, playerShots, hostileShots, hostileAircraft, fx, audio, onInventoryChange };
 }
 
 describe('CountermeasureSystem', () => {
@@ -63,7 +68,7 @@ describe('CountermeasureSystem', () => {
     expect(system.deployPlayer()).toBe(false);
 
     expect(decoys).toHaveLength(2);
-    expect(audio.playWeaponNoLock).toHaveBeenCalledTimes(2);
+    expect(audio.playCountermeasureUnavailable).toHaveBeenCalledTimes(2);
   });
 
   it('deploys a flare and starts evasive action for a hostile aircraft', () => {
@@ -85,6 +90,86 @@ describe('CountermeasureSystem', () => {
     expect(decoys.map(decoy => decoy.type)).toEqual(['ir']);
     expect(decoys[0].spoofChance).toBe(.62);
     expect(scene.children).toHaveLength(1);
+  });
+
+  it('deploys chaff from a separate finite inventory and respects its cooldown', () => {
+    const { system, fx, audio } = makeCountermeasures({ random: () => 0 });
+
+    expect(system.deployChaff()).toBe(true);
+    expect(system.chaff).toBe(11);
+    expect(system.flares).toBe(12);
+    expect(system.chaffCooldown).toBe(1.7);
+    expect(system.cooldown).toBe(.85);
+    expect(fx.emitParticle).toHaveBeenCalledTimes(14);
+    expect(audio.playChaffCountermeasure).toHaveBeenCalledOnce();
+
+    expect(system.deployChaff()).toBe(false);
+    expect(system.chaff).toBe(11);
+    system.tick(1.7);
+    expect(system.deployChaff()).toBe(true);
+    expect(system.chaff).toBe(10);
+  });
+
+  it('cannot deploy chaff when its inventory is empty', () => {
+    const { system, fx, audio } = makeCountermeasures({ random: () => 0 });
+    system.chaff = 0;
+
+    expect(system.deployChaff()).toBe(false);
+    expect(system.lastChaffDeployment).toBe('empty');
+    expect(fx.emitParticle).not.toHaveBeenCalled();
+    expect(audio.playCountermeasureUnavailable).toHaveBeenCalledOnce();
+  });
+
+  it('probabilistically disrupts an existing hostile radar track, not a searching fighter', () => {
+    const player = { position: new THREE.Vector3(), quaternion: new THREE.Quaternion() };
+    const trackingEnemy = { phase: 'inbound', engagementTarget: player, burstTarget: player, dead: false };
+    const searchingEnemy = { phase: 'staging', detectedPlayerTimer: 1, engagementTarget: player, dead: false };
+    const { system } = makeCountermeasures({
+      hostileAircraft: [trackingEnemy, searchingEnemy],
+      random: () => 0,
+    });
+    system.player = player;
+
+    expect(system.deployChaff()).toBe(true);
+
+    expect(trackingEnemy.radarTrackDisruptionRemaining).toBe(2.8);
+    expect(trackingEnemy.chaffTrackReevaluationRemaining).toBe(5);
+    expect(searchingEnemy.radarTrackDisruptionRemaining).toBeUndefined();
+  });
+
+  it('keeps a failed track-break roll from being rerolled by another chaff deployment', () => {
+    const player = { position: new THREE.Vector3(), quaternion: new THREE.Quaternion() };
+    const enemy = { phase: 'inbound', engagementTarget: player, dead: false };
+    const { system } = makeCountermeasures({ hostileAircraft: [enemy], random: () => .99 });
+    system.player = player;
+
+    expect(system.deployChaff()).toBe(true);
+    expect(enemy.radarTrackDisruptionRemaining).toBeUndefined();
+    expect(enemy.chaffTrackReevaluationRemaining).toBe(5);
+
+    system.tick(2);
+    expect(system.deployChaff()).toBe(true);
+    expect(enemy.radarTrackDisruptionRemaining).toBeUndefined();
+  });
+
+  it('disrupts radar missile guidance without affecting an infrared missile', () => {
+    const player = { position: new THREE.Vector3(0, 100, 0), quaternion: new THREE.Quaternion() };
+    const makeMissile = seeker => {
+      const mesh = new THREE.Object3D();
+      mesh.position.set(0, 100, 500);
+      return { missile: true, seeker, mesh, target: player, guidanceActive: true, life: 5 };
+    };
+    const radarMissile = makeMissile('radar');
+    const infraredMissile = makeMissile('ir');
+    const { system } = makeCountermeasures({ hostileShots: [radarMissile, infraredMissile], random: () => 0 });
+    system.player = player;
+
+    expect(system.deployChaff()).toBe(true);
+
+    expect(radarMissile.chaffAttempted).toBe(true);
+    expect(radarMissile.chaffDisruptedRemaining).toBe(3.3);
+    expect(infraredMissile.chaffAttempted).toBeUndefined();
+    expect(infraredMissile.chaffDisruptedRemaining).toBeUndefined();
   });
 
   it('keeps expired decoys while a missile tracks them, then disposes them after release', () => {

@@ -56,7 +56,7 @@ tests/
 | Weapon cadence, inventory, and launch conditions | `WeaponSystem` | Radar mode/lock, player, audio/FX, projectile insertion |
 | Projectile movement, guidance, damage, and expiry | `ProjectileSystem` | Projectile queues, collision queries, decoys, destruction callbacks |
 | Swept hit tests, aircraft/unit impacts, and operational boundary checks | `CollisionSystem` | Previous/current transforms, terrain coverage, collider lists |
-| Decoys and countermeasure inventory/cooldowns | `CountermeasureSystem` | Player/hostile aircraft, projectile seeker state, scene/audio/FX |
+| Flare and chaff inventory/cooldowns, decoy motion, radar-track disruption, and countermeasure cleanup | `CountermeasureSystem` | Player/hostile aircraft, projectile seeker state, scene/audio/FX |
 | Objective progress and mission outcome | `MissionSystem` | Mission objective, remaining targets, destruction state, presentation nodes |
 | Sortie phases, navigation and waypoint presentation | `MissionFlowSystem` | Player position, mission settings, presentation nodes |
 | Phase and wingman radio reports | `RadioSystem` | Phase changes, wingman events, audio cue, radio DOM nodes |
@@ -83,7 +83,7 @@ The same `SortieController` is reused after returning to the menu, but each laun
 
 - `AirBattle` owns hostile aircraft and wingmen; `GroundBattle` owns friendly and hostile ground units.
 - `WeaponSystem` owns gun timing and weapon stores. `ProjectileSystem` owns projectile queues and lifecycle.
-- `CountermeasureSystem` owns flare inventory, deployment cooldowns, flare decoys, and their scene/effect cleanup. Only infrared seekers can be diverted by flares.
+- `CountermeasureSystem` owns flare and chaff inventories, deployment cooldowns, flare decoys, and countermeasure effects. Flares can divert only infrared seekers; chaff can temporarily disrupt an existing hostile fighter track or active radar-missile guidance.
 - `CollisionSystem` retains swept player-position history and performs terrain, boundary, vehicle, aircraft, and projectile collision queries.
 - `MissionSystem` owns objective timing/progress and completion/failure outcome. `MissionFlowSystem` owns sortie phase and route state.
 - `ScoreSystem` owns sortie score, kill totals, gun hits, and one-time objective awards. `CombatWorld` exposes read-only score statistics for the HUD and debrief.

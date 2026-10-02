@@ -1448,6 +1448,64 @@
   box-shadow: 0 0 18px #e8413040,inset 2px 0 #ff5148;
 }
 
+.radar-warning {
+  position: absolute;
+  z-index: 8;
+  top: calc(17% + 47px);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  transform: translateX(-50%);
+  border: 1px solid #91b4a56e;
+  border-left: 2px solid #9abbb0;
+  background: #071914df;
+  color: #c5d9d1;
+  font: 700 10px Rajdhani,sans-serif;
+  letter-spacing: .15em;
+  white-space: nowrap;
+}
+
+.radar-warning[hidden] {
+  display: none;
+}
+
+.radar-warning i {
+  width: 6px;
+  height: 6px;
+  border: 1px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.radar-warning span {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.radar-warning small {
+  color: #91b4a5;
+  font-size: 8px;
+}
+
+.radar-warning[data-state="search"] {
+  color: #c5d9d1;
+}
+
+.radar-warning[data-state="track"] {
+  border-color: #edc96c99;
+  border-left-color: #f0cf70;
+  background: #211d10df;
+  color: #f0dda0;
+}
+
+.radar-warning[data-state="disrupted"] {
+  border-color: #8dbea67a;
+  border-left-color: #83d5a2;
+  color: #aee2c2;
+}
+
 @keyframes missile-warning {
   50% {
     border-color: #ff9b6c55;
@@ -1659,14 +1717,13 @@
 
 .boundary-warning {
   position: absolute;
-  z-index: 7;
-  top: calc(17% + 42px);
-  left: 50%;
+  z-index: 10;
+  top: 113px;
+  right: 28px;
   display: flex;
   align-items: center;
   gap: 9px;
   padding: 6px 11px;
-  transform: translate(-50%);
   border: 1px solid #d5b96c78;
   border-left: 2px solid #e7c66f;
   background: #211d10d9;
@@ -2141,6 +2198,18 @@
   filter: drop-shadow(0 0 5px #ffc276);
 }
 
+.flare-row small,.flare-row strong {
+  color: #ead2a0;
+}
+
+.chaff-row small,.chaff-row strong {
+  color: #b6d0cc;
+}
+
+.chaff-row.dispensed .countermeasure-icon svg {
+  filter: drop-shadow(0 0 4px #a8d5c3);
+}
+
 .wingman-order-row,.hull-row {
   display: flex;
   align-items: center;
@@ -2215,7 +2284,8 @@
 
 @media (max-width:700px) {
   .boundary-warning {
-    top: calc(17% + 42px);
+    top: 105px;
+    right: 12px;
     max-width: calc(100vw - 24px);
     gap: 7px;
     padding: 5px 8px;

@@ -21,6 +21,8 @@ export class HostileFighterAI {
       enemy.missileClock -= dt;
       enemy.effectClock += dt;
       enemy.countermeasureCooldown = Math.max(0, enemy.countermeasureCooldown - dt);
+      enemy.radarTrackDisruptionRemaining = Math.max(0, (enemy.radarTrackDisruptionRemaining ?? 0) - dt);
+      enemy.chaffTrackReevaluationRemaining = Math.max(0, (enemy.chaffTrackReevaluationRemaining ?? 0) - dt);
       enemy.evasiveTimer = Math.max(0, enemy.evasiveTimer - dt);
       if (enemy.evasiveTimer <= 0) enemy.evasiveDuration = 0;
       enemy.tacticalManeuverCooldown = Math.max(0, enemy.tacticalManeuverCooldown - dt);
@@ -29,6 +31,14 @@ export class HostileFighterAI {
       enemy.lockResponseFollowupTimer = Math.max(0, enemy.lockResponseFollowupTimer - dt);
 
       const range = enemy.mesh.position.distanceTo(playerPosition);
+      if (enemy.radarTrackDisruptionRemaining > 0) {
+        if (enemy.engagementTarget === battle.player) enemy.engagementTarget = null;
+        if (enemy.burstTarget === battle.player) {
+          enemy.burstTarget = null;
+          enemy.burstShots = 0;
+        }
+        enemy.targetRefreshTimer = 0;
+      }
       const playerHasLock = playerThreat.lockedTarget === enemy;
       if (playerHasLock) {
         enemy.lockResponseLost = 0;
@@ -288,10 +298,13 @@ export class HostileFighterAI {
         enemy.missileClock <= 0 && enemy.missilesFired < missileCapacity && enemy.phase !== 'staging' &&
         range > missileMinRange && range < missileMaxRange && enemyNose.dot(toPlayer) > missileBoresight
       ) {
-        battle.weaponAI.launchEnemyMissile(battle, enemy);
-        enemy.missileClock = (battle.difficulty?.fighter?.missile?.cooldown ?? 14)
-          + Math.random() * (battle.difficulty?.fighter?.missile?.cooldownJitter ?? 5);
-        enemy.missilesFired++;
+        const seeker = battle.weaponAI.chooseHostileMissileSeeker();
+        if (this.canLaunchMissile(enemy, seeker)) {
+          battle.weaponAI.launchEnemyMissile(battle, enemy, seeker);
+          enemy.missileClock = (battle.difficulty?.fighter?.missile?.cooldown ?? 14)
+            + Math.random() * (battle.difficulty?.fighter?.missile?.cooldownJitter ?? 5);
+          enemy.missilesFired++;
+        }
       }
     }
   }
@@ -310,7 +323,9 @@ export class HostileFighterAI {
 
   selectEnemyEngagementTarget(battle, enemy, playerRange) {
     const priorityRange = battle.difficulty?.fighter?.targeting?.airPriorityRange ?? 13000;
-    if (playerRange <= priorityRange) return { target: battle.player, domain: 'air' };
+    if (playerRange <= priorityRange && (enemy.radarTrackDisruptionRemaining ?? 0) <= 0) {
+      return { target: battle.player, domain: 'air' };
+    }
 
     let nearestAlly = null;
     let nearestAllyRange = priorityRange;
@@ -340,6 +355,10 @@ export class HostileFighterAI {
       if (target) return { target, domain: 'ground' };
     }
     return null;
+  }
+
+  canLaunchMissile(enemy, seeker) {
+    return (enemy.radarTrackDisruptionRemaining ?? 0) <= 0 || seeker === 'ir';
   }
 
   update(battle, dt, playerForward, playerRight, playerThreat) {

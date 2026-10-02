@@ -327,7 +327,16 @@ describe('main game session lifecycle', () => {
     await launch(document);
     const firstWorld = harness.worlds[0];
 
+    const pauseKey = new Event('keydown', { cancelable: true });
+    Object.defineProperty(pauseKey, 'code', { value: 'Escape' });
+    document.dispatchEvent(pauseKey);
+    expect(document.querySelector('#pause-dialog').open).toBe(true);
+
     document.querySelector('#quit-to-menu').dispatch('click');
+    expect(document.querySelector('#pause-confirm-panel').hidden).toBe(false);
+    expect(firstWorld.dispose).not.toHaveBeenCalled();
+
+    document.querySelector('#confirm-quit-to-menu').dispatch('click');
     expect(firstWorld.dispose).toHaveBeenCalledOnce();
     expect(harness.audio.stopEngine).toHaveBeenCalledWith(true);
     expect(document.querySelector('#flight-hud').hidden).toBe(true);

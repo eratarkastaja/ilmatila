@@ -42,7 +42,10 @@ export class CombatWorld {
       hitMarker: document.querySelector('#gun-hit-feedback'),
       hullFill: document.querySelector('#hull-fill'),
       hullValue: document.querySelector('#hull-value'),
-      countermeasureRow: document.querySelector('.countermeasure-row'),
+      countermeasureRows: {
+        flare: document.querySelector('.flare-row'),
+        chaff: document.querySelector('.chaff-row'),
+      },
       maxHull:this.difficulty?.player?.hull,
     });
     this.radio = new RadioSystem({
@@ -61,6 +64,7 @@ export class CombatWorld {
     });
     this.missileLaunchTimer=0;
     this.missileLaunchSource=null;
+    this.missileLaunchSeeker=null;
     this.missileLaunchAlertCooldown=0;
     this.terrain=terrain; this.playerHeading=0; this.previousPlayerPosition=player.position.clone();
     this.remainingMissionState={airRemaining:0,groundRemaining:0};
@@ -73,7 +77,7 @@ export class CombatWorld {
       deployHostileCountermeasures: enemy => this.countermeasureSystem.deployHostile(enemy),
       addHostileProjectile: shot => this.projectileSystem.addHostileProjectile(shot),
       addPlayerProjectile: shot => this.projectileSystem.addPlayerProjectile(shot),
-      onMissileLaunch: enemy => this.onMissileLaunch(enemy),
+      onMissileLaunch: (enemy, missile, seeker) => this.onMissileLaunch(enemy, missile, seeker),
       onWingmanRadio: (event, wingman, details) => this.reportWingmanRadio(event, wingman, details),
       difficulty:this.difficulty,
     });
@@ -120,8 +124,10 @@ export class CombatWorld {
     this.countermeasureSystem = new CountermeasureSystem({
       scene, player, playerVelocity: this.playerVelocity, fx, audio,
       playerShots: this.projectileSystem.playerShots, hostileShots: this.projectileSystem.hostiles,
+      hostileAircraft: this.airBattle.enemies,
       addTransientGlow,
       initialCount:this.difficulty?.player?.countermeasures,
+      chaffConfig:this.difficulty?.player?.chaff,
       onInventoryChange: () => this.updateHud(),
     });
     this.projectileSystem.setDecoys(this.countermeasureSystem.decoys);
@@ -132,7 +138,10 @@ export class CombatWorld {
     });
     this.lastObservedMissilesFired=this.weaponSystem.missilesFired;
     this.weapon=document.querySelector('#weapon'); this.ammo=document.querySelector('#ammo'); this.missileType=document.querySelector('#missile-type'); this.missileCount=document.querySelector('#missile-count'); this.scoreEl=document.querySelector('#score');
-    this.countermeasureCount=document.querySelector('#countermeasure-count'); this.threatWarning=document.querySelector('#threat-warning');
+    this.flareCount=document.querySelector('#flare-count'); this.chaffCount=document.querySelector('#chaff-count');
+    this.radarWarning=document.querySelector('#radar-warning');
+    this.radarWarningLabel=document.querySelector('#radar-warning-label');
+    this.threatWarning=document.querySelector('#threat-warning');
     this.threatWarningLabel=document.querySelector('#threat-warning-label');
     this.threatWarningDetail=document.querySelector('#threat-warning-detail');
     this.wingmanOrderNode=document.querySelector('#wingman-order');
@@ -258,19 +267,24 @@ export class CombatWorld {
     this.frameDelta=dt;
     this.missileLaunchTimer=Math.max(0,this.missileLaunchTimer-dt);
     this.missileLaunchAlertCooldown=Math.max(0,this.missileLaunchAlertCooldown-dt);
-    if(this.missileLaunchTimer<=0)this.missileLaunchSource=null;
+    if(this.missileLaunchTimer<=0){this.missileLaunchSource=null;this.missileLaunchSeeker=null;}
     this.countermeasureSystem.tick(dt);
     if(dt>0){this.playerVelocity.copy(this.player.position).sub(this.previousPlayerPosition).multiplyScalar(1/dt);this.previousPlayerPosition.copy(this.player.position);}
     const justPressed = this.input.consumeJustPressed();
     const radarModeRequested=justPressed.has('KeyR');
     const targetCycleDirection=justPressed.has('KeyY')?-1:justPressed.has('KeyT')?1:0;
     const missileRequested=justPressed.has('KeyM')||justPressed.has('MouseSecondary');
-    const countermeasureRequested=justPressed.has('KeyF');
+    const flareRequested=justPressed.has('KeyF');
+    const chaffRequested=justPressed.has('KeyC');
     const wingmanOrder=justPressed.has('Digit1')?'attack':justPressed.has('Digit2')?'defend':justPressed.has('Digit3')?'regroup':justPressed.has('Digit4')?'disengage':null;
     if(radarModeRequested)this.radar.toggleMode();
-    if(countermeasureRequested){
-      const deployed=this.countermeasureSystem.deployPlayer();
-      this.feedback.countermeasures(deployed,this.countermeasureSystem.lastPlayerDeployment,this.countermeasureSystem.countermeasures);
+    if(flareRequested){
+      const deployed=this.countermeasureSystem.deployFlare();
+      this.feedback.countermeasures('flare',deployed,this.countermeasureSystem.lastPlayerDeployment,this.countermeasureSystem.flares);
+    }
+    if(chaffRequested){
+      const deployed=this.countermeasureSystem.deployChaff();
+      this.feedback.countermeasures('chaff',deployed,this.countermeasureSystem.lastChaffDeployment,this.countermeasureSystem.chaff);
     }
     if(wingmanOrder&&this.airBattle.issueWingmanOrder(wingmanOrder)){
       this.audio?.playWingmanOrder(wingmanOrder);
@@ -346,6 +360,7 @@ export class CombatWorld {
     this.destroyed=true;
     this.missionSystem.markPlayerDestroyed();
     if(this.boundaryWarning)this.boundaryWarning.hidden=true;
+    if(this.radarWarning)this.radarWarning.hidden=true;
     this.weaponSystem.stopGun();
     this.audio?.playCollision();
     this.audio?.stopEngine();
@@ -363,6 +378,7 @@ export class CombatWorld {
     this.destroyed=true;
     this.missionAborted=true;
     if(this.boundaryWarning)this.boundaryWarning.hidden=true;
+    if(this.radarWarning)this.radarWarning.hidden=true;
     if(this.terrain.boundaryLine)this.terrain.boundaryLine.visible=false;
     this.weaponSystem.stopGun();
     this.audio?.stopEngine();
@@ -388,12 +404,16 @@ export class CombatWorld {
     if(this.feedback.hull<=0)this.destroyPlayer(reasonKey);
   }
 
-  onMissileLaunch(enemy){
+  onMissileLaunch(enemy, _missile, seeker){
     this.missileLaunchSource=enemy;
+    this.missileLaunchSeeker=seeker??null;
     this.missileLaunchTimer=Math.max(this.missileLaunchTimer,2.2);
     if(this.missileLaunchAlertCooldown<=0){
       this.audio?.playMissileLaunchWarning();
-      this.feedback.notify('combat.missileLaunchDetected',2.1,'warning');
+      const launchKey=seeker==='radar'
+        ? 'combat.radarMissileLaunchDetected'
+        : seeker==='ir'?'combat.irMissileLaunchDetected':'combat.missileLaunchDetected';
+      this.feedback.notify(launchKey,2.1,'warning');
       this.missileLaunchAlertCooldown=2.8;
     }
     const reporter=this.airBattle.closestWingmanTo(enemy.mesh.position);
@@ -513,21 +533,37 @@ export class CombatWorld {
     const designator=document.querySelector('#target-designator');
     if(designator){designator.hidden=true;designator.classList.remove('ground-target','locked');}
     if(this.threatWarning)this.threatWarning.hidden=true;
+    if(this.radarWarning)this.radarWarning.hidden=true;
     const missileCue=document.querySelector('#missile-approach-cue');
     if(missileCue)missileCue.hidden=true;
     if(this.status){this.status.classList.remove('destroyed','complete');this.status.replaceChildren(document.createElement('i'),document.createTextNode(` ${t('hud.ready')}`));}
   }
   updateHud(){
     if(this.weapon)this.weapon.textContent=this.input.pressed.has('Space')?t('combat.firing'):t('hud.readyShort');
-    if(this.countermeasureCount)this.countermeasureCount.textContent=String(this.countermeasureSystem.countermeasures).padStart(2,'0');
+    if(this.flareCount)this.flareCount.textContent=String(this.countermeasureSystem.flares).padStart(2,'0');
+    if(this.chaffCount)this.chaffCount.textContent=String(this.countermeasureSystem.chaff).padStart(2,'0');
     if(this.wingmanOrderNode)this.wingmanOrderNode.textContent=t(`combat.wingmanStatus.${this.airBattle.wingmanOrder}`);
+    const radarWarningState=this.getPlayerRadarWarningState();
+    if(this.radarWarning){
+      this.radarWarning.hidden=this.destroyed||!radarWarningState;
+      if(radarWarningState){
+        this.radarWarning.dataset.state=radarWarningState;
+        const label=t(`hud.radarWarning.${radarWarningState}`);
+        if(this.radarWarningLabel&&this.radarWarningLabel.textContent!==label)this.radarWarningLabel.textContent=label;
+      }
+    }
     const threat=this.projectileSystem.missileThreat;
     const launchVisible=this.missileLaunchTimer>0&&this.missileLaunchSource&&!this.missileLaunchSource.dead;
     if(this.threatWarning){
       this.threatWarning.hidden=this.destroyed||(!threat&&!launchVisible);
       this.threatWarning.classList.toggle('critical',Boolean(threat&&this.projectileSystem.missileThreatEta<4.5));
       if(!this.threatWarning.hidden){
-        const warningKey=threat?(this.projectileSystem.missileThreatEta<=8.5?'hud.missileInbound':'hud.missileLaunchDetected'):'hud.missileLaunchDetected';
+        let warningKey='hud.missileLaunchDetected';
+        const missileSeeker=threat?.seeker??(launchVisible?this.missileLaunchSeeker:null);
+        const warningPhase=threat&&this.projectileSystem.missileThreatEta<=8.5?'Inbound':'LaunchDetected';
+        if(missileSeeker==='radar')warningKey=`hud.radarMissile${warningPhase}`;
+        else if(missileSeeker==='ir')warningKey=`hud.irMissile${warningPhase}`;
+        else if(threat)warningKey=this.projectileSystem.missileThreatEta<=8.5?'hud.missileInbound':'hud.missileLaunchDetected';
         const label=t(warningKey);
         if(this.threatWarningLabel&&this.threatWarningLabel.textContent!==label)this.threatWarningLabel.textContent=label;
         let detail='';
@@ -607,5 +643,18 @@ export class CombatWorld {
     }
     if(this.missileCount)this.missileCount.textContent=String(this.weaponSystem.missiles[this.radar.mode]).padStart(2,'0');
     if(this.scoreEl)this.scoreEl.textContent=String(this.score).padStart(5,'0');
+  }
+  getPlayerRadarWarningState(){
+    let searching=false;
+    let disrupted=false;
+    for(const enemy of this.enemies){
+      if(enemy.dead||enemy.kind==='attack-helicopter')continue;
+      if(enemy.radarTrackDisruptionRemaining>0){disrupted=true;continue;}
+      if(enemy.phase!=='staging'&&(enemy.engagementTarget===this.player||enemy.burstTarget===this.player))return 'track';
+      if(enemy.phase==='staging'&&enemy.detectedPlayerTimer>0)searching=true;
+    }
+    if(disrupted)return 'disrupted';
+    if(searching)return 'search';
+    return null;
   }
 }

@@ -6,7 +6,7 @@ const WORLD_UP = new THREE.Vector3(0, 1, 0);
 const GAME_KEY_CODES = new Set([
   'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE',
   'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-  'ShiftLeft', 'ShiftRight', 'Space', 'KeyM', 'KeyR', 'KeyT', 'KeyF',
+  'ShiftLeft', 'ShiftRight', 'Space', 'KeyM', 'KeyR', 'KeyT', 'KeyF', 'KeyC',
   'Minus', 'NumpadAdd', 'NumpadSubtract', 'KeyY',
 ]);
 const CAMERA_DISTANCE_DEFAULT = 22;

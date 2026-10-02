@@ -147,6 +147,72 @@ function createAircraftAsset() {
 }
 
 describe('CombatWorld sortie lifecycle', () => {
+  it('binds C to chaff and keeps F on flare deployment', async () => {
+    const { document, window } = installBrowserGlobals();
+    const { CombatWorld } = await import('../../src/combat/world.js');
+    const scene = new THREE.Scene();
+    const player = new THREE.Group();
+    player.position.set(0, 100, 0);
+    const world = new CombatWorld(
+      scene, player, createTerrain(), null, createAircraftAsset(), createMission(), null, vi.fn(), 'standard',
+    );
+    const press = code => {
+      const event = new Event('keydown');
+      Object.defineProperty(event, 'code', { value: code });
+      window.dispatchEvent(event);
+    };
+
+    press('KeyC');
+    world.update(.016);
+    expect(world.countermeasureSystem.chaff).toBe(11);
+    expect(world.countermeasureSystem.flares).toBe(20);
+    expect(document.querySelector('#chaff-count').textContent).toBe('11');
+    expect(document.querySelector('#flare-count').textContent).toBe('20');
+
+    world.countermeasureSystem.tick(2);
+    press('KeyF');
+    world.update(.016);
+    expect(world.countermeasureSystem.flares).toBe(19);
+    expect(world.countermeasureSystem.decoys[0].type).toBe('ir');
+    expect(document.querySelector('#flare-count').textContent).toBe('19');
+
+    const enemyMesh = new THREE.Group();
+    enemyMesh.position.set(0, 100, 1000);
+    scene.add(enemyMesh);
+    const enemy = {
+      mesh: enemyMesh,
+      phase: 'staging',
+      detectedPlayerTimer: .2,
+      dead: false,
+    };
+    world.enemies.push(enemy);
+    world.updateHud();
+    expect(document.querySelector('#radar-warning').dataset.state).toBe('search');
+
+    enemy.phase = 'inbound';
+    enemy.engagementTarget = player;
+    world.updateHud();
+    expect(document.querySelector('#radar-warning').dataset.state).toBe('track');
+
+    world.countermeasureSystem.tick(2);
+    world.countermeasureSystem.random = () => 0;
+    expect(world.countermeasureSystem.deployChaff()).toBe(true);
+    world.updateHud();
+    expect(enemy.radarTrackDisruptionRemaining).toBeGreaterThan(0);
+    expect(document.querySelector('#radar-warning').dataset.state).toBe('disrupted');
+
+    world.onMissileLaunch(enemy, null, 'radar');
+    world.updateHud();
+    expect(document.querySelector('#threat-warning-label').textContent).toBe('RADAR MISSILE LAUNCH · C');
+    world.onMissileLaunch(enemy, null, 'ir');
+    world.updateHud();
+    expect(document.querySelector('#threat-warning-label').textContent).toBe('IR MISSILE LAUNCH · F');
+
+    world.dispose();
+    expect(scene.children).toHaveLength(0);
+    expect(document.querySelector('#radar-warning').hidden).toBe(true);
+  });
+
   it('runs a training mission through RTB and debrief, saves its record, and releases listeners between sorties', async () => {
     const { document, window } = installBrowserGlobals();
     const { CombatWorld } = await import('../../src/combat/world.js');

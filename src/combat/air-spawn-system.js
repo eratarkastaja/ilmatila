@@ -130,6 +130,8 @@ export class AirSpawnSystem {
         phase: 'staging',
         phaseClock: 0,
         detectedPlayerTimer: 0,
+        radarTrackDisruptionRemaining: 0,
+        chaffTrackReevaluationRemaining: 0,
         stagingLane: lane,
         stagingLateral: stagingOffset.dot(playerRight),
         attackPattern: Math.floor(Math.random() * ENEMY_ATTACK_RUNS.length),

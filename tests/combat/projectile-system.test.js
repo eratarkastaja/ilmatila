@@ -164,6 +164,55 @@ describe('ProjectileSystem', () => {
     expect(missile.velocity.length()).toBeGreaterThan(600);
   });
 
+  it('lets a radar missile fly unguided through chaff disruption, then reacquire', () => {
+    const { system, scene, player, hostiles } = makeSystem();
+    player.position.set(1000, 0, 0);
+    system.collision.lastCollisionPosition.copy(player.position);
+    const mesh = new THREE.Object3D();
+    scene.add(mesh);
+    const missile = {
+      projectile: true, missile: true, seeker: 'radar', target: player,
+      mesh, velocity: new THREE.Vector3(0, 0, 650), speed: 650, turnRate: .78,
+      life: 8, burnRemaining: 5, coastDrag: .07, motorBurning: true, guidanceActive: true,
+      guidanceAfterBurnout: true, chaffDisruptedRemaining: 1, warningClock: 2,
+      proximityRadius: 20, damage: 1,
+    };
+    hostiles.push(missile);
+
+    system.update(.1);
+
+    expect(hostiles).toContain(missile);
+    expect(missile.mesh.position.z).toBeCloseTo(65);
+    expect(missile.velocity.x).toBe(0);
+    expect(missile.guidanceActive).toBe(true);
+
+    missile.chaffDisruptedRemaining = .01;
+    system.update(.1);
+    expect(missile.chaffDisruptedRemaining).toBe(0);
+    expect(missile.velocity.x).toBeGreaterThan(0);
+  });
+
+  it('continues normal guidance on radar missiles that have not been disrupted by chaff', () => {
+    const { system, scene, player, hostiles } = makeSystem();
+    player.position.set(1000, 0, 0);
+    system.collision.lastCollisionPosition.copy(player.position);
+    const mesh = new THREE.Object3D();
+    scene.add(mesh);
+    const missile = {
+      projectile: true, missile: true, seeker: 'radar', target: player,
+      mesh, velocity: new THREE.Vector3(0, 0, 650), speed: 650, turnRate: .78,
+      life: 8, burnRemaining: 5, coastDrag: .07, motorBurning: true, guidanceActive: true,
+      guidanceAfterBurnout: true, warningClock: 2, proximityRadius: 20, damage: 1,
+    };
+    hostiles.push(missile);
+
+    system.update(.1);
+
+    expect(missile.chaffDisruptedRemaining).toBe(0);
+    expect(missile.velocity.x).toBeGreaterThan(0);
+    expect(hostiles).toContain(missile);
+  });
+
   it('limits air-to-air missile turns smoothly while preserving flight speed', () => {
     const { system, scene, playerShots, enemies } = makeSystem();
     const targetMesh = new THREE.Object3D();

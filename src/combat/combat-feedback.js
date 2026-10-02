@@ -4,13 +4,14 @@ const TONE_PRIORITY = { info: 1, friendly: 2, success: 3, warning: 4, damage: 5 
 
 /** Owns short cockpit acknowledgements, hit cues and aircraft damage indication. */
 export class CombatFeedback {
-  constructor({ hud, message, hitMarker, hullFill, hullValue, countermeasureRow, maxHull = 100 } = {}) {
+  constructor({ hud, message, hitMarker, hullFill, hullValue, countermeasureRows = {}, maxHull = 100 } = {}) {
     this.hud = hud;
     this.message = message;
     this.hitMarker = hitMarker;
     this.hullFill = hullFill;
     this.hullValue = hullValue;
-    this.countermeasureRow = countermeasureRow;
+    this.countermeasureRows = countermeasureRows;
+    this.activeCountermeasureRow = null;
     this.messageTimer = 0;
     this.messageKey = null;
     this.messageParams = {};
@@ -55,12 +56,13 @@ export class CombatFeedback {
     }
   }
 
-  countermeasures(deployed, status, remaining) {
-    this.countermeasureRow?.classList.remove('dispensed');
+  countermeasures(kind, deployed, status, remaining) {
+    this.activeCountermeasureRow?.classList.remove('dispensed');
+    this.activeCountermeasureRow = this.countermeasureRows[kind] ?? null;
     if (deployed) {
-      this.countermeasureRow?.classList.add('dispensed');
+      this.activeCountermeasureRow?.classList.add('dispensed');
       this.countermeasureTimer = .42;
-      this.notify('combat.countermeasuresDispensed', 1.25, 'friendly', { remaining });
+      this.notify(`combat.${kind}Dispensed`, 1.25, 'friendly', { remaining });
     } else {
       const key = status === 'empty' ? 'combat.countermeasuresEmpty' : 'combat.countermeasuresRearming';
       this.notify(key, 1.35, 'warning');
@@ -76,7 +78,10 @@ export class CombatFeedback {
     if (this.message) this.message.hidden = this.messageTimer <= 0;
     if (this.hitMarker) this.hitMarker.hidden = this.hitTimer <= 0;
     this.hud?.classList.toggle('damage-hit', this.damageTimer > 0);
-    if (this.countermeasureTimer <= 0) this.countermeasureRow?.classList.remove('dispensed');
+    if (this.countermeasureTimer <= 0) {
+      this.activeCountermeasureRow?.classList.remove('dispensed');
+      this.activeCountermeasureRow = null;
+    }
   }
 
   refreshLanguage() {
@@ -101,6 +106,7 @@ export class CombatFeedback {
       this.hitMarker.classList.remove('kill');
     }
     this.hud?.classList.remove('damage-hit', 'damage-critical');
-    this.countermeasureRow?.classList.remove('dispensed');
+    for (const row of Object.values(this.countermeasureRows)) row?.classList.remove('dispensed');
+    this.activeCountermeasureRow = null;
   }
 }

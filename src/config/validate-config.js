@@ -15,6 +15,16 @@ const difficultySchema = object({
   player: object({
     hull: number(1, 500),
     countermeasures: number(0, 100, true),
+    chaff: object({
+      count: number(0, 100, true),
+      cooldown: number(.05, 120),
+      radarTrackBreakChance: number(0, 1),
+      radarMissileBreakChance: number(0, 1),
+      radarTrackDisruptionDuration: number(0, 60),
+      radarMissileDisruptionDuration: number(0, 60),
+      radarMissileEffectRange: number(0, 50000),
+      radarTrackReevaluationCooldown: number(0, 120),
+    }),
     incomingDamage: number(.05, 5),
   }),
   fighter: object({

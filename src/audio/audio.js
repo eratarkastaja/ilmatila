@@ -633,6 +633,11 @@ export class GameAudio {
     this.playTone(185, 72, 0.14, 0.1, 'triangle', 'effects');
   }
 
+  playChaffCountermeasure() {
+    this.playNoise(0.13, 0.075, { low: 4100, high: 950, type: 'bandpass', q: 0.8 });
+    this.playTone(560, 335, 0.09, 0.04, 'triangle', 'effects', 0.008);
+  }
+
   startMissileFlight(id) {
     const ctx = this.getContext();
     if (!ctx || this.missileLoops.has(id)) return;

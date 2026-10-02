@@ -11,6 +11,16 @@ export const DIFFICULTY_PRESETS = deepFreeze({
     player: {
       hull: 135,
       countermeasures: 20,
+      chaff: {
+        count: 16,
+        cooldown: 1.4,
+        radarTrackBreakChance: 0.62,
+        radarMissileBreakChance: 0.68,
+        radarTrackDisruptionDuration: 3.4,
+        radarMissileDisruptionDuration: 3.8,
+        radarMissileEffectRange: 5500,
+        radarTrackReevaluationCooldown: 4.5,
+      },
       incomingDamage: 0.72
     },
     fighter: {
@@ -123,6 +133,16 @@ export const DIFFICULTY_PRESETS = deepFreeze({
     player: {
       hull: 100,
       countermeasures: 20,
+      chaff: {
+        count: 12,
+        cooldown: 1.7,
+        radarTrackBreakChance: 0.5,
+        radarMissileBreakChance: 0.56,
+        radarTrackDisruptionDuration: 2.8,
+        radarMissileDisruptionDuration: 3.3,
+        radarMissileEffectRange: 5000,
+        radarTrackReevaluationCooldown: 5,
+      },
       incomingDamage: 1
     },
     fighter: {
@@ -235,6 +255,16 @@ export const DIFFICULTY_PRESETS = deepFreeze({
     player: {
       hull: 88,
       countermeasures: 20,
+      chaff: {
+        count: 10,
+        cooldown: 2,
+        radarTrackBreakChance: 0.4,
+        radarMissileBreakChance: 0.46,
+        radarTrackDisruptionDuration: 2.4,
+        radarMissileDisruptionDuration: 2.8,
+        radarMissileEffectRange: 4600,
+        radarTrackReevaluationCooldown: 5.5,
+      },
       incomingDamage: 1.25
     },
     fighter: {
