@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { MissionOptionalObjectives } from '../../src/mission/optional-objectives.js';
+import {
+  MissionOptionalObjectives,
+  scaleMissileReserveObjectives,
+} from '../../src/mission/optional-objectives.js';
+import { DIFFICULTY_PRESETS } from '../../src/combat/difficulty.js';
 
 function makeState(overrides = {}) {
   const hostileFighter = { dead: false, hp: 10, mesh: { position: { x: 0, y: 300, z: 4000 } } };
@@ -21,6 +25,22 @@ function makeState(overrides = {}) {
 }
 
 describe('MissionOptionalObjectives', () => {
+  it('scales missile reserve targets to the available loadout without mutating mission data', () => {
+    const objectives = [
+      { id: 'missiles', type: 'preserveMissiles', minimumRemaining: 16 },
+      { id: 'wingmen', type: 'allWingmenSurvive' },
+    ];
+    const scaled = scaleMissileReserveObjectives(
+      objectives,
+      DIFFICULTY_PRESETS.hard.player.weapons,
+      DIFFICULTY_PRESETS.standard.player.weapons,
+    );
+
+    expect(scaled[0].minimumRemaining).toBe(10);
+    expect(scaled[1]).toBe(objectives[1]);
+    expect(objectives[0].minimumRemaining).toBe(16);
+  });
+
   it('evaluates the built-in data-driven objective types at extraction', () => {
     const objectives = [
       { id: 'wingmen', type: 'allWingmenSurvive' },

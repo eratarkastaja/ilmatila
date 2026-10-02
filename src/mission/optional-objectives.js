@@ -7,6 +7,26 @@ function isDestroyed(unit) {
 const TARGET_FOUND = 1;
 const TARGET_DESTROYED = 2;
 
+/** Scales authored missile reserves when a difficulty carries fewer stores. */
+export function scaleMissileReserveObjectives(objectives, currentWeapons, referenceWeapons) {
+  const rows = Array.isArray(objectives) ? objectives : [];
+  const capacity = weapons => (weapons?.airMissiles ?? 0) + (weapons?.groundMissiles ?? 0);
+  const available = capacity(currentWeapons);
+  const reference = capacity(referenceWeapons);
+  if (reference <= 0 || available >= reference) return rows;
+
+  return rows.map(objective => {
+    if (objective.type !== 'preserveMissiles') return objective;
+    return {
+      ...objective,
+      minimumRemaining: Math.min(
+        available,
+        Math.max(0, Math.round((objective.minimumRemaining ?? 0) * available / reference)),
+      ),
+    };
+  });
+}
+
 function matchesSelector(unit, selector) {
   if (selector.role && unit.role !== selector.role) return false;
   if (selector.team && unit.team !== selector.team) return false;

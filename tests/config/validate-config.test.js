@@ -29,6 +29,7 @@ describe('game configuration validation', () => {
     difficulties.standard.player.chaff.radarMissileBreakChance = 1.4;
     difficulties.easy.player.chaff.count = 2.5;
     difficulties.hard.player.weapons.gunRounds = 1200.5;
+    difficulties.hard.player.fuel.enduranceMinutes = 0.5;
 
     const errors = validateGameConfig({ difficulties, missions: {} });
 
@@ -39,6 +40,7 @@ describe('game configuration validation', () => {
     expect(errors).toContain('difficulties.standard.player.chaff.radarMissileBreakChance must be between 0 and 1');
     expect(errors).toContain('difficulties.easy.player.chaff.count must be an integer');
     expect(errors).toContain('difficulties.hard.player.weapons.gunRounds must be null or an integer between 0 and 100000');
+    expect(errors).toContain('difficulties.hard.player.fuel.enduranceMinutes must be between 1 and 10000');
   });
 
   it('reports invalid mission fields, unreasonable values, and broken relationships', () => {

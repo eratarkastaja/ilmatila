@@ -105,6 +105,45 @@ export function chooseAirSpawnLayout(origin, forward, right, terrain, requestedD
   return { direction: forward.clone(), distance: lowerBound };
 }
 
+/** Shares exact theater-clamped aircraft formation placement between combat and previews. */
+export function planAirFormation({
+  origin,
+  forward,
+  right,
+  terrain,
+  count,
+  requestedDistance,
+  minimumDistance,
+  lateralSpacing,
+  forwardLaneSpacing = 0,
+  margin,
+}) {
+  const maxLane = Math.max(0, (count - 1) * .5);
+  const spawnMargin = margin ?? Math.min(getAircraftEdgeMargin({ terrain }), 1200);
+  const formation = chooseAirSpawnLayout(
+    origin,
+    forward,
+    right,
+    terrain,
+    requestedDistance,
+    minimumDistance,
+    maxLane * lateralSpacing,
+    maxLane * forwardLaneSpacing,
+    spawnMargin,
+  );
+  const battle = { terrain };
+  const positions = [];
+  for (let index = 0; index < count; index++) {
+    const lane = index - (count - 1) * .5;
+    const position = origin.clone()
+      .addScaledVector(formation.direction, formation.distance + Math.abs(lane) * forwardLaneSpacing)
+      .addScaledVector(right, lane * lateralSpacing);
+    clampToTheater(battle, position, spawnMargin);
+    positions.push(position);
+  }
+  return { ...formation, positions, margin: spawnMargin };
+}
+
 export function keepAircraftClear(battle, unit, waypoint, playerRight, friendly, target = null) {
   const awayFromPlayer = unit.away.subVectors(unit.mesh.position, battle.player.position);
   const playerDistance = awayFromPlayer.length();

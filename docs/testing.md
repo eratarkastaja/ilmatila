@@ -28,6 +28,8 @@ There are two useful lifecycle integration tests:
 
 `tests/integration/combat-scenarios.test.js` runs seeded 45-second air and ground engagements without a renderer, then follows a player missile from launch through guidance, impact, cleanup, and pool reuse. It checks target selection and ownership, ammunition use, once-only destruction, destroyed-unit inactivity, objective progress, and projectile cleanup across the real combat systems.
 
+`tests/combat/fuel-system.test.js` verifies difficulty fuel reserves, cruise and afterburner consumption, and afterburner lockout at empty. The flight-control test checks that an exhausted sortie loses afterburner and continues at glide speed; the world-session test checks HUD visibility and green/yellow/red gauge states.
+
 The scenario tests give wingman and ground-unit AI direct combat integration coverage; helicopter behavior and wider tactical choices still have focused unit coverage. The highest-value broader integration boundary remains a real-browser run that combines actual terrain and aircraft loading, pointer lock/audio, WebGL rendering, and the second-launch lifecycle. No browser automation stack is configured in the repository. Repository-level tests do cover shared-load cancellation and terrain leases; the `SortieController`'s timeout and preparation race behavior is a narrower remaining boundary.
 
 ## What to test

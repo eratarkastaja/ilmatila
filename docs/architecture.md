@@ -51,7 +51,8 @@ tests/
 | Shared particles, contrails, missile trails, and vapor | `FlightFX` in `effects/fx.js` | Dynamic render buffers, aircraft and projectile state |
 | Sound effects, engine audio, radio cues and music | `GameAudio` | Web Audio/HTML audio, app-level user-gesture unlock |
 | Flight input and aircraft control | `FlightControls`, `CombatInput` | Player transform, camera, pointer/keyboard state |
-| Air unit spawning, hostile/wingman behavior and ownership | `AirBattle` plus spawn, fighter, helicopter, wingman, and weapon helpers | Player, terrain, units, velocity, projectile/countermeasure callbacks |
+| Sortie fuel reserve and afterburner gating | `FuelSystem` in `combat/fuel-system.js`, owned by `CombatWorld` and consumed through `FlightControls` | Difficulty fuel capacity, frame time, afterburner request |
+| Air unit spawning, hostile/wingman behavior and ownership | `AirBattle` plus spawn, fighter, helicopter, wingman, and weapon helpers; `planAirFormation` is shared with the menu radar forecast | Player, terrain, units, velocity, projectile/countermeasure callbacks |
 | Ground force spawning, movement, weapons, air defense and ownership | `GroundBattle` plus spawn, unit, movement, weapon, and air-defense helpers | Player, terrain, units, velocity, projectile callbacks |
 | Target selection and radar display data | `CombatRadar` | Player heading/position, hostile and friendly contacts |
 | Combat status, weapon, warning, and inventory HUD rendering | `CombatHud` in `ui/combat-hud.js` | `CombatWorld.hudState`, DOM nodes |
@@ -66,7 +67,7 @@ tests/
 | Projected target, gun lead, missile and route cues | `TacticalHud` in `ui/hud.js` | Controls, camera, `CombatWorld.hudState`, DOM nodes |
 | Local unlocks, difficulty selection and best records | `CareerProgress` in `mission/progression.js` | Built-in missions, browser local storage |
 
-The outer active-frame order in `main.js` is flight controls and engine audio, `CombatWorld.update()`, stress-scenario work, player collision/boundary checks, terrain detail streaming, `FlightFX`, flight readouts and `TacticalHud`, then render. Paused sorties skip simulation. Inside `CombatWorld.update()`, input and radar contacts/lock are updated before weapon requests; air and ground AI then run, followed by countermeasures, projectiles/collision effects, radio, objective evaluation, mission flow, the `hudState` refresh and throttled `CombatHud` update, then combat feedback. Player collision is checked after that method by `main.js`. This ordering means weapons and seekers consume the current radar state, while mission/UI state observes the frame's combat results.
+The outer active-frame order in `main.js` is flight controls (which spend the sortie's fuel reserve before enabling afterburner) and engine audio, `CombatWorld.update()`, stress-scenario work, player collision/boundary checks, terrain detail streaming, `FlightFX`, flight readouts and `TacticalHud`, then render. Paused sorties skip simulation. Inside `CombatWorld.update()`, input and radar contacts/lock are updated before weapon requests; air and ground AI then run, followed by countermeasures, projectiles/collision effects, radio, objective evaluation, mission flow, the `hudState` refresh and throttled `CombatHud` update, then combat feedback. Player collision is checked after that method by `main.js`. This ordering means weapons and seekers consume the current radar state, while mission/UI state observes the frame's combat results.
 
 ```mermaid
 flowchart TD

@@ -13,8 +13,8 @@ describe('air-combat loadouts', () => {
       chaff: preset.player.chaff.count,
     }))).toEqual([
       { airMissiles: 10, groundMissiles: 10, gunRounds: null, flares: 20, chaff: 20 },
-      { airMissiles: 10, groundMissiles: 10, gunRounds: 2000, flares: 15, chaff: 15 },
-      { airMissiles: 6, groundMissiles: 6, gunRounds: 1200, flares: 10, chaff: 10 },
+      { airMissiles: 10, groundMissiles: 10, gunRounds: 3500, flares: 15, chaff: 15 },
+      { airMissiles: 6, groundMissiles: 6, gunRounds: 2000, flares: 10, chaff: 10 },
     ]);
     expect(MISSILE_PROFILES.playerAir.count).toBe(10);
   });

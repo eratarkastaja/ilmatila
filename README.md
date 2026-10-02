@@ -1,6 +1,6 @@
 # ILMATILA
 
-ILMATILA is an independent browser-based air-combat game by ERÄGAMES. The current source version is **0.1.0-alpha.14**. It is an alpha build: missions, combat, progression, aircraft handling, radar, and weapons are playable, while balance and mission pacing remain under development. The simulation is fictional and is not intended for real-world training or operational use.
+ILMATILA is an independent browser-based air-combat game by ERÄGAMES. The current source version is **0.1.0-alpha.15**. It is an alpha build: missions, combat, progression, aircraft handling, radar, and weapons are playable, while balance and mission pacing remain under development. The simulation is fictional and is not intended for real-world training or operational use.
 
 **[Play ILMATILA in your browser](https://eratarkastaja.github.io/ilmatila/).**
 
@@ -23,7 +23,7 @@ The available sorties are Combat Air Patrol, Intercept Flight, Close Air Support
 
 The player flies an F-35A representation using an included FlightGear F-35B visual model. Hostile flights use FlightGear Su-27-family and MiG-29 exterior models. Ground vehicles and the Mi-24 helicopter are low-detail, project-authored procedural models. These models are visual game assets, not exact engineering replicas.
 
-Flight controls are shown in the mission menu and in the pause menu's **Show Controls** view. Mouse steering and keyboard steering work together. The radar can switch between air and ground modes; the gun lead cue and selected radar target support combat. Air-to-air and air-to-ground missiles use separate inventories.
+The mission menu and pause menu open a **Show Controls** dialog with the flight controls. Mouse steering and keyboard steering work together. The radar can switch between air and ground modes; the gun lead cue and selected radar target support combat. Air-to-air and air-to-ground missiles use separate inventories. Standard and Hard sorties have finite fuel, and afterburner use burns it faster; Easy has unlimited fuel.
 
 ## Controls
 

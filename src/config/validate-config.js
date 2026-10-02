@@ -8,6 +8,7 @@ const array = item => ({ type: 'array', item });
 const optional = schema => ({ ...schema, optional: true });
 const object = shape => ({ type: 'object', shape });
 const ammoCapacity = { type: 'ammoCapacity' };
+const nullableNumber = (min, max, integer = false) => ({ type: 'nullableNumber', min, max, integer });
 const REQUIRED_DIFFICULTY_IDS = ['easy', 'standard', 'hard'];
 const REQUIRED_MISSION_IDS = ['intercept', 'patrol', 'support', 'training'];
 const OPTIONAL_OBJECTIVE_FIELDS = {
@@ -34,6 +35,10 @@ const difficultySchema = object({
       airMissiles: number(0, 100, true),
       groundMissiles: number(0, 100, true),
       gunRounds: ammoCapacity,
+    }),
+    fuel: object({
+      enduranceMinutes: nullableNumber(1, 10000, true),
+      afterburnerMultiplier: number(1, 20),
     }),
     chaff: object({
       count: number(0, 100, true),
@@ -174,6 +179,11 @@ function validateNode(value, schema, path, errors) {
     if (!Number.isInteger(value) || value < 0 || value > 100000) {
       errors.push(`${path} must be null or an integer between 0 and 100000`);
     }
+    return;
+  }
+  if (schema.type === 'nullableNumber') {
+    if (value === null) return;
+    validateNode(value, number(schema.min, schema.max, schema.integer), path, errors);
     return;
   }
   if (schema.type === 'optionalObjective') {

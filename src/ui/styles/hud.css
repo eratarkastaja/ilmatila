@@ -2182,6 +2182,73 @@
   border-top: 1px solid #91b4a526;
 }
 
+.fuel-gauge {
+  padding: 8px 2px 7px;
+  border-top: 1px solid #91b4a526;
+}
+
+.fuel-gauge[hidden] {
+  display: none;
+}
+
+.fuel-gauge-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.fuel-gauge-heading small {
+  color: #9eb7ae;
+  font: 600 9px Rajdhani,sans-serif;
+  letter-spacing: .18em;
+}
+
+.fuel-gauge-heading b {
+  color: #a5ebba;
+  font: 700 12px Barlow Condensed,sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .08em;
+  transition: color .25s ease;
+}
+
+.fuel-gauge-track {
+  height: 7px;
+  overflow: hidden;
+  border: 1px solid #90ae9c66;
+  background: #07110f;
+  box-shadow: inset 0 1px 3px #000b;
+}
+
+.fuel-gauge-track i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: scaleX(1);
+  transform-origin: left center;
+  background: #91e6aa;
+  box-shadow: 0 0 9px #91e6aa99;
+  transition: transform .22s linear,background-color .25s ease,box-shadow .25s ease;
+}
+
+.fuel-gauge[data-level="yellow"] .fuel-gauge-heading b {
+  color: #f2d36e;
+}
+
+.fuel-gauge[data-level="yellow"] .fuel-gauge-track i {
+  background: #f2d36e;
+  box-shadow: 0 0 9px #f2d36e99;
+}
+
+.fuel-gauge[data-level="red"] .fuel-gauge-heading b {
+  color: #ff786a;
+}
+
+.fuel-gauge[data-level="red"] .fuel-gauge-track i {
+  background: #ff786a;
+  box-shadow: 0 0 10px #ff786a99;
+}
+
 .countermeasure-row strong {
   color: #e7d7a5;
 }

@@ -66,7 +66,7 @@ vi.mock('../../src/environment/clouds.js', async () => {
 });
 
 vi.mock('../../src/ui/menu-radar.js', () => ({
-  MenuRadar: class { setMission() {} update() {} },
+  MenuRadar: class { setScenario() {} update() {} },
 }));
 
 vi.mock('../../src/input/controls.js', () => ({
@@ -249,7 +249,7 @@ function createDocument() {
       super.removeEventListener(type, listener, options);
     }
     querySelector(selector) {
-      if (selector === '#start-menu .menu-control-grid' || selector === '#start-menu .menu-lock-instruction') {
+      if (selector === '#menu-controls-dialog .menu-control-grid' || selector === '#menu-controls-dialog .menu-lock-instruction') {
         if (!this.elements.has(selector)) this.elements.set(selector, new MockElement());
         return this.elements.get(selector);
       }
@@ -275,7 +275,7 @@ function createDocument() {
 let documentMock;
 let windowMock;
 
-async function loadMain() {
+async function loadMain(missionId = 'training') {
   vi.resetModules();
   const THREE = await import('three');
   globalThis.THREE_FOR_TESTS = THREE;
@@ -286,7 +286,10 @@ async function loadMain() {
   globalThis.innerWidth = 1280;
   globalThis.innerHeight = 720;
   globalThis.devicePixelRatio = 1;
-  globalThis.location = { href: 'http://localhost/?mission=training&area=paijanne', search: '?mission=training&area=paijanne' };
+  globalThis.location = {
+    href: `http://localhost/?mission=${missionId}&area=paijanne`,
+    search: `?mission=${missionId}&area=paijanne`,
+  };
   globalThis.history = { replaceState: vi.fn() };
   globalThis.matchMedia = () => ({ matches: false });
   globalThis.addEventListener = windowMock.addEventListener.bind(windowMock);
@@ -332,6 +335,22 @@ describe('main game session lifecycle', () => {
     harness.worlds.length = 0;
     harness.raf.length = 0;
     harness.resumeOrder.length = 0;
+  });
+
+  it('opens the menu flight controls in a modal instead of expanding the launch page', async () => {
+    const document = await loadMain();
+    const menu = document.querySelector('#start-menu');
+    const controlsDialog = document.querySelector('#menu-controls-dialog');
+
+    document.querySelector('#show-menu-controls').dispatch('click');
+
+    expect(controlsDialog.open).toBe(true);
+    expect(menu.hidden).toBe(false);
+
+    document.querySelector('#close-menu-controls').dispatch('click');
+
+    expect(controlsDialog.open).toBe(false);
+    expect(menu.hidden).toBe(false);
   });
 
   it('completes a sortie, saves career progress, returns to menu, and launches again cleanly', async () => {
@@ -446,6 +465,18 @@ describe('main game session lifecycle', () => {
     document.dispatchEvent(new Event('ilmatila:languagechange'));
     expect(variantNode.textContent).toBe(variantBeforeLanguageChange);
     expect(harness.worlds[0].seed).toBe(world.seed);
+  });
+
+  it('shows a missile reserve objective that fits the selected difficulty loadout', async () => {
+    const document = await loadMain('patrol');
+    const difficulty = document.querySelector('#menu-difficulty');
+    difficulty.value = 'hard';
+    difficulty.dispatch('change');
+
+    const missileObjective = [...document.querySelector('#briefing-optional-objective-list').children]
+      .find(row => row.children[0].children[0].textContent === 'SAVE GUIDED MISSILES');
+
+    expect(missileObjective.children[0].children[1].textContent).toMatch(/(?:9|10) guided missiles/);
   });
 
   it('resumes with one click after an application pause releases pointer lock programmatically', async () => {

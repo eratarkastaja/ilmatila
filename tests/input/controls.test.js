@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { FlightControls } from '../../src/input/controls.js';
+import { FuelSystem } from '../../src/combat/fuel-system.js';
 
 function makeControls() {
   vi.stubGlobal('addEventListener', vi.fn());
@@ -37,7 +38,7 @@ function lockMouse(controls, canvas) {
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe('FlightControls mouse steering', () => {
+describe('FlightControls', () => {
   it('ignores cursor travel when pointer lock is not active', () => {
     const { controls } = makeControls();
     controls.setEnabled(true);
@@ -132,5 +133,20 @@ describe('FlightControls mouse steering', () => {
     controls.forward.set(0, 0, 1).applyQuaternion(controls.plane.quaternion);
 
     expect(controls.forward.y).toBeLessThan(0);
+  });
+
+  it('uses the sortie fuel reserve for afterburner and keeps a depleted aircraft gliding', () => {
+    const { controls } = makeControls();
+    const fuel = new FuelSystem({ enduranceMinutes: 1, afterburnerMultiplier: 5 });
+    controls.keys.add('ShiftLeft');
+
+    for (let second = 0; second < 12; second++) controls.update(1, fuel);
+    expect(fuel.remainingSeconds).toBe(0);
+    expect(controls.plane.userData.boosting).toBe(true);
+
+    controls.update(.1, fuel);
+    expect(controls.plane.userData.boosting).toBe(false);
+    expect(controls.speed).toBeLessThan(410);
+    expect(controls.speed).toBeGreaterThan(170);
   });
 });

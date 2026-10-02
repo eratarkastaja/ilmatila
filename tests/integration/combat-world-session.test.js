@@ -8,6 +8,7 @@ class MockElement {
     this.textContent = '';
     this.dataset = {};
     this.style = { setProperty() {} };
+    this.attributes = new Map();
     this.children = [];
     this.listeners = new Map();
     this.queriedElements = new Map();
@@ -30,6 +31,8 @@ class MockElement {
     this.listeners.set(type, listeners);
   }
   removeEventListener(type, listener) { this.listeners.get(type)?.delete(listener); }
+  setAttribute(name, value) { this.attributes.set(name, String(value)); }
+  getAttribute(name) { return this.attributes.get(name) ?? null; }
   querySelector(selector) {
     if (!this.queriedElements.has(selector)) this.queriedElements.set(selector, new MockElement());
     return this.queriedElements.get(selector);
@@ -229,11 +232,22 @@ describe('CombatWorld sortie lifecycle', () => {
     expect(world.countermeasureSystem.chaff).toBe(15);
     expect(world.countermeasureSystem.flares).toBe(15);
     expect(world.weaponSystem.missiles).toEqual({ air: 10, ground: 10 });
-    expect(world.weaponSystem.gunAmmoRemaining).toBe(2000);
+    expect(world.weaponSystem.gunAmmoRemaining).toBe(3500);
     world.update(0);
+    expect(document.querySelector('#fuel-gauge').hidden).toBe(false);
+    expect(document.querySelector('#fuel-value').textContent).toBe('100%');
+    expect(document.querySelector('#fuel-gauge').dataset.level).toBe('green');
     expect(document.querySelector('#chaff-count').textContent).toBe('15');
     expect(document.querySelector('#flare-count').textContent).toBe('15');
-    expect(document.querySelector('#gun-ammo-count').textContent).toBe('2,000');
+    expect(document.querySelector('#gun-ammo-count').textContent).toBe('3,500');
+    world.fuelSystem.update(4 * 60 * 60, false);
+    world.updateHud();
+    expect(document.querySelector('#fuel-value').textContent).toBe('50%');
+    expect(document.querySelector('#fuel-gauge').dataset.level).toBe('yellow');
+    expect(document.querySelector('#fuel-gauge').getAttribute('aria-valuenow')).toBe('50');
+    world.fuelSystem.update(3 * 60 * 60, false);
+    world.updateHud();
+    expect(document.querySelector('#fuel-gauge').dataset.level).toBe('red');
     const press = code => {
       const event = new Event('keydown');
       Object.defineProperty(event, 'code', { value: code });
@@ -292,6 +306,12 @@ describe('CombatWorld sortie lifecycle', () => {
     world.dispose();
     expect(scene.children).toHaveLength(0);
     expect(document.querySelector('#radar-warning').hidden).toBe(true);
+    const easy = new CombatWorld(
+      scene, player, createTerrain(), null, createAircraftAsset(), createMission(), null, vi.fn(), 'easy',
+    );
+    easy.update(0);
+    expect(document.querySelector('#fuel-gauge').hidden).toBe(true);
+    easy.dispose();
   });
 
   it('runs a training mission through RTB and debrief, saves its record, and releases listeners between sorties', async () => {
@@ -318,8 +338,10 @@ describe('CombatWorld sortie lifecycle', () => {
     const onMissionEnd = vi.fn((outcome, result) => career.recordMission({ ...result, outcome }));
 
     const first = new CombatWorld(scene, player, terrain, null, aircraftAsset, mission, null, onMissionEnd, 'hard');
+    expect(first.fuelSystem.capacitySeconds).toBe(4 * 60 * 60);
+    expect(first.fuelSystem.fraction).toBe(1);
     expect(first.weaponSystem.missiles).toEqual({ air: 6, ground: 6 });
-    expect(first.weaponSystem.gunAmmoRemaining).toBe(1200);
+    expect(first.weaponSystem.gunAmmoRemaining).toBe(2000);
     expect(first.countermeasureSystem.flares).toBe(10);
     expect(first.countermeasureSystem.chaff).toBe(10);
     expect(window.listenerCount('keydown')).toBe(1);

@@ -10,6 +10,7 @@ import { MissionSystem } from './mission-system.js';
 import { MISSION_PHASE, MissionFlowSystem } from './mission-flow.js';
 import { MISSION_OUTCOME } from './mission-objective.js';
 import { WeaponSystem } from './weapon-system.js';
+import { FuelSystem } from './fuel-system.js';
 import { CombatFeedback } from './combat-feedback.js';
 import { RadioSystem } from './radio-system.js';
 import { ScoreSystem } from './score-system.js';
@@ -19,7 +20,7 @@ import { getBoundaryApproach } from './boundary-warning.js';
 import { getDifficultyPreset } from './difficulty.js';
 import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
 import { calculateDebriefGrade } from '../mission/debrief-grade.js';
-import { MissionOptionalObjectives } from '../mission/optional-objectives.js';
+import { MissionOptionalObjectives, scaleMissileReserveObjectives } from '../mission/optional-objectives.js';
 import { resolveMissionVariant } from '../mission/mission-variants.js';
 import { addTransientGlow, CombatEffects, disposeCombatEffectResources } from '../effects/combat-effects.js';
 import { CombatHud } from '../ui/combat-hud.js';
@@ -42,6 +43,7 @@ export class CombatWorld {
     this.boundaryApproach=null;
     this.boundaryCritical=false;
     this.difficulty=getDifficultyPreset(difficultyId);
+    this.fuelSystem=new FuelSystem(this.difficulty.player.fuel);
     this.seed = Number(seed) >>> 0;
     this.random = createSeededRandom(this.seed);
     this.telemetry=null;
@@ -49,6 +51,11 @@ export class CombatWorld {
     this.missionVariant=missionResolution.variant;
     this.reinforcement=missionResolution.reinforcement;
     const missionConfig={hostiles:4,wingmen:2,groundBattle:true,groundPairs:6,groundTrucks:12,...missionResolution.mission};
+    missionConfig.optionalObjectives=scaleMissileReserveObjectives(
+      missionConfig.optionalObjectives,
+      this.difficulty.player.weapons,
+      getDifficultyPreset('standard').player.weapons,
+    );
     this.input = new CombatInput(window, inputTarget);
     this.scoreSystem=new ScoreSystem();
     this.damageTaken=0;
@@ -297,6 +304,7 @@ export class CombatWorld {
         lockCueConfirmed:false,lockCueTarget:false,lock:0,
       },
       weapons:{missiles:this.weaponSystem.missiles,gunAmmoRemaining:this.weaponSystem.gunAmmoRemaining,cooldown:0,feedbackKey:null,feedbackTimer:0},
+      fuel:{unlimited:this.fuelSystem.unlimited,fraction:this.fuelSystem.fraction},
       countermeasures:{flares:0,chaff:0},
       wingmanOrder:this.airBattle.wingmanOrder,
       score:0,
@@ -307,6 +315,7 @@ export class CombatWorld {
       },
     };
     this.refreshHudState();
+    this.combatHud.update(this.hudState);
     this.restartButton = document.querySelector('#restart');
     this.onRestart = () => location.reload();
     this.restartButton?.addEventListener('click', this.onRestart);
@@ -368,6 +377,8 @@ export class CombatWorld {
     state.radar.lock=this.radar.lock;
     state.weapons.cooldown=this.weaponSystem.cooldown;
     state.weapons.gunAmmoRemaining=this.weaponSystem.gunAmmoRemaining;
+    state.fuel.unlimited=this.fuelSystem.unlimited;
+    state.fuel.fraction=this.fuelSystem.fraction;
     state.weapons.feedbackKey=this.weaponSystem.missileFeedbackKey;
     state.weapons.feedbackTimer=this.weaponSystem.missileFeedbackTimer;
     state.countermeasures.flares=this.countermeasureSystem.flares;

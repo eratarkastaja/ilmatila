@@ -1,40 +1,135 @@
 import * as THREE from 'three';
+import { getAircraftEdgeMargin, planAirFormation } from '../combat/air-combat-utils.js';
 import { t } from './i18n.js';
-import { MISSIONS } from '../mission/missions.js';
 
-const CONVOY_GROUP_SIZE = 4;
+const AIR_RADAR_RANGE = 27000;
+const RADAR_RADIUS_PERCENT = 43;
+const FRIENDLY_MIN_RADIUS_PERCENT = 5;
+const CONTACT_PULSE_SECONDS = 0.72;
+const DEFAULT_MISSION = { hostiles: 4, wingmen: 2 };
 
-function getMissionContacts(mission) {
+function sweepCrossesContact(contactBearing, previousAngle, sweptDegrees) {
+  if (sweptDegrees <= 0) return false;
+  if (sweptDegrees >= 360) return true;
+  const bearingFromSweepStart = THREE.MathUtils.euclideanModulo(contactBearing - previousAngle, 360);
+  return bearingFromSweepStart <= sweptDegrees;
+}
+
+function addFormationContacts(contacts, positions, team, origin, heading, { reinforcement = false } = {}) {
+  for (const position of positions) {
+    const dx = position.x - origin.x;
+    const dz = position.z - origin.z;
+    const range = Math.hypot(dx, dz);
+    const bearing = Math.atan2(dx, dz) - heading;
+    const radius = Math.min(range / AIR_RADAR_RANGE, 1) * RADAR_RADIUS_PERCENT;
+    // Wingmen are only a few hundred metres from ownship and overlap its symbol
+    // at radar scale; preserve their true aft bearings with a small display floor.
+    const displayRadius = team === 'friendly'
+      ? Math.max(radius, FRIENDLY_MIN_RADIUS_PERCENT)
+      : radius;
+    contacts.push({
+      bearing,
+      range,
+      team,
+      domain: 'air',
+      position,
+      reinforcement,
+      left: 50 - Math.sin(bearing) * displayRadius,
+      top: 50 - Math.cos(bearing) * displayRadius,
+    });
+  }
+}
+
+function formationPositions(origin, forward, right, terrain, {
+  count,
+  requestedDistance,
+  minimumDistance,
+  lateralSpacing,
+  forwardLaneSpacing = 0,
+  margin,
+}) {
+  if (count <= 0) return [];
+  return planAirFormation({
+    origin,
+    forward,
+    right,
+    terrain,
+    count,
+    requestedDistance,
+    minimumDistance,
+    lateralSpacing,
+    forwardLaneSpacing,
+    margin,
+  }).positions;
+}
+
+function getScenarioContacts(missionResolution, terrain, origin, heading) {
+  const mission = { ...DEFAULT_MISSION, ...missionResolution.mission };
+  const forward = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
+  const right = new THREE.Vector3(Math.cos(heading), 0, -Math.sin(heading));
+  const spawnMargin = Math.min(getAircraftEdgeMargin({ terrain }), 1200);
   const contacts = [];
-  for (let index = 0; index < mission.wingmen; index += 1) contacts.push({ team: 'friendly', domain: 'air' });
-  for (let index = 0; index < mission.hostiles; index += 1) contacts.push({ team: 'hostile', domain: 'air' });
 
-  if (mission.groundBattle) {
-    for (let index = 0; index < mission.groundPairs; index += 1) {
-      contacts.push({ team: 'friendly', domain: 'ground' });
-      contacts.push({ team: 'hostile', domain: 'ground' });
-    }
-    const convoyGroups = Math.ceil(mission.groundTrucks / CONVOY_GROUP_SIZE);
-    for (let index = 0; index < convoyGroups; index += 1) contacts.push({ team: 'hostile', domain: 'ground' });
+  for (let index = 0; index < (mission.wingmen ?? 0); index++) {
+    const wing = index === 0 ? -1 : 1;
+    const position = origin.clone()
+      .addScaledVector(right, wing * 230)
+      .addScaledVector(forward, -300);
+    addFormationContacts(contacts, [position], 'friendly', origin, heading);
+  }
+
+  const hostilePositions = formationPositions(origin, forward, right, terrain, {
+    count: mission.hostiles ?? 0,
+    requestedDistance: mission.hostileSpawnDistance ?? 12000,
+    minimumDistance: mission.hostileMinimumSpawnDistance ?? 10000,
+    lateralSpacing: mission.hostileLateralSpacing ?? 560,
+    forwardLaneSpacing: 90,
+    margin: spawnMargin,
+  });
+  addFormationContacts(contacts, hostilePositions, 'hostile', origin, heading);
+
+  const helicopterPositions = formationPositions(origin, forward, right, terrain, {
+    count: mission.hostileHelicopters ?? 0,
+    requestedDistance: mission.hostileHelicopterSpawnDistance ?? 9500,
+    minimumDistance: mission.hostileHelicopterMinimumSpawnDistance ?? 8500,
+    lateralSpacing: mission.hostileHelicopterLateralSpacing ?? 850,
+    margin: spawnMargin,
+  });
+  addFormationContacts(contacts, helicopterPositions, 'hostile', origin, heading);
+
+  const reinforcement = missionResolution.reinforcement;
+  if (reinforcement?.scheduled) {
+    const reinforcementMission = {
+      ...mission,
+      hostiles: reinforcement.hostiles,
+      hostileSpawnDistance: reinforcement.spawnDistance ?? mission.hostileSpawnDistance,
+      hostileMinimumSpawnDistance: reinforcement.minimumSpawnDistance
+        ?? mission.hostileMinimumSpawnDistance,
+      hostileLateralSpacing: reinforcement.lateralSpacing ?? mission.hostileLateralSpacing,
+    };
+    const reinforcementPositions = formationPositions(
+      origin,
+      forward,
+      right,
+      terrain,
+      {
+        count: reinforcementMission.hostiles ?? 0,
+        requestedDistance: reinforcementMission.hostileSpawnDistance ?? 12000,
+        minimumDistance: reinforcementMission.hostileMinimumSpawnDistance ?? 10000,
+        lateralSpacing: reinforcementMission.hostileLateralSpacing ?? 560,
+        forwardLaneSpacing: 90,
+        margin: spawnMargin,
+      },
+    );
+    addFormationContacts(contacts, reinforcementPositions, 'hostile', origin, heading, { reinforcement: true });
   }
 
   return contacts;
 }
 
-function createRandom(missionId) {
-  let seed = 2166136261;
-  for (const character of missionId) seed = Math.imul(seed ^ character.charCodeAt(0), 16777619);
-  seed >>>= 0;
-  if (seed === 0) seed = 1;
-  return () => {
-    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-    return seed / 4294967296;
-  };
-}
-
-/** Decorative mission-theater radar used by the start menu. */
+/** Heading-up preview of the selected sortie's authored air formations. */
 export class MenuRadar {
-  constructor({ reducedMotion = false, missionId = 'intercept' } = {}) {
+  constructor({ reducedMotion = false } = {}) {
     this.scope = document.querySelector('.radar-scope');
     this.sweep = document.querySelector('.grid-sweep');
     this.readout = document.querySelector('.radar-readout');
@@ -42,43 +137,42 @@ export class MenuRadar {
     this.angle = 0;
     this.elapsed = 0;
     this.visibleCount = -1;
+    this.detectedCount = 0;
     this.missionId = null;
+    this.seed = null;
     this.contacts = [];
 
     this.onLanguageChange = () => {
       this.updateContactLabels();
       this.visibleCount = -1;
-      this.updateReadout(this.contacts.filter(contact => contact.visibleUntil > this.elapsed).length);
+      this.updateReadout(this.detectedCount);
     };
     document.addEventListener('ilmatila:languagechange', this.onLanguageChange);
-    this.setMission(missionId);
   }
 
-  setMission(missionId) {
-    if (!Object.hasOwn(MISSIONS, missionId) || this.missionId === missionId || !this.scope) return;
-    const mission = MISSIONS[missionId];
-
+  setScenario(missionResolution, { seed, terrain, origin = new THREE.Vector3(), heading = 0 } = {}) {
+    if (!missionResolution?.mission || !this.scope) return;
     for (const contact of this.contacts) contact.element.remove();
-    this.contacts = [];
-    this.missionId = missionId;
+    this.contacts.length = 0;
+    this.missionId = missionResolution.mission.id;
+    this.seed = seed === undefined ? null : Number(seed) >>> 0;
 
-    const random = createRandom(missionId);
-    for (const spec of getMissionContacts(mission)) {
+    for (const contact of getScenarioContacts(missionResolution, terrain, origin, heading)) {
       const element = document.createElement('b');
-      element.className = `grid-contact contact-${spec.team} contact-${spec.domain}`;
+      element.className = `grid-contact contact-${contact.team} contact-air${contact.reinforcement ? ' contact-reinforcement' : ''}`;
+      element.style.left = `${contact.left}%`;
+      element.style.top = `${contact.top}%`;
       this.scope.append(element);
-
-      const bearing = random() * 360;
-      const range = 0.2 + random() * 0.7;
-      const radius = range * 46;
-      const radians = THREE.MathUtils.degToRad(bearing);
-      element.style.left = `${50 + Math.sin(radians) * radius}%`;
-      element.style.top = `${50 - Math.cos(radians) * radius}%`;
-      this.contacts.push({ element, bearing, team: spec.team, visibleUntil: -1 });
+      contact.element = element;
+      contact.scanBearing = THREE.MathUtils.euclideanModulo(-THREE.MathUtils.radToDeg(contact.bearing), 360);
+      contact.detectedUntil = -Infinity;
+      contact.detected = false;
+      this.contacts.push(contact);
     }
 
     this.updateContactLabels();
     this.visibleCount = -1;
+    this.detectedCount = 0;
     this.updateReadout(0);
   }
 
@@ -89,23 +183,26 @@ export class MenuRadar {
   }
 
   update(dt) {
-    this.elapsed += dt;
-    this.angle = THREE.MathUtils.euclideanModulo(this.angle + dt * 360 / this.scanSeconds, 360);
+    const sweptDegrees = Math.max(0, dt * 360 / this.scanSeconds);
+    const previousAngle = this.angle;
+    this.angle = THREE.MathUtils.euclideanModulo(previousAngle + sweptDegrees, 360);
     if (this.sweep) this.sweep.style.transform = `rotate(${this.angle}deg)`;
-    const beamTolerance = 1.6 + dt * 180 / this.scanSeconds;
-    let visibleCount = 0;
+    this.elapsed += Math.max(0, dt);
 
+    let detectedCount = 0;
     for (const contact of this.contacts) {
-      const angularError = THREE.MathUtils.euclideanModulo(this.angle - contact.bearing + 180, 360) - 180;
-      if (Math.abs(angularError) <= beamTolerance) contact.visibleUntil = this.elapsed + 1.15;
-      const remaining = contact.visibleUntil - this.elapsed;
-      const opacity = remaining > 0 ? Math.min(1, remaining / .55) : 0;
-      contact.element.style.opacity = String(opacity);
-      contact.element.classList.toggle('detected', opacity > .05);
-      if (opacity > .05) visibleCount++;
+      if (sweepCrossesContact(contact.scanBearing, previousAngle, sweptDegrees)) {
+        contact.detectedUntil = this.elapsed + CONTACT_PULSE_SECONDS;
+      }
+      const detected = this.elapsed < contact.detectedUntil;
+      if (detected !== contact.detected) {
+        contact.detected = detected;
+        contact.element.classList.toggle('detected', detected);
+      }
+      if (detected) detectedCount++;
     }
-
-    this.updateReadout(visibleCount);
+    this.detectedCount = detectedCount;
+    this.updateReadout(detectedCount);
   }
 
   updateReadout(visibleCount) {

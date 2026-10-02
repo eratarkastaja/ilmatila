@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { createFighter } from '../aircraft/plane.js';
 import { createMi24AttackHelicopter } from '../aircraft/rotorcraft.js';
 import {
-  ENEMY_ATTACK_RUNS, chooseAirSpawnLayout, clampToTheater, flightDirection,
-  forwardOfHeading, getAircraftEdgeMargin, rightOfHeading, wrapAngle,
+  ENEMY_ATTACK_RUNS, flightDirection, forwardOfHeading,
+  getAircraftEdgeMargin, planAirFormation, rightOfHeading, wrapAngle,
 } from './air-combat-utils.js';
 
 /** Creates and places player support and hostile aircraft. */
@@ -99,18 +99,18 @@ export class AirSpawnSystem {
     const edgeMargin = getAircraftEdgeMargin(battle);
     const spawnMargin = Math.min(edgeMargin, 1200);
     const lateralSpacing = mission.hostileLateralSpacing ?? 560;
-    const maxLane = Math.max(0, (hostileCount - 1) * 0.5);
-    const formation = chooseAirSpawnLayout(
-      battle.player.position,
-      playerForward,
-      playerRight,
-      battle.terrain,
-      mission.hostileSpawnDistance ?? 12000,
-      mission.hostileMinimumSpawnDistance ?? 10000,
-      maxLane * lateralSpacing,
-      maxLane * 90,
-      spawnMargin,
-    );
+    const formation = planAirFormation({
+      origin: battle.player.position,
+      forward: playerForward,
+      right: playerRight,
+      terrain: battle.terrain,
+      count: hostileCount,
+      requestedDistance: mission.hostileSpawnDistance ?? 12000,
+      minimumDistance: mission.hostileMinimumSpawnDistance ?? 10000,
+      lateralSpacing,
+      forwardLaneSpacing: 90,
+      margin: spawnMargin,
+    });
 
     for (let i = 0; i < hostileCount; i++) {
       const aircraftVariant = mission.hostileComposition?.length
@@ -123,11 +123,7 @@ export class AirSpawnSystem {
       });
       const lane = i - (hostileCount - 1) * .5;
       const laneCoordinate = lane / Math.max(.5, (hostileCount - 1) * .5);
-      const lateral = lane * lateralSpacing;
-      jet.position.copy(battle.player.position)
-        .addScaledVector(formation.direction, formation.distance + Math.abs(lane) * 90)
-        .addScaledVector(playerRight, lateral);
-      clampToTheater(battle, jet.position, spawnMargin);
+      jet.position.copy(formation.positions[i]);
 
       const ground = battle.terrain?.sampleHeight(jet.position.x, jet.position.z) ?? -Infinity;
       jet.position.y = Math.max(battle.player.position.y + altitudeOffsets[i % altitudeOffsets.length], ground + 360);
@@ -212,23 +208,20 @@ export class AirSpawnSystem {
     const count = mission.hostileHelicopters ?? 0;
     if (!count) return;
     const lateralSpacing = battle.mission.hostileHelicopterLateralSpacing ?? 850;
-    const formation = chooseAirSpawnLayout(
-      battle.player.position,
-      playerForward,
-      playerRight,
-      battle.terrain,
-      mission.hostileHelicopterSpawnDistance ?? 9500,
-      mission.hostileHelicopterMinimumSpawnDistance ?? 8500,
-      (count - 1) * 0.5 * lateralSpacing,
-      0,
-      spawnMargin,
-    );
+    const formation = planAirFormation({
+      origin: battle.player.position,
+      forward: playerForward,
+      right: playerRight,
+      terrain: battle.terrain,
+      count,
+      requestedDistance: mission.hostileHelicopterSpawnDistance ?? 9500,
+      minimumDistance: mission.hostileHelicopterMinimumSpawnDistance ?? 8500,
+      lateralSpacing,
+      margin: spawnMargin,
+    });
     for (let i = 0; i < count; i++) {
       const mesh = createMi24AttackHelicopter();
-      mesh.position.copy(battle.player.position)
-        .addScaledVector(formation.direction, formation.distance)
-        .addScaledVector(playerRight, (i - (count - 1) * 0.5) * lateralSpacing);
-      clampToTheater(battle, mesh.position, spawnMargin);
+      mesh.position.copy(formation.positions[i]);
       const ground = battle.terrain?.sampleHeight(mesh.position.x, mesh.position.z) ?? 0;
       mesh.position.y = ground + (mission.hostileHelicopterSpawnAltitude ?? 320) + i * 35;
       mesh.rotation.order = 'YXZ';

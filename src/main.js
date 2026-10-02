@@ -13,10 +13,12 @@ import { SunEffects, SUN_DIRECTION } from './environment/sun.js';
 import { ATMOSPHERE } from './environment/atmosphere.js';
 import { MISSIONS } from './mission/missions.js';
 import { resolveMissionVariant } from './mission/mission-variants.js';
+import { scaleMissileReserveObjectives } from './mission/optional-objectives.js';
 import { CareerProgress } from './mission/progression.js';
 import { SortieController } from './game/sortie-controller.js';
 import { disposeMissilePool } from './combat/projectiles.js';
 import { createSortieSeed } from './combat/random.js';
+import { getDifficultyPreset } from './combat/difficulty.js';
 import { renderOptionalObjectives } from './ui/optional-objectives.js';
 import { formatPercent, getLanguage, initializeLanguagePicker, t } from './ui/i18n.js';
 import './ui/styles/base.css';
@@ -36,11 +38,14 @@ const launchProgress = document.querySelector('#launch-progress');
 const launchProgressFill = document.querySelector('#launch-progress-fill');
 const launchProgressStatus = document.querySelector('#launch-progress-status');
 const launchProgressTitle = document.querySelector('#launch-progress-title');
+const menuControlsDialog = document.querySelector('#menu-controls-dialog');
+const showMenuControlsButton = document.querySelector('#show-menu-controls');
+const closeMenuControlsButton = document.querySelector('#close-menu-controls');
 const pauseControlsReference = document.querySelector('#pause-controls-reference');
 pauseControlsReference.append(
-  document.querySelector('#start-menu .menu-control-grid').cloneNode(true),
+  document.querySelector('#menu-controls-dialog .menu-control-grid').cloneNode(true),
 );
-const pauseControlsDescription = document.querySelector('#start-menu .menu-lock-instruction').cloneNode(true);
+const pauseControlsDescription = document.querySelector('#menu-controls-dialog .menu-lock-instruction').cloneNode(true);
 pauseControlsDescription.id = 'pause-controls-description';
 pauseControlsReference.append(pauseControlsDescription);
 initializeLanguagePicker();
@@ -57,6 +62,7 @@ const areaAliases = new Map([['vironlahti', 'virolahti']]);
 let selectedMissionId = Object.hasOwn(MISSIONS, urlParams.get('mission')) ? urlParams.get('mission') : 'patrol';
 if (!careerProgress.isUnlocked(selectedMissionId)) selectedMissionId = 'patrol';
 let plannedSortieSeed = null;
+let selectedMissionResolution = null;
 let menuRadar = null;
 const theaterAreas = TERRAIN_AREAS;
 if (!menuTheater.options.length) {
@@ -199,7 +205,13 @@ function selectMission(id) {
   selectedMissionId = id;
   const baseMission = stressMode ? { ...MISSIONS[id], variants: [] } : MISSIONS[id];
   const missionResolution = resolveMissionVariant(baseMission, plannedSortieSeed);
-  menuRadar?.setMission(id);
+  selectedMissionResolution = missionResolution;
+  menuRadar?.setScenario(missionResolution, {
+    seed: plannedSortieSeed,
+    terrain,
+    origin: player.position,
+    heading: controls.heading,
+  });
   for (const card of missionCards) {
     const selected = card.dataset.mission === id;
     card.classList.toggle('selected', selected);
@@ -208,7 +220,14 @@ function selectMission(id) {
   document.querySelector('#briefing-code').textContent = t(`mission.${id}.code`);
   document.querySelector('#briefing-copy').textContent = t(`mission.${id}.briefing`);
   document.querySelector('#theater-mission-name').textContent = t(`mission.${id}.title`).toUpperCase();
-  renderOptionalObjectives(briefingOptionalObjectiveList, missionResolution.mission.optionalObjectives);
+  const standardWeapons = getDifficultyPreset('standard').player.weapons;
+  const selectedWeapons = getDifficultyPreset(careerProgress.difficulty).player.weapons;
+  const optionalObjectives = scaleMissileReserveObjectives(
+    missionResolution.mission.optionalObjectives,
+    selectedWeapons,
+    standardWeapons,
+  );
+  renderOptionalObjectives(briefingOptionalObjectiveList, optionalObjectives);
   if (briefingVariant) {
     briefingVariant.hidden = !missionResolution.variant;
     briefingVariant.textContent = missionResolution.variant
@@ -233,6 +252,12 @@ function installTerrain(replacement) {
   scene.add(replacement.mesh);
   disposeTerrain(previous);
   terrain = replacement;
+  menuRadar?.setScenario(selectedMissionResolution, {
+    seed: plannedSortieSeed,
+    terrain,
+    origin: player.position,
+    heading: controls.heading,
+  });
 }
 
 updateMenuArea(theaterAreas.find(area => area.id === initialAreaId));
@@ -313,6 +338,7 @@ menuTheater.addEventListener('change', () => {
 menuDifficulty.addEventListener('change', () => {
   careerProgress.setDifficulty(menuDifficulty.value);
   renderMissionProgress();
+  selectMission(selectedMissionId);
 });
 
 for (const card of missionCards) card.addEventListener('click', () => selectMission(card.dataset.mission));
@@ -337,6 +363,15 @@ document.querySelector('#credits-back').addEventListener('click', () => creditsD
 creditsDialog.addEventListener('click', event => {
   if (event.target === creditsDialog) creditsDialog.close();
 });
+showMenuControlsButton.addEventListener('click', () => {
+  menuControlsDialog.showModal();
+  closeMenuControlsButton.focus({ preventScroll: true });
+});
+closeMenuControlsButton.addEventListener('click', () => menuControlsDialog.close());
+menuControlsDialog.addEventListener('click', event => {
+  if (event.target === menuControlsDialog) menuControlsDialog.close();
+});
+menuControlsDialog.addEventListener('close', () => showMenuControlsButton.focus({ preventScroll: true }));
 
 function pauseFlight() {
   if (!sortie?.started || sortie.paused) return false;
@@ -588,7 +623,12 @@ const assets = new AssetRepository({
 });
 menuRadar = new MenuRadar({
   reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
-  missionId: selectedMissionId,
+});
+menuRadar.setScenario(selectedMissionResolution, {
+  seed: plannedSortieSeed,
+  terrain,
+  origin: player.position,
+  heading: controls.heading,
 });
 
 sortie = new SortieController({
@@ -710,7 +750,7 @@ function animate() {
     const stressScenario = sortie.stressScenario;
     stressScenario?.recordFrame(performance.now());
     if (!combat.destroyed) {
-      controls.update(dt);
+      controls.update(dt, combat.fuelSystem);
       audio.updateEngine(controls.speed, Boolean(player.userData.boosting), dt);
       combat.update(dt);
       if (!sortie.paused) {

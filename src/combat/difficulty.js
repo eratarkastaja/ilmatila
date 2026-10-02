@@ -12,6 +12,7 @@ export const DIFFICULTY_PRESETS = deepFreeze({
       hull: 135,
       countermeasures: 20,
       weapons: { airMissiles: 10, groundMissiles: 10, gunRounds: null },
+      fuel: { enduranceMinutes: null, afterburnerMultiplier: 5 },
       chaff: {
         count: 20,
         cooldown: 1.4,
@@ -134,7 +135,8 @@ export const DIFFICULTY_PRESETS = deepFreeze({
     player: {
       hull: 100,
       countermeasures: 15,
-      weapons: { airMissiles: 10, groundMissiles: 10, gunRounds: 2000 },
+      weapons: { airMissiles: 10, groundMissiles: 10, gunRounds: 3500 },
+      fuel: { enduranceMinutes: 480, afterburnerMultiplier: 5 },
       chaff: {
         count: 15,
         cooldown: 1.7,
@@ -257,7 +259,8 @@ export const DIFFICULTY_PRESETS = deepFreeze({
     player: {
       hull: 94,
       countermeasures: 10,
-      weapons: { airMissiles: 6, groundMissiles: 6, gunRounds: 1200 },
+      weapons: { airMissiles: 6, groundMissiles: 6, gunRounds: 2000 },
+      fuel: { enduranceMinutes: 240, afterburnerMultiplier: 5 },
       chaff: {
         count: 10,
         cooldown: 2,

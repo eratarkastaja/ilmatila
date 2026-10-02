@@ -130,11 +130,14 @@ export class FlightControls {
     this.camera.lookAt(0, 70, 30);
   }
 
-  update(dt) {
+  update(dt, fuelSystem = null) {
     if (!this.enabled) return;
     this.elapsed += dt;
     const key = code => this.keys.has(code) ? 1 : 0;
-    const boost = key('ShiftLeft') || key('ShiftRight');
+    const boostRequested = Boolean(key('ShiftLeft') || key('ShiftRight'));
+    const boost = fuelSystem
+      ? fuelSystem.update(dt, boostRequested)
+      : boostRequested;
     this.plane.userData.boosting = Boolean(boost);
     if (this.plane.userData.afterburner) {
       const plume = this.plane.userData.afterburner;
@@ -143,7 +146,7 @@ export class FlightControls {
       const flutter = boost ? Math.sin(this.elapsed * 23) * 0.018 : 0;
       plume.scale.set(1 + flutter, 1 - flutter * 0.65, pulse);
     }
-    const targetSpeed = boost ? 410 : 235;
+    const targetSpeed = boost ? 410 : fuelSystem && !fuelSystem.hasFuel ? 170 : 235;
     this.speed = THREE.MathUtils.damp(this.speed, targetSpeed, 1.2, dt);
 
     // W/Up lowers the nose; S/Down raises it. Arrow keys mirror WASD.

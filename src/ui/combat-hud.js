@@ -24,6 +24,9 @@ export class CombatHud {
     this.score = document.querySelector('#score');
     this.flareCount = document.querySelector('#flare-count');
     this.chaffCount = document.querySelector('#chaff-count');
+    this.fuelGauge = document.querySelector('#fuel-gauge');
+    this.fuelValue = document.querySelector('#fuel-value');
+    this.fuelFill = document.querySelector('#fuel-fill');
     this.wingmanOrder = document.querySelector('#wingman-order');
     this.radarWarning = document.querySelector('#radar-warning');
     this.radarWarningLabel = document.querySelector('#radar-warning-label');
@@ -46,6 +49,19 @@ export class CombatHud {
     setTextIfChanged(this.flareCount, String(state.countermeasures.flares).padStart(2, '0'));
     setTextIfChanged(this.chaffCount, String(state.countermeasures.chaff).padStart(2, '0'));
     setTextIfChanged(this.wingmanOrder, t(`combat.wingmanStatus.${state.wingmanOrder}`));
+    setHiddenIfChanged(this.fuelGauge, state.fuel.unlimited);
+    if (!state.fuel.unlimited && this.fuelGauge) {
+      const percent = Math.max(0, Math.min(100, Math.round(state.fuel.fraction * 100)));
+      const level = percent > 50 ? 'green' : percent > 20 ? 'yellow' : 'red';
+      setTextIfChanged(this.fuelValue, `${percent}%`);
+      if (this.fuelGauge.dataset.level !== level) this.fuelGauge.dataset.level = level;
+      const scale = `scaleX(${percent / 100})`;
+      if (this.fuelFill?.style.transform !== scale) this.fuelFill.style.transform = scale;
+      const ariaValue = String(percent);
+      if (this.fuelGauge.getAttribute?.('aria-valuenow') !== ariaValue) {
+        this.fuelGauge.setAttribute?.('aria-valuenow', ariaValue);
+      }
+    }
 
     const { radar, threats, weapons, mission } = state;
     if (this.radarWarning) {
