@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { CollisionSystem } from '../../src/combat/collision-system.js';
 import { ProjectileSystem } from '../../src/combat/projectile-system.js';
+import { CombatTelemetry } from '../../src/performance/combat-telemetry.js';
 
 function makeSystem(overrides = {}) {
   const scene = new THREE.Scene();
@@ -48,6 +49,53 @@ function makeSystem(overrides = {}) {
 }
 
 describe('ProjectileSystem', () => {
+  it('uses the injected random source for flare acquisition and reports the successful decoy', () => {
+    const random = vi.fn(() => 0);
+    const telemetry = new CombatTelemetry();
+    const { system, player, decoys } = makeSystem({ random });
+    system.setTelemetry(telemetry);
+    const flarePosition = new THREE.Vector3(0, 0, -50);
+    const flare = {
+      active: true,
+      team: 'player',
+      source: player,
+      type: 'ir',
+      position: flarePosition,
+      age: 0,
+      maxLife: 2.7,
+      spoofChance: 1,
+    };
+    decoys.push(flare);
+    const missile = {
+      seeker: 'ir',
+      velocity: new THREE.Vector3(0, 0, 1),
+      mesh: { position: new THREE.Vector3(0, 0, -100) },
+    };
+
+    expect(system.tryAcquireFlare(missile, player.position, decoys, 'player', player)).toBe(flare);
+    expect(random).toHaveBeenCalledOnce();
+    expect(telemetry.snapshot().countermeasures).toMatchObject({
+      attempts: { flare: { player: { missile: 1 } } },
+      successes: { flare: { player: { missile: 1 } } },
+    });
+  });
+
+  it('records player, wingman and hostile missile launches by seeker type', () => {
+    const telemetry = new CombatTelemetry();
+    const { system } = makeSystem();
+    system.setTelemetry(telemetry);
+
+    system.addPlayerProjectile({ missile: true, seeker: 'radar' });
+    system.addPlayerProjectile({ missile: true, seeker: 'ir', ally: true });
+    system.addHostileProjectile({ missile: true, seeker: 'ir' });
+
+    expect(telemetry.snapshot().missileLaunches).toEqual({
+      total: 3,
+      byTeam: { player: { radar: 1 }, wingman: { ir: 1 }, hostile: { ir: 1 } },
+      bySeeker: { radar: 1, ir: 2 },
+    });
+  });
+
   it('moves player projectiles, resolves aircraft hits and removes spent rounds', () => {
     const { system, scene, playerShots, enemies, hooks } = makeSystem();
     const aircraftMesh = new THREE.Object3D();

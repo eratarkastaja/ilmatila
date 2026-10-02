@@ -88,10 +88,12 @@ export class CountermeasureSystem {
     this._chaffUp = new THREE.Vector3();
     this.onInventoryChange = onInventoryChange;
     this.chaffConfig = chaffConfig;
+    this.telemetry = null;
     this.flares = initialCount;
     this.chaff = chaffConfig.count;
     this.cooldown = 0;
     this.chaffCooldown = 0;
+    this.chaffDeploymentCount = 0;
     this.lastPlayerDeployment = 'ready';
     this.lastChaffDeployment = 'ready';
   }
@@ -99,6 +101,10 @@ export class CountermeasureSystem {
   tick(dt) {
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.chaffCooldown = Math.max(0, this.chaffCooldown - dt);
+  }
+
+  setTelemetry(telemetry) {
+    this.telemetry = telemetry;
   }
 
   deployPlayer() {
@@ -148,6 +154,7 @@ export class CountermeasureSystem {
       life: 2.7, maxLife: 2.7, active: true, age: 0, trailClock: 0, spoofChance: .62,
     });
     this.audio?.playCountermeasure();
+    this.telemetry?.recordCountermeasureUse('player', 'flare');
     this.onInventoryChange();
     return true;
   }
@@ -174,6 +181,8 @@ export class CountermeasureSystem {
     this.cooldown = .85;
     this.chaffCooldown = this.chaffConfig.cooldown;
     this.emitChaffEffect();
+    this.chaffDeploymentCount++;
+    this.telemetry?.recordCountermeasureUse('player', 'chaff');
     this.interfereWithRadarTracks();
     this.interfereWithRadarMissiles();
     if (this.audio?.playChaffCountermeasure) this.audio.playChaffCountermeasure();
@@ -225,11 +234,13 @@ export class CountermeasureSystem {
         && (enemy.engagementTarget === this.player || enemy.burstTarget === this.player);
       if (!trackingPlayer || enemy.chaffTrackReevaluationRemaining > 0) continue;
       enemy.chaffTrackReevaluationRemaining = config.radarTrackReevaluationCooldown;
+      this.telemetry?.recordCountermeasureAttempt('player', 'chaff', 'radarTrack');
       if (this.random() >= config.radarTrackBreakChance) continue;
       enemy.radarTrackDisruptionRemaining = Math.max(
         enemy.radarTrackDisruptionRemaining ?? 0,
         config.radarTrackDisruptionDuration,
       );
+      this.telemetry?.recordCountermeasureSuccess('player', 'chaff', 'radarTrack');
     }
   }
 
@@ -237,21 +248,29 @@ export class CountermeasureSystem {
     const config = this.chaffConfig;
     for (const missile of this.hostileShots) {
       if (!missile?.missile || missile.seeker !== 'radar' || !missile.guidanceActive
-        || missile.life <= 0 || missile.chaffAttempted
+        || missile.life <= 0
+        || missile.lastChaffAttemptDeployment === this.chaffDeploymentCount
+        || (missile.chaffDisruptedRemaining ?? 0) > 0
         || !missile.mesh || (missile.target && missile.target !== this.player)
         || missile.mesh.position.distanceTo(this.player.position) > config.radarMissileEffectRange) continue;
-      missile.chaffAttempted = true;
+      // One probability roll per missile for this chaff burst. A later burst
+      // can try again after a failed roll or after the previous disruption ends.
+      missile.lastChaffAttemptDeployment = this.chaffDeploymentCount;
+      missile.chaffAttemptCount = (missile.chaffAttemptCount ?? 0) + 1;
+      this.telemetry?.recordCountermeasureAttempt('player', 'chaff', 'radarMissile');
       if (this.random() >= config.radarMissileBreakChance) continue;
       missile.chaffDisruptedRemaining = Math.max(
         missile.chaffDisruptedRemaining ?? 0,
         config.radarMissileDisruptionDuration,
       );
+      this.telemetry?.recordCountermeasureSuccess('player', 'chaff', 'radarMissile');
     }
   }
 
   deployHostile(enemy) {
     if (!enemy?.mesh || enemy.dead || enemy.countermeasures <= 0 || enemy.countermeasureCooldown > 0) return false;
     enemy.countermeasures--;
+    this.telemetry?.recordCountermeasureUse('hostile', 'flare');
     enemy.countermeasureCooldown = (enemy.countermeasureCooldownBase ?? 4.5)
       + this.random() * (enemy.countermeasureCooldownJitter ?? 1.5);
     const evasiveDuration = enemy.countermeasureEvasionDuration ?? 2.4;

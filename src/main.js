@@ -47,6 +47,7 @@ const careerProgress = new CareerProgress();
 menuDifficulty.value = careerProgress.difficulty;
 const urlParams = new URLSearchParams(location.search);
 const stressMode = import.meta.env.DEV && urlParams.get('stress') === '1';
+const telemetryMode = import.meta.env.DEV;
 const areaAliases = new Map([['vironlahti', 'virolahti']]);
 let selectedMissionId = Object.hasOwn(MISSIONS, urlParams.get('mission')) ? urlParams.get('mission') : 'patrol';
 if (!careerProgress.isUnlocked(selectedMissionId)) selectedMissionId = 'patrol';
@@ -306,6 +307,7 @@ const pauseConfirmPanel = document.querySelector('#pause-confirm-panel');
 const pauseControlsPanel = document.querySelector('#pause-controls-panel');
 const missionDebriefDialog = document.querySelector('#mission-debrief');
 const resumeFlightButton = document.querySelector('#resume-flight');
+const resumeLockStatus = document.querySelector('#resume-lock-status');
 const showFlightControlsButton = document.querySelector('#show-flight-controls');
 const backToPauseButton = document.querySelector('#back-to-pause');
 const quitToMenuButton = document.querySelector('#quit-to-menu');
@@ -320,7 +322,10 @@ creditsDialog.addEventListener('click', event => {
 });
 
 function pauseFlight() {
-  sortie?.pause();
+  if (!sortie?.started || sortie.paused) return false;
+  resumeCapturePending = false;
+  if (sortie.pause()) return true;
+  return false;
 }
 
 function showPauseControls() {
@@ -352,16 +357,64 @@ function confirmMissionInterruption() {
   cancelQuitToMenuButton.focus({ preventScroll: true });
 }
 
+let resumeCapturePending = false;
+
+function setResumeLockStatus(key = null) {
+  resumeLockStatus.hidden = !key;
+  resumeLockStatus.textContent = key ? t(key) : '';
+}
+
+function reportResumeCaptureFailure() {
+  if (!resumeCapturePending || !sortie?.started || !sortie.paused) return;
+  resumeCapturePending = false;
+  setResumeLockStatus('pause.pointerLockError');
+  if (import.meta.env.DEV) {
+    console.warn('Pointer lock was denied during resume; the sortie remains paused.');
+  }
+}
+
+function resumeAfterPointerCapture() {
+  if (!resumeCapturePending || !sortie?.started || !sortie.paused
+    || document.pointerLockElement !== renderer.domElement) return false;
+  resumeCapturePending = false;
+  const resumed = sortie.resume();
+  if (resumed) {
+    setResumeLockStatus();
+  }
+  return resumed;
+}
+
 document.addEventListener('pointerlockchange', () => {
-  // Escape releases pointer lock before the page receives its key event in
-  // some browsers. Use that release to open pause immediately; the key handler
-  // below also covers browsers that deliver the key event first.
-  if (!sortie?.started || sortie.paused || !controls.enabled || controls.pointerLockActive) return;
-  pauseFlight();
+  if (document.pointerLockElement !== renderer.domElement) return;
+  if (resumeAfterPointerCapture()) return;
+  if (sortie?.finished || (!sortie?.started && !sortie?.launchInProgress)) {
+    document.exitPointerLock?.();
+  }
 });
 
+document.addEventListener('pointerlockerror', reportResumeCaptureFailure);
+
 function resumeFlight() {
-  sortie?.resume();
+  if (!sortie?.started || !sortie.paused || resumeCapturePending) return;
+  resumeCapturePending = true;
+  setResumeLockStatus();
+  let captureRequest;
+  try {
+    // Keep this call inside the initiating click or P key gesture. The sortie
+    // remains paused until the browser confirms canvas ownership.
+    captureRequest = controls.requestMouseCapture();
+  } catch {
+    reportResumeCaptureFailure();
+    return;
+  }
+  Promise.resolve(captureRequest).then(locked => {
+    if (!resumeCapturePending) return;
+    if (locked && document.pointerLockElement === renderer.domElement) {
+      resumeAfterPointerCapture();
+    } else {
+      reportResumeCaptureFailure();
+    }
+  }, reportResumeCaptureFailure);
 }
 
 function resetPlayerAirframeVisuals() {
@@ -375,6 +428,8 @@ function resetPlayerAirframeVisuals() {
 
 function returnToMenu() {
   if (!sortie?.started) return;
+  resumeCapturePending = false;
+  setResumeLockStatus();
   root.classList.remove('flight-active', 'flight-paused');
   if (pauseDialog.open) pauseDialog.close();
   if (missionDebriefDialog.open) missionDebriefDialog.close();
@@ -419,7 +474,11 @@ function returnToMenu() {
   launchButton.focus({ preventScroll: true });
 }
 
-resumeFlightButton.addEventListener('click', () => resumeFlight());
+document.addEventListener('click', event => {
+  if (event.target !== resumeFlightButton
+    && event.target?.closest?.('#resume-flight') !== resumeFlightButton) return;
+  resumeFlight();
+});
 showFlightControlsButton.addEventListener('click', showPauseControls);
 backToPauseButton.addEventListener('click', () => returnToPauseOptions());
 quitToMenuButton.addEventListener('click', confirmMissionInterruption);
@@ -428,32 +487,28 @@ confirmQuitToMenuButton.addEventListener('click', returnToMenu);
 missionDebriefReturnButton.addEventListener('click', returnToMenu);
 missionDebriefDialog.addEventListener('cancel', event => event.preventDefault());
 pauseDialog.addEventListener('cancel', event => {
-  // Escape is reserved for opening pause; use the visible controls to resume
-  // so the browser can grant pointer lock from a direct click gesture.
+  // Keep Escape from dismissing a paused sortie; P or Resume Flight resumes it.
   event.preventDefault();
 });
 document.addEventListener('keydown', event => {
-  if (event.code !== 'Escape' || event.repeat || !sortie?.started || sortie.combat?.destroyed) return;
-  if (missionDebriefDialog.open) {
-    event.preventDefault();
-    event.stopPropagation();
-    return;
-  }
-  if (sortie.paused) {
-    event.preventDefault();
-    event.stopPropagation();
-    return;
-  }
+  if (!sortie?.started || sortie.finished || sortie.combat?.destroyed) return;
+  if (event.code !== 'KeyP' || event.repeat) return;
   event.preventDefault();
   event.stopPropagation();
-  pauseFlight();
+  if (sortie.paused) resumeFlight();
+  else pauseFlight();
 }, { capture: true });
 
 launchButton.addEventListener('click', async () => {
   if (sortie?.started || sortie?.launchInProgress || launchButton.disabled) return;
   // Pointer lock must be requested directly in the launch-button gesture;
   // waiting for the asynchronous terrain/model loads loses browser activation.
-  controls.requestMouseCapture();
+  let captureRequest;
+  try {
+    captureRequest = controls.requestMouseCapture();
+  } catch {
+    captureRequest = Promise.resolve(false);
+  }
   const selectedArea = theaterAreas.find(area => area.id === selectedAreaId) ?? theaterAreas[0];
   const prepared = await sortie.prepare({
     missionId: selectedMissionId,
@@ -461,7 +516,20 @@ launchButton.addEventListener('click', async () => {
     area: selectedArea,
     difficulty: careerProgress.difficulty,
   });
-  if (prepared) sortie.start();
+  if (!prepared) return;
+  const locked = await Promise.resolve(captureRequest).then(Boolean, () => false);
+  if (!locked || document.pointerLockElement !== renderer.domElement) {
+    sortie.dispose();
+    launchButton.disabled = false;
+    menuDifficulty.disabled = false;
+    launchButton.setAttribute('aria-busy', 'false');
+    menuTheater.disabled = false;
+    setLaunchProgress(0, 'menu.launchButton', 'menu.launchReadyStatus');
+    setMenuStatus('launch.pointerLockFailed', 'error');
+    if (import.meta.env.DEV) console.warn('Pointer lock was denied during launch; the sortie was not started.');
+    return;
+  }
+  sortie.start();
 });
 
 const clock = new THREE.Clock();
@@ -504,6 +572,7 @@ sortie = new SortieController({
   difficulty: careerProgress.difficulty,
   playerStartAgl: PLAYER_START_AGL,
   stressMode,
+  telemetryMode,
   onPrepareStart: () => {
     const supersededMenuTerrain = menuTerrainController;
     terrainRequest++;
@@ -527,11 +596,14 @@ sortie = new SortieController({
     resetPlayerAirframeVisuals();
   },
   onStart: () => {
+    resumeCapturePending = false;
+    setResumeLockStatus();
     const nextUrl = new URL(location.href);
     nextUrl.searchParams.set('mission', selectedMissionId);
     nextUrl.searchParams.set('area', selectedAreaId);
     history.replaceState(null, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
     if (stressMode) window.__ilmatilaStress = sortie.stressScenario;
+    if (telemetryMode) window.__ilmatilaTelemetry = sortie.telemetry;
     root.classList.add('flight-active');
     root.classList.remove('flight-paused');
     flightHud.hidden = false;
@@ -542,6 +614,7 @@ sortie = new SortieController({
   },
   onPause: () => {
     root.classList.add('flight-paused');
+    setResumeLockStatus();
     pauseConfirmPanel.hidden = true;
     pauseControlsPanel.hidden = true;
     pauseMainPanel.hidden = false;
@@ -552,9 +625,12 @@ sortie = new SortieController({
   },
   onResume: () => {
     root.classList.remove('flight-paused');
+    setResumeLockStatus();
     if (pauseDialog.open) pauseDialog.close();
   },
   onFinish: (outcome, result) => {
+    resumeCapturePending = false;
+    setResumeLockStatus();
     const careerUpdate = careerProgress.recordMission({ ...result, outcome });
     renderMissionProgress();
     const note = document.querySelector('#debrief-career-note');

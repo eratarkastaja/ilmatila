@@ -59,6 +59,7 @@ export class FlightControls {
     this.mouseViewportWidth = canvas.clientWidth || innerWidth;
     this.mouseViewportHeight = canvas.clientHeight || innerHeight;
     this.pointerLockActive = false;
+    this.mouseCaptureRequest = null;
     this.cameraOffset = new THREE.Vector3();
     this.cameraFollowOffset = new THREE.Vector3(0, 5, -CAMERA_DISTANCE_DEFAULT);
     this.cameraTarget = new THREE.Vector3();
@@ -104,7 +105,7 @@ export class FlightControls {
       this.mouseDeltaY += event.movementY;
     };
     this.onCanvasPointerDown = event => {
-      if (!this.enabled || this.pointerLockActive || event.pointerType !== 'mouse') return;
+      if (!this.enabled || document.pointerLockElement === this.canvas || event.pointerType !== 'mouse') return;
       this.requestMouseCapture();
     };
     this.onPointerLockChange = () => {
@@ -232,14 +233,44 @@ export class FlightControls {
   }
 
   requestMouseCapture() {
-    if (this.pointerLockActive || typeof this.canvas.requestPointerLock !== 'function') return;
+    if (document.pointerLockElement === this.canvas) {
+      this.pointerLockActive = true;
+      return Promise.resolve(true);
+    }
+    if (this.mouseCaptureRequest) return this.mouseCaptureRequest;
+    if (typeof this.canvas.requestPointerLock !== 'function') return Promise.resolve(false);
+
     this.resetMouseAim();
+    let resolveRequest;
+    const request = new Promise(resolve => { resolveRequest = resolve; });
+    this.mouseCaptureRequest = request;
+    const finish = locked => {
+      if (this.mouseCaptureRequest !== request) return;
+      document.removeEventListener('pointerlockchange', onLockChange);
+      document.removeEventListener('pointerlockerror', onLockError);
+      this.mouseCaptureRequest = null;
+      resolveRequest(locked);
+    };
+    const onLockChange = () => {
+      if (document.pointerLockElement === this.canvas) finish(true);
+    };
+    const onLockError = () => finish(false);
+    document.addEventListener('pointerlockchange', onLockChange);
+    document.addEventListener('pointerlockerror', onLockError);
+
     try {
-      const request = this.canvas.requestPointerLock();
-      request?.catch?.(() => {});
+      const lockRequest = this.canvas.requestPointerLock();
+      lockRequest?.then?.(
+        () => {
+          if (document.pointerLockElement === this.canvas) finish(true);
+        },
+        () => finish(false),
+      );
     } catch {
+      finish(false);
       this.resetMouseAim();
     }
+    return request;
   }
 
   setEnabled(enabled) {

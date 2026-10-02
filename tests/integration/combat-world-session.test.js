@@ -9,6 +9,7 @@ class MockElement {
     this.style = { setProperty() {} };
     this.children = [];
     this.listeners = new Map();
+    this.queriedElements = new Map();
     const classes = new Set();
     this.classList = {
       add: (...names) => names.forEach(name => classes.add(name)),
@@ -28,7 +29,10 @@ class MockElement {
     this.listeners.set(type, listeners);
   }
   removeEventListener(type, listener) { this.listeners.get(type)?.delete(listener); }
-  querySelector() { return new MockElement(); }
+  querySelector(selector) {
+    if (!this.queriedElements.has(selector)) this.queriedElements.set(selector, new MockElement());
+    return this.queriedElements.get(selector);
+  }
   querySelectorAll() { return []; }
   append(child) { this.children.push(child); }
   appendChild(child) { this.children.push(child); return child; }
@@ -203,10 +207,13 @@ describe('CombatWorld sortie lifecycle', () => {
 
     world.onMissileLaunch(enemy, null, 'radar');
     world.updateHud();
-    expect(document.querySelector('#threat-warning-label').textContent).toBe('RADAR MISSILE LAUNCH · C');
+    expect(document.querySelector('#threat-warning-label').textContent).toBe('RADAR MISSILE LAUNCH → CHAFF [C]');
+    expect(document.querySelector('#combat-feedback').querySelector('b').textContent).toBe('RADAR MISSILE LAUNCH → CHAFF [C]');
+    world.missileLaunchAlertCooldown = 0;
     world.onMissileLaunch(enemy, null, 'ir');
     world.updateHud();
-    expect(document.querySelector('#threat-warning-label').textContent).toBe('IR MISSILE LAUNCH · F');
+    expect(document.querySelector('#threat-warning-label').textContent).toBe('IR MISSILE LAUNCH → FLARES [F]');
+    expect(document.querySelector('#combat-feedback').querySelector('b').textContent).toBe('IR MISSILE LAUNCH → FLARES [F]');
 
     world.dispose();
     expect(scene.children).toHaveLength(0);

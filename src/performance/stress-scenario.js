@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createMissile, MISSILE_PROFILES } from '../combat/projectiles.js';
+import { CombatTelemetry } from './combat-telemetry.js';
 
 const forward = new THREE.Vector3(0, 0, 1);
 const gunDirection = new THREE.Vector3();
@@ -7,11 +8,13 @@ const effectPosition = new THREE.Vector3();
 
 /** Repeatable development-only combat load used for browser profiling. */
 export class CombatStressScenario {
-  constructor({ combat, scene, player, renderer }) {
+  constructor({ combat, scene, player, renderer, telemetry = null }) {
     this.combat = combat;
     this.scene = scene;
     this.player = player;
     this.renderer = renderer;
+    this.telemetry = telemetry ?? combat.telemetry ?? new CombatTelemetry();
+    combat.setTelemetry(this.telemetry);
     this.originalDestroyPlayer = combat.destroyPlayer;
     this.preventedDeaths = 0;
     combat.destroyPlayer = () => { this.preventedDeaths++; };
@@ -140,6 +143,7 @@ export class CombatStressScenario {
     const maxFrameTime = percentile(.95);
     return {
       seconds: (performance.now() - this.started) / 1000,
+      difficulty: this.combat.difficulty?.id ?? 'unknown',
       fps: frameTime > 0 ? 1000 / frameTime : 0,
       frameMsMedian: frameTime,
       frameMsP95: maxFrameTime,
@@ -161,11 +165,13 @@ export class CombatStressScenario {
       particles: this.combat.fx?.maxParticles ?? 0,
       renderer: { ...this.renderer.info.render },
       gpuResources: { ...this.renderer.info.memory },
+      combatTelemetry: this.telemetry.snapshot(),
     };
   }
 
   stop() {
     this.active = false;
     this.combat.destroyPlayer = this.originalDestroyPlayer;
+    this.combat.setTelemetry(null);
   }
 }

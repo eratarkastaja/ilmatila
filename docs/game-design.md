@@ -11,7 +11,7 @@ The implemented game is a single-player, real-time 3D air-combat sortie in a cha
 - **Flight:** Keyboard and pointer-locked mouse steering work together. The aircraft has pitch, bank, heading, speed, afterburner, chase-camera zoom, and terrain-relative altitude feedback.
 - **Radar and targeting:** The radar switches between air and ground search modes. Contacts are selected with `T`/`Y`; the selected target has separate sensor, lock-envelope, and boresight conditions. Lock acquisition and confirmation are shown to the player.
 - **Weapons:** The player fires a cannon and carries separate air-to-air and air-to-ground missile stores. Missile launch depends on the radar-selected target, mode, lock, and launch envelope. The gun uses ballistic projectiles; missiles have finite motor/lifetime behavior and can be spoofed by decoys.
-- **Countermeasures:** `F` deploys flares against infrared missiles and `C` deploys chaff against existing hostile radar tracks and radar-guided missiles. Both inventories are finite and use cooldowns. Flare decoys can distract infrared seekers when the missile can see a fresh flare ahead of its target; chaff can briefly disrupt an existing fighter track or radar missile guidance, with probabilistic success and normal reacquisition.
+- **Countermeasures:** `F` deploys flares against infrared missiles and `C` deploys chaff against existing hostile radar tracks and radar-guided missiles. Both inventories are finite and use cooldowns. Flare decoys can distract infrared seekers when the missile can see a fresh flare ahead of its target. Each chaff burst gets one break roll against an eligible radar missile; a later burst may retry after a failed roll or once an earlier disruption ends. A successful break briefly interrupts guidance, followed by normal reacquisition.
 - **Wingmen:** The player can order wingmen to attack, defend, regroup, or disengage. Wingmen have their own targeting, weapons, health, loss behavior, and radio reports.
 - **Objectives:** Current objective types are clear air, support, and timed training. Mission phases guide the player through departure, navigation/ingress, contact, engagement, objective, RTB, and debrief. Clear-air and support sorties complete after the objective and extraction; training completes after its configured duration and then uses the return route.
 
@@ -46,7 +46,7 @@ Definitions and their spawn/route settings are in `src/mission/missions.js`. `Mi
 
 - Radar mode, contact visibility, selected target, lock acquisition, and confirmed/lost lock state must agree with weapon eligibility.
 - The gun reticle tracks the aircraft boresight, while the radar target cue can represent lock state; do not conflate those signals.
-- Missile launch/inbound warnings, countermeasure availability, airframe damage/degraded handling, and boundary warnings communicate immediate threats or constraints.
+- Missile launch/inbound warnings identify infrared versus radar guidance and pair them with `F` flares or `C` chaff; a radar track warning also calls out chaff. Countermeasure availability, airframe damage/degraded handling, and boundary warnings communicate immediate threats or constraints.
 - Mission phase/route/objective indicators and radio reports provide navigation, task, wingman-command, and threat context. Avoid removing cues when changing their owning system.
 - The debrief reports outcome, score, kills, gun use/accuracy, missiles, damage, and objective result; progression uses this result data.
 

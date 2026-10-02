@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import packageMetadata from '../../package.json';
 
 const harness = vi.hoisted(() => ({
   worlds: [],
@@ -6,6 +7,7 @@ const harness = vi.hoisted(() => ({
   controls: null,
   audio: null,
   raf: [],
+  resumeOrder: [],
 }));
 
 vi.mock('three', async importOriginal => {
@@ -69,16 +71,41 @@ vi.mock('../../src/ui/menu-radar.js', () => ({
 
 vi.mock('../../src/input/controls.js', () => ({
   FlightControls: class {
-    constructor() {
+    constructor(plane, camera, canvas) {
       this.enabled = false;
+      this.canvas = canvas;
       this.keys = new Set();
       this.speed = 235;
       this.pitch = this.roll = this.heading = this.elapsed = 0;
       this.bankReferenceValid = true;
+      canvas.addEventListener('pointerdown', event => {
+        if (!this.enabled || globalThis.document.pointerLockElement === canvas || event.pointerType !== 'mouse') return;
+        this.requestMouseCapture();
+      });
       harness.controls = this;
     }
-    setEnabled(enabled) { this.enabled = enabled; }
-    requestMouseCapture() {}
+    setEnabled(enabled) {
+      this.enabled = enabled;
+      if (!enabled && globalThis.document.pointerLockElement === this.canvas) {
+        globalThis.document.pointerLockElement = null;
+        globalThis.document.dispatchEvent(new Event('pointerlockchange'));
+      }
+    }
+    requestMouseCapture() {
+      harness.resumeOrder.push('pointer-lock');
+      this.pauseDialogOpenAtCapture = globalThis.document.querySelector('#pause-dialog').open;
+      this.documentGestureReceivedAtRequest = globalThis.document.clickGestureReceived;
+      const captureResult = this.capturePromise ?? Promise.resolve(this.captureResult ?? true);
+      return Promise.resolve(captureResult).then(locked => {
+        if (locked) {
+          globalThis.document.pointerLockElement = this.canvas;
+          globalThis.document.dispatchEvent(new Event('pointerlockchange'));
+        } else {
+          globalThis.document.dispatchEvent(new Event('pointerlockerror'));
+        }
+        return locked;
+      });
+    }
     resetMouseAim() {}
     resetCameraZoom() {}
     updateAttitude() {}
@@ -95,6 +122,7 @@ vi.mock('../../src/combat/world.js', () => ({
       this.allies = [];
       this.playerShots = [];
       this.hostiles = [];
+      this.setTelemetry = vi.fn();
       this.dispose = vi.fn(() => { this.destroyed = true; });
       this.clearInput = vi.fn();
       this.checkPlayerCollision = vi.fn();
@@ -113,7 +141,7 @@ vi.mock('../../src/effects/fx.js', () => ({
 vi.mock('../../src/audio/audio.js', () => ({
   GameAudio: class {
     constructor() {
-      this.setPaused = vi.fn();
+      this.setPaused = vi.fn(paused => harness.resumeOrder.push(paused ? 'audio-pause' : 'audio-resume'));
       this.setGunFiring = vi.fn();
       this.stopEngine = vi.fn();
       this.startEngine = vi.fn();
@@ -167,7 +195,12 @@ class MockElement {
   }
   removeEventListener(type, listener) { this.listeners.get(type)?.delete(listener); }
   dispatch(type, event = {}) {
-    for (const listener of this.listeners.get(type) ?? []) listener({ target: this, ...event });
+    const dispatchedEvent = { target: this, ...event };
+    for (const listener of this.listeners.get(type) ?? []) listener(dispatchedEvent);
+    if (type === 'click' && this !== globalThis.document) {
+      globalThis.document.clickGestureReceived = true;
+      for (const listener of globalThis.document.listenerRegistry.get(type) ?? []) listener(dispatchedEvent);
+    }
   }
   append(...children) {
     this.children.push(...children);
@@ -280,14 +313,27 @@ async function launch(document) {
   });
 }
 
+function pressKey(document, code) {
+  const event = new Event('keydown', { cancelable: true });
+  Object.defineProperty(event, 'code', { value: code });
+  document.dispatchEvent(event);
+  return event;
+}
+
+function pressPauseKey(document) {
+  pressKey(document, 'KeyP');
+}
+
 describe('main game session lifecycle', () => {
   beforeEach(() => {
     harness.worlds.length = 0;
     harness.raf.length = 0;
+    harness.resumeOrder.length = 0;
   });
 
   it('completes a sortie, saves career progress, returns to menu, and launches again cleanly', async () => {
     const document = await loadMain();
+    expect(document.querySelector('#menu-version').textContent).toBe(packageMetadata.version);
     await launch(document);
     const firstWorld = harness.worlds[0];
 
@@ -322,14 +368,141 @@ describe('main game session lifecycle', () => {
     expect(document.listenerRegistry.get('ilmatila:languagechange').size).toBe(1);
   });
 
+  it('does not start a prepared sortie unless launch pointer lock is confirmed', async () => {
+    const document = await loadMain();
+    harness.controls.captureResult = false;
+    const launchButton = document.querySelector('#launch-mission');
+
+    launchButton.dispatch('click');
+    expect(launchButton.disabled).toBe(true);
+    await vi.waitFor(() => expect(harness.raf.length).toBeGreaterThan(1));
+    harness.raf.pop()(0);
+    await vi.waitFor(() => expect(launchButton.disabled).toBe(false));
+
+    expect(document.querySelector('#game').classList.contains('flight-active')).toBe(false);
+    expect(harness.controls.enabled).toBe(false);
+    expect(document.querySelector('#start-menu').hidden).toBe(false);
+    expect(harness.worlds[0].dispose).toHaveBeenCalledOnce();
+  });
+
+  it('resumes with one click after an application pause releases pointer lock programmatically', async () => {
+    const document = await loadMain();
+    await launch(document);
+
+    pressPauseKey(document);
+    expect(document.querySelector('#pause-dialog').open).toBe(true);
+    expect(document.pointerLockElement).toBe(null);
+    harness.resumeOrder.length = 0;
+
+    const resumeButton = document.querySelector('#resume-flight');
+    resumeButton.dispatch('click', { detail: 1 });
+
+    await vi.waitFor(() => expect(harness.controls.enabled).toBe(true));
+    expect(harness.controls.enabled).toBe(true);
+    expect(document.querySelector('#pause-dialog').open).toBe(false);
+    expect(harness.controls.pauseDialogOpenAtCapture).toBe(true);
+    expect(harness.controls.documentGestureReceivedAtRequest).toBe(true);
+    expect(harness.resumeOrder).toEqual(['pointer-lock', 'audio-resume']);
+  });
+
+  it('lets Escape release only the mouse and recaptures it on a canvas click', async () => {
+    const document = await loadMain();
+    await launch(document);
+    const escapeEvent = pressKey(document, 'Escape');
+    expect(escapeEvent.defaultPrevented).toBe(false);
+    document.pointerLockElement = null;
+    document.dispatchEvent(new Event('pointerlockchange'));
+
+    expect(document.querySelector('#pause-dialog').open).toBe(false);
+    expect(document.querySelector('#game').classList.contains('flight-active')).toBe(true);
+    expect(document.querySelector('#game').classList.contains('flight-paused')).toBe(false);
+    expect(harness.controls.enabled).toBe(true);
+    expect(document.querySelector('#resume-lock-status').hidden).toBe(true);
+    expect(harness.audio.setPaused).not.toHaveBeenCalledWith(true);
+
+    harness.controls.canvas.dispatch('pointerdown', { pointerType: 'mouse' });
+    await vi.waitFor(() => expect(document.pointerLockElement).toBe(harness.controls.canvas));
+    expect(document.querySelector('#pause-dialog').open).toBe(false);
+    expect(harness.controls.enabled).toBe(true);
+    expect(harness.audio.setPaused).not.toHaveBeenCalledWith(true);
+  });
+
+  it('uses one P press to pause and another to capture the mouse and resume', async () => {
+    const document = await loadMain();
+    await launch(document);
+    harness.resumeOrder.length = 0;
+
+    const pauseEvent = pressKey(document, 'KeyP');
+    expect(pauseEvent.defaultPrevented).toBe(true);
+    expect(document.querySelector('#pause-dialog').open).toBe(true);
+    expect(harness.controls.enabled).toBe(false);
+    expect(document.pointerLockElement).toBe(null);
+
+    const resumeEvent = pressKey(document, 'KeyP');
+    expect(resumeEvent.defaultPrevented).toBe(true);
+    await vi.waitFor(() => expect(harness.controls.enabled).toBe(true));
+
+    expect(document.querySelector('#pause-dialog').open).toBe(false);
+    expect(document.pointerLockElement).toBe(harness.controls.canvas);
+    expect(harness.audio.setPaused.mock.calls.filter(([paused]) => !paused)).toHaveLength(1);
+  });
+
+  it('keeps the sortie paused and reports pointerlockerror after a programmatic resume request', async () => {
+    const document = await loadMain();
+    await launch(document);
+    pressPauseKey(document);
+    harness.controls.captureResult = false;
+
+    document.querySelector('#resume-flight').dispatch('click', { detail: 1 });
+    await vi.waitFor(() => expect(document.querySelector('#resume-lock-status').hidden).toBe(false));
+
+    expect(harness.controls.enabled).toBe(false);
+    expect(document.querySelector('#pause-dialog').open).toBe(true);
+    expect(document.querySelector('#game').classList.contains('flight-paused')).toBe(true);
+    expect(harness.audio.setPaused).not.toHaveBeenCalledWith(false);
+  });
+
+  it('keeps keyboard click activation available for Resume Flight', async () => {
+    const document = await loadMain();
+    await launch(document);
+    harness.resumeOrder.length = 0;
+
+    pressPauseKey(document);
+    document.querySelector('#resume-flight').dispatch('click', { detail: 0 });
+
+    await vi.waitFor(() => expect(harness.controls.enabled).toBe(true));
+    expect(harness.resumeOrder).toEqual(['audio-pause', 'pointer-lock', 'audio-resume']);
+  });
+
+  it('keeps the pause state until the browser confirms pointer capture', async () => {
+    const document = await loadMain();
+    await launch(document);
+    let confirmCapture;
+    harness.controls.capturePromise = new Promise(resolve => { confirmCapture = resolve; });
+
+    pressPauseKey(document);
+    document.querySelector('#resume-flight').dispatch('click', { detail: 1 });
+
+    expect(document.querySelector('#pause-dialog').open).toBe(true);
+    expect(document.querySelector('#game').classList.contains('flight-paused')).toBe(true);
+    expect(harness.controls.enabled).toBe(false);
+    expect(harness.audio.setPaused).not.toHaveBeenCalledWith(false);
+
+    confirmCapture(true);
+    await vi.waitFor(() => expect(harness.controls.enabled).toBe(true));
+    expect(document.querySelector('#pause-dialog').open).toBe(false);
+    expect(document.querySelector('#game').classList.contains('flight-paused')).toBe(false);
+    expect(harness.audio.setPaused).toHaveBeenLastCalledWith(false);
+    document.dispatchEvent(new Event('pointerlockchange'));
+    expect(harness.audio.setPaused.mock.calls.filter(([paused]) => !paused)).toHaveLength(1);
+  });
+
   it('keeps a quit sortie from leaking into the next launch', async () => {
     const document = await loadMain();
     await launch(document);
     const firstWorld = harness.worlds[0];
 
-    const pauseKey = new Event('keydown', { cancelable: true });
-    Object.defineProperty(pauseKey, 'code', { value: 'Escape' });
-    document.dispatchEvent(pauseKey);
+    pressPauseKey(document);
     expect(document.querySelector('#pause-dialog').open).toBe(true);
 
     document.querySelector('#quit-to-menu').dispatch('click');

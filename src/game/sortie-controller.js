@@ -1,6 +1,7 @@
 import { CombatWorld } from '../combat/world.js';
 import { disposeTerrain } from '../environment/terrain.js';
 import { CombatStressScenario } from '../performance/stress-scenario.js';
+import { CombatTelemetry } from '../performance/combat-telemetry.js';
 import { TacticalHud } from '../ui/hud.js';
 import { MISSIONS } from '../mission/missions.js';
 
@@ -29,8 +30,10 @@ export class SortieController {
     controls,
     renderer,
     difficulty,
+    random = Math.random,
     playerStartAgl = 450,
     stressMode = false,
+    telemetryMode = false,
     onPrepareStart = () => null,
     onProgress = () => {},
     onStatus = () => {},
@@ -53,8 +56,10 @@ export class SortieController {
     this.controls = controls;
     this.renderer = renderer;
     this.difficulty = difficulty;
+    this.random = random;
     this.playerStartAgl = playerStartAgl;
     this.stressMode = stressMode;
+    this.telemetryMode = telemetryMode;
     this.callbacks = {
       onPrepareStart,
       onProgress,
@@ -71,6 +76,7 @@ export class SortieController {
     this.combat = null;
     this.tacticalHud = null;
     this.stressScenario = null;
+    this.telemetry = null;
     this.started = false;
     this.paused = false;
     this.launchInProgress = false;
@@ -116,6 +122,7 @@ export class SortieController {
     let launchFailed = false;
     let preparedCombat = null;
     let preparedStressScenario = null;
+    let preparedTelemetry = null;
 
     try {
       const terrainRequestPromise = this.ensureTerrainLoaded(areaId, (progress, detail) => {
@@ -202,7 +209,12 @@ export class SortieController {
         (outcome, result) => this.finish(outcome, result),
         difficulty,
         this.renderer.domElement,
+        this.random,
       );
+      if (this.telemetryMode) {
+        preparedTelemetry = new CombatTelemetry({ difficulty });
+        preparedCombat.setTelemetry(preparedTelemetry);
+      }
       const tacticalHud = new TacticalHud();
       if (this.stressMode) {
         preparedStressScenario = new CombatStressScenario({
@@ -210,22 +222,26 @@ export class SortieController {
           scene: this.scene,
           player: this.player,
           renderer: this.renderer,
+          telemetry: preparedTelemetry,
         });
       }
 
       this.combat = preparedCombat;
       this.tacticalHud = tacticalHud;
       this.stressScenario = preparedStressScenario;
+      this.telemetry = preparedTelemetry;
       this.prepared = true;
       return true;
     } catch (error) {
       launchFailed = true;
       if (generation !== this.generation) return false;
       preparedStressScenario?.stop();
+      if (preparedTelemetry) preparedCombat?.setTelemetry(null);
       preparedCombat?.dispose();
       if (this.combat === preparedCombat) this.combat = null;
       if (this.stressScenario === preparedStressScenario) this.stressScenario = null;
       this.tacticalHud = null;
+      this.telemetry = null;
       this.prepared = false;
       this.controls.setEnabled(false);
       if (pendingTerrain && pendingTerrain !== this.getTerrain()) disposeTerrain(pendingTerrain);
@@ -267,12 +283,11 @@ export class SortieController {
 
   resume() {
     if (!this.started || !this.paused || this.finished) return false;
-    this.paused = false;
     this.controls.keys.clear();
     this.controls.resetMouseAim();
     this.combat?.clearInput();
+    this.paused = false;
     this.controls.setEnabled(true);
-    this.controls.requestMouseCapture();
     this.audio.setPaused(false);
     this.callbacks.onResume();
     return true;
@@ -304,10 +319,12 @@ export class SortieController {
     this.audio.setGunFiring(false);
     this.audio.stopEngine(true);
     this.stressScenario?.stop();
+    this.combat?.setTelemetry(null);
     this.combat?.dispose();
     this.controls.setEnabled(false);
     this.controls.keys.clear();
     this.stressScenario = null;
+    this.telemetry = null;
     this.combat = null;
     this.tacticalHud = null;
     this.started = false;

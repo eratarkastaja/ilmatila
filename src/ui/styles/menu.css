@@ -1229,6 +1229,17 @@
   display: none;
 }
 
+.pause-resume-status {
+  margin: 11px 0 0;
+  color: #f0d895;
+  font: 600 13px/1.4 Rajdhani,sans-serif;
+  letter-spacing: .035em;
+}
+
+.pause-resume-status[hidden] {
+  display: none;
+}
+
 .pause-mark {
   display: grid;
   position: relative;

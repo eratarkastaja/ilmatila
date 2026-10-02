@@ -38,7 +38,7 @@ export class ProjectileSystem {
     playerVelocity = stationaryVelocity, onPlayerDestroyed, onPlayerDamaged, onPlayerHit, onJetDestroyed,
     onUnitDestroyed, onFriendlyAircraftHit, addSpark, addWaterImpact, addExplosion, incomingDamageMultiplier = 1,
     hostileMissileTurnRate = HOSTILE_MISSILE_TURN_RATE, hostileMissileDamage = 62,
-    hostileMissileProximityRadius = 20,
+    hostileMissileProximityRadius = 20, random = Math.random,
   }) {
     this.scene = scene;
     this.player = player;
@@ -61,6 +61,8 @@ export class ProjectileSystem {
     this.addSpark = addSpark;
     this.addWaterImpact = addWaterImpact;
     this.addExplosion = addExplosion;
+    this.random = random;
+    this.telemetry = null;
     this.incomingMissile = false;
     this.missileThreat = null;
     this.missileThreatDistance = Infinity;
@@ -104,7 +106,10 @@ export class ProjectileSystem {
     const ageRatio = THREE.MathUtils.clamp(candidate.age / candidate.maxLife, 0, 1);
     const remainingHeat = 1 - ageRatio;
     const attractionChance = (candidate.spoofChance ?? .62) * (.25 + remainingHeat * .75);
-    return Math.random() < attractionChance ? candidate : null;
+    this.telemetry?.recordCountermeasureAttempt(candidate.team, 'flare', 'missile');
+    if (this.random() >= attractionChance) return null;
+    this.telemetry?.recordCountermeasureSuccess(candidate.team, 'flare', 'missile');
+    return candidate;
   }
 
   steerMissile(shot, desiredDirection, turnRate, speed, dt) {
@@ -131,10 +136,18 @@ export class ProjectileSystem {
 
   addPlayerProjectile(projectile) {
     this.playerShots.push(projectile);
+    if (projectile.missile) {
+      this.telemetry?.recordMissileLaunch(projectile.ally ? 'wingman' : 'player', projectile.seeker);
+    }
   }
 
   addHostileProjectile(projectile) {
     this.hostiles.push(projectile);
+    if (projectile.missile) this.telemetry?.recordMissileLaunch('hostile', projectile.seeker);
+  }
+
+  setTelemetry(telemetry) {
+    this.telemetry = telemetry;
   }
 
   setDecoys(decoys) {
@@ -199,7 +212,7 @@ export class ProjectileSystem {
         const desiredDirection = aimPoint.sub(shot.mesh.position).normalize();
         const turnRate = shot.turnRate ?? (shot.targetDomain === 'ground' ? 1.5 : MISSILE_TURN_RATE);
         this.steerMissile(shot, desiredDirection, turnRate, missileSpeed, dt);
-        if (Math.random() < .04) this.addSpark(shot.mesh.position);
+        if (this.random() < .04) this.addSpark(shot.mesh.position);
       }
       if (shot.homing) audio?.updateMissileFlight(shot.mesh.id, shot.mesh.position.distanceTo(player.position), dt);
       const previous = this._previousPosition.copy(shot.mesh.position);

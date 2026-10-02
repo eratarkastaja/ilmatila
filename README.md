@@ -1,6 +1,6 @@
 # ILMATILA
 
-ILMATILA is an independent browser-based air-combat game by ERÄGAMES. The current source version is **0.1.0-alpha.12**. It is an alpha build: missions, combat, progression, aircraft handling, radar, and weapons are playable, while balance and mission pacing remain under development. The simulation is fictional and is not intended for real-world training or operational use.
+ILMATILA is an independent browser-based air-combat game by ERÄGAMES. The current source version is **0.1.0-alpha.13**. It is an alpha build: missions, combat, progression, aircraft handling, radar, and weapons are playable, while balance and mission pacing remain under development. The simulation is fictional and is not intended for real-world training or operational use.
 
 **[Play ILMATILA in your browser](https://eratarkastaja.github.io/ilmatila/).**
 
@@ -45,7 +45,10 @@ Flight controls are shown in the mission menu and in the pause menu's **Show Con
 | Move mouse | Steer the aircraft |
 | Left / right mouse button | Fire cannon / launch a missile |
 | Mouse wheel or + / − | Zoom the chase camera |
-| Esc | Open the pause menu |
+| Esc | Release mouse capture; flight continues |
+| P | Pause or resume flight |
+
+After pressing Esc, click the flight view to capture the mouse again.
 
 ## Terrain and GitHub Pages
 

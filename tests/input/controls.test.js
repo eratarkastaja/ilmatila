@@ -6,6 +6,7 @@ function makeControls() {
   vi.stubGlobal('addEventListener', vi.fn());
   vi.stubGlobal('document', {
     addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
     pointerLockElement: null,
   });
   vi.stubGlobal('window', { addEventListener: vi.fn() });
@@ -14,7 +15,15 @@ function makeControls() {
     clientWidth: 1280,
     clientHeight: 720,
     addEventListener: vi.fn(),
-    classList: { toggle: vi.fn() },
+    classList: {
+      classes: new Set(),
+      toggle(name, force) {
+        const enabled = force ?? !this.classes.has(name);
+        if (enabled) this.classes.add(name);
+        else this.classes.delete(name);
+      },
+      contains(name) { return this.classes.has(name); },
+    },
     getBoundingClientRect: () => ({ width: 1280, height: 720 }),
   };
   const controls = new FlightControls(new THREE.Object3D(), new THREE.PerspectiveCamera(), canvas);
@@ -71,6 +80,47 @@ describe('FlightControls mouse steering', () => {
     expect(controls.mouseDeltaY).toBe(0);
     expect(controls.mouseRoll).toBe(0);
     expect(controls.mousePitch).toBe(0);
+  });
+
+  it('shows the cursor after unlock and hides it again when the canvas recaptures the mouse', async () => {
+    const { controls, canvas } = makeControls();
+    controls.setEnabled(true);
+    canvas.requestPointerLock = vi.fn(() => {
+      document.pointerLockElement = canvas;
+      controls.onPointerLockChange();
+      return Promise.resolve();
+    });
+
+    lockMouse(controls, canvas);
+    expect(canvas.classList.contains('mouse-locked')).toBe(true);
+
+    document.pointerLockElement = null;
+    controls.onPointerLockChange();
+    expect(canvas.classList.contains('mouse-locked')).toBe(false);
+
+    controls.onCanvasPointerDown({ pointerType: 'mouse' });
+    await expect(controls.mouseCaptureRequest).resolves.toBe(true);
+    expect(canvas.classList.contains('mouse-locked')).toBe(true);
+  });
+
+  it('confirms mouse capture only after the browser locks the canvas', async () => {
+    const { controls, canvas } = makeControls();
+    canvas.requestPointerLock = vi.fn(() => {
+      document.pointerLockElement = canvas;
+      controls.onPointerLockChange();
+      return Promise.resolve();
+    });
+
+    await expect(controls.requestMouseCapture()).resolves.toBe(true);
+    expect(controls.pointerLockActive).toBe(true);
+  });
+
+  it('reports a rejected pointer lock request to the sortie', async () => {
+    const { controls, canvas } = makeControls();
+    canvas.requestPointerLock = vi.fn(() => Promise.reject(new Error('pointer lock denied')));
+
+    await expect(controls.requestMouseCapture()).resolves.toBe(false);
+    expect(controls.pointerLockActive).toBe(false);
   });
 
   it('keeps keyboard nose-down input available after pause', () => {

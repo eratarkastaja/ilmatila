@@ -12,7 +12,8 @@ const helicopterRocketMaterial = new THREE.MeshBasicMaterial({ color: '#d3d3bd',
 
 /** Builds air launched cannon rounds, rockets, and missiles. */
 export class AirWeaponAI {
-  constructor() {
+  constructor(random = Math.random) {
+    this.random = random;
     this._helicopterMissileStart = new THREE.Vector3();
     this._allyGunMuzzle = new THREE.Vector3();
     this._gunMuzzle = new THREE.Vector3();
@@ -77,9 +78,9 @@ export class AirWeaponAI {
         enemy.lead, enemy.leadOffset);
       const horizontal = Math.hypot(aim.x - start.x, aim.z - start.z);
       const dispersion = Math.min(0.11, 0.035 + range * 0.000012);
-      aim.x += (Math.random() - 0.5) * horizontal * dispersion;
-      aim.y += (Math.random() - 0.5) * horizontal * dispersion * 0.28;
-      aim.z += (Math.random() - 0.5) * horizontal * dispersion;
+      aim.x += (this.random() - 0.5) * horizontal * dispersion;
+      aim.y += (this.random() - 0.5) * horizontal * dispersion * 0.28;
+      aim.z += (this.random() - 0.5) * horizontal * dispersion;
       const direction = aim.sub(start).normalize();
       const rocket = new THREE.Mesh(helicopterRocketGeo, helicopterRocketMaterial);
       rocket.position.copy(start);
@@ -113,7 +114,7 @@ export class AirWeaponAI {
     const predicted = leadPoint(start, target.mesh.position, target.velocity, 680, 3);
     const aim = predicted.sub(start).normalize();
     const spread=battle.difficulty?.wingman?.aimSpread ?? 1;
-    aim.add(new THREE.Vector3((Math.random() - .5) * .012 * spread, (Math.random() - .5) * .009 * spread, (Math.random() - .5) * .012 * spread)).normalize();
+    aim.add(new THREE.Vector3((this.random() - .5) * .012 * spread, (this.random() - .5) * .009 * spread, (this.random() - .5) * .012 * spread)).normalize();
     const velocity = aim.multiplyScalar(680);
     battle.fx?.addMovingTracer(start, velocity, '#82e7ff', {
       life: .14,
@@ -160,7 +161,7 @@ export class AirWeaponAI {
     const flightTime = Math.min(3, start.distanceTo(predicted) / 880);
     predicted.y += .5 * 9.81 * flightTime * flightTime;
     const aim = predicted.sub(start).normalize();
-    aim.add(new THREE.Vector3((Math.random() - .5) * .018, (Math.random() - .5) * .012, (Math.random() - .5) * .018)).normalize();
+    aim.add(new THREE.Vector3((this.random() - .5) * .018, (this.random() - .5) * .012, (this.random() - .5) * .018)).normalize();
     const velocity = aim.multiplyScalar(880).add(ally.velocity);
     battle.audio?.playDistantGun(ally.mesh.position.distanceTo(battle.player.position), 'air');
     ally.groundRoundCount++;
@@ -215,7 +216,7 @@ export class AirWeaponAI {
     const predicted = leadPoint(start, targetPosition, targetVelocity, 720, battle.difficulty?.fighter?.gun?.leadTime ?? 4.5);
     const aim = predicted.sub(start).normalize();
     const spread=battle.difficulty?.fighter?.aimSpread ?? 1;
-    aim.add(new THREE.Vector3((Math.random() - .5) * .018 * spread, (Math.random() - .5) * .012 * spread, (Math.random() - .5) * .018 * spread)).normalize();
+    aim.add(new THREE.Vector3((this.random() - .5) * .018 * spread, (this.random() - .5) * .012 * spread, (this.random() - .5) * .018 * spread)).normalize();
     const shot = new THREE.Mesh(hostileShotGeo, hostileShotMaterial);
     shot.position.copy(start);
     shot.quaternion.setFromUnitVectors(projectileAxis, aim);
@@ -242,7 +243,7 @@ export class AirWeaponAI {
   }
 
   chooseHostileMissileSeeker() {
-    return Math.random() < .5 ? 'ir' : 'radar';
+    return this.random() < .5 ? 'ir' : 'radar';
   }
 
   launchEnemyMissile(battle, enemy, seeker = this.chooseHostileMissileSeeker()) {

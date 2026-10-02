@@ -9,7 +9,7 @@ import { AirWeaponAI } from './air-weapon-ai.js';
 
 /** Coordinates air units and advances their behavior in simulation order. */
 export class AirBattle {
-  constructor({ scene, player, aircraftAsset, mission, terrain, audio, fx, playerVelocity, getPlayerHeading, deployHostileCountermeasures, addHostileProjectile, addPlayerProjectile, onMissileLaunch, onWingmanRadio, difficulty = {} }) {
+  constructor({ scene, player, aircraftAsset, mission, terrain, audio, fx, playerVelocity, getPlayerHeading, deployHostileCountermeasures, addHostileProjectile, addPlayerProjectile, onMissileLaunch, onWingmanRadio, difficulty = {}, random = Math.random }) {
     this.scene = scene;
     this.player = player;
     this.aircraftAssets = aircraftAsset;
@@ -25,6 +25,7 @@ export class AirBattle {
     this.onMissileLaunch = onMissileLaunch;
     this.onWingmanRadio = onWingmanRadio;
     this.difficulty = difficulty;
+    this.random = random;
     this._playerForward = new THREE.Vector3();
     this._playerRight = new THREE.Vector3();
     this.enemies = [];
@@ -34,10 +35,10 @@ export class AirBattle {
     this.wingmanOrder = 'attack';
     this.hostilesSpawned = false;
     this.spawnSystem = new AirSpawnSystem();
-    this.hostileFighterAI = new HostileFighterAI();
+    this.hostileFighterAI = new HostileFighterAI(random);
     this.helicopterAI = new HelicopterAI();
     this.wingmanController = new WingmanController();
-    this.weaponAI = new AirWeaponAI();
+    this.weaponAI = new AirWeaponAI(random);
     this.spawn();
   }
 

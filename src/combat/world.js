@@ -27,11 +27,13 @@ const forward=new THREE.Vector3(0,0,1);
 const headingDirection=new THREE.Vector3();
 
 export class CombatWorld {
-  constructor(scene, player, terrain, fx, aircraftAsset = null, mission = {}, audio = null, onMissionEnd = () => {}, difficultyId = 'standard', inputTarget = null) {
+  constructor(scene, player, terrain, fx, aircraftAsset = null, mission = {}, audio = null, onMissionEnd = () => {}, difficultyId = 'standard', inputTarget = null, random = Math.random) {
     this.scene=scene; this.player=player; this.destroyed=false; this.missionAborted=false;
     this.fx=fx; this.audio=audio;
     this.onMissionEnd=onMissionEnd;
     this.difficulty=getDifficultyPreset(difficultyId);
+    this.random=random;
+    this.telemetry=null;
     const missionConfig={hostiles:4,wingmen:2,groundBattle:true,groundPairs:6,groundTrucks:12,...mission};
     this.input = new CombatInput(window, inputTarget);
     this.scoreSystem=new ScoreSystem();
@@ -80,6 +82,7 @@ export class CombatWorld {
       onMissileLaunch: (enemy, missile, seeker) => this.onMissileLaunch(enemy, missile, seeker),
       onWingmanRadio: (event, wingman, details) => this.reportWingmanRadio(event, wingman, details),
       difficulty:this.difficulty,
+      random:this.random,
     });
     this.groundBattle = new GroundBattle({
       scene, player, playerVelocity: this.playerVelocity, terrain, mission: missionConfig,
@@ -106,6 +109,7 @@ export class CombatWorld {
       hostileMissileTurnRate:this.difficulty?.fighter?.missile?.projectile?.turnRate,
       hostileMissileDamage:this.difficulty?.fighter?.missile?.projectile?.damage,
       hostileMissileProximityRadius:this.difficulty?.fighter?.missile?.projectile?.proximityRadius,
+      random:this.random,
       onPlayerDestroyed: (reason, params) => this.destroyPlayer(reason, params),
       playerVelocity: this.playerVelocity,
       onPlayerDamaged: (amount, reason) => this.damagePlayer(amount, reason),
@@ -128,6 +132,7 @@ export class CombatWorld {
       addTransientGlow,
       initialCount:this.difficulty?.player?.countermeasures,
       chaffConfig:this.difficulty?.player?.chaff,
+      random:this.random,
       onInventoryChange: () => this.updateHud(),
     });
     this.projectileSystem.setDecoys(this.countermeasureSystem.decoys);
@@ -258,6 +263,12 @@ export class CombatWorld {
   get airKills(){return this.scoreSystem.airKills;}
   get groundKills(){return this.scoreSystem.groundKills;}
   get gunHits(){return this.scoreSystem.gunHits;}
+
+  setTelemetry(telemetry) {
+    this.telemetry=telemetry;
+    this.projectileSystem.setTelemetry(telemetry);
+    this.countermeasureSystem.setTelemetry(telemetry);
+  }
   getPlayerHeading(){
     const direction=headingDirection.copy(forward).applyQuaternion(this.player.quaternion);
     if(direction.x*direction.x+direction.z*direction.z>1e-4)this.playerHeading=Math.atan2(direction.x,direction.z);
@@ -354,7 +365,9 @@ export class CombatWorld {
   destroyPlayer(reasonKey,params={}){
     if(this.destroyed)return;
     if(this.feedback.hull>0){
-      this.damageTaken+=this.feedback.hull;
+      const remainingHull=this.feedback.hull;
+      this.damageTaken+=remainingHull;
+      this.telemetry?.recordPlayerDamage(reasonKey,remainingHull);
       this.feedback.damage(this.feedback.hull);
     }
     this.destroyed=true;
@@ -396,7 +409,9 @@ export class CombatWorld {
     if(this.destroyed)return;
     const hullBefore=this.feedback.hull;
     this.feedback.damage(amount);
-    this.damageTaken+=hullBefore-this.feedback.hull;
+    const appliedDamage=hullBefore-this.feedback.hull;
+    this.damageTaken+=appliedDamage;
+    this.telemetry?.recordPlayerDamage(reasonKey,appliedDamage);
     const previousHealthRatio=this.player.userData.airframeHealthRatio??1;
     const healthRatio=applyAirframeCondition(this.player,this.feedback.hull,this.feedback.maxHull);
     if(previousHealthRatio>=.3&&healthRatio<.3)this.feedback.notify('combat.flightControlsDegraded',2.2,'damage');

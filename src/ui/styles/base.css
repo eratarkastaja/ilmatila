@@ -122,7 +122,7 @@ html,body,#game {
   color: #dbe9dd;
 }
 
-#game.flight-active:not(.flight-paused) canvas {
+#game.flight-active:not(.flight-paused) canvas.mouse-locked {
   cursor: none;
 }
 

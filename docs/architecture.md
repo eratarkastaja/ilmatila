@@ -17,7 +17,7 @@ src/
   ground/                 procedural ground vehicle visuals
   input/                  flight controls
   mission/                mission definitions and local progression
-  performance/            development stress scenario
+  performance/            development stress scenario and combat telemetry
   ui/                     HUD, menu radar, translations, and styles
 
 tests/
@@ -87,6 +87,7 @@ The same `SortieController` is reused after returning to the menu, but each laun
 - `CollisionSystem` retains swept player-position history and performs terrain, boundary, vehicle, aircraft, and projectile collision queries.
 - `MissionSystem` owns objective timing/progress and completion/failure outcome. `MissionFlowSystem` owns sortie phase and route state.
 - `ScoreSystem` owns sortie score, kill totals, gun hits, and one-time objective awards. `CombatWorld` exposes read-only score statistics for the HUD and debrief.
+- `CombatTelemetry` owns event counters for development-sortie missile launches, countermeasure use/effect, and player damage by source. Existing combat systems report events to it; it does not sample the frame loop.
 - `DestructionSystem` applies the shared consequences for destroyed hostile aircraft and ground units. AirBattle continues to own wingman health and loss behavior.
 - `CombatEffects` owns explosion and spark scene objects and their pools. `FlightFX` owns shared particles, contrails, missile trails, and related render buffers.
 - `AssetRepository` shares in-flight asset loads. Each terrain caller owns a lease and releases it when that terrain is no longer installed or pending for that caller. The installed terrain is application/menu state and remains while sorties come and go.
@@ -96,7 +97,7 @@ The same `SortieController` is reused after returning to the menu, but each laun
 
 ## Runtime lifecycle
 
-At startup, `main.js` creates app-level scene, renderer, player, controls, audio, `FlightFX`, and `AssetRepository`, starts the menu/animation loop, and requests menu terrain and shared aircraft assets. Terrain selection cancels the previous menu subscription. The launch click requests pointer capture synchronously, then `SortieController.prepare()` loads terrain and aircraft concurrently with abort signals and timeouts, installs the terrain, resets the player/effects, and constructs the combat world/HUD. `start()` enables controls and engine audio.
+At startup, `main.js` creates app-level scene, renderer, player, controls, audio, `FlightFX`, and `AssetRepository`, starts the menu/animation loop, and requests menu terrain and shared aircraft assets. Terrain selection cancels the previous menu subscription. The launch click requests pointer capture synchronously; the sortie starts only after both preparation and canvas lock confirmation succeed. During flight, P pauses through the app and releases pointer lock programmatically. Pressing P while paused requests pointer lock and resumes only after `pointerlockchange` confirms that the renderer canvas owns the pointer. Escape is left to the browser's default pointer-unlock behavior; losing pointer lock alone does not pause flight or show a message. `FlightControls` reacquires pointer lock on a mouse click in the flight canvas. A denied lock request during app resume leaves the sortie paused and shows a retry explanation in the pause dialog. `SortieController` owns sortie transitions and audio/input state, while `main.js` owns browser pointer-lock state and pause/resume input.
 
 `MissionFlowSystem` advances from departure and ingress through contact/engagement/objective and RTB extraction. Completion, failure, or boundary abort produces a debrief through `CombatWorld`; `SortieController.finish()` freezes input and audio state, and `main.js` records progress and presents the debrief. Returning to the menu calls `dispose()`, which releases the combat world and session resources and resets player/menu state. A subsequent launch builds a fresh combat world.
 

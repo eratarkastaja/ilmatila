@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { CountermeasureSystem } from '../../src/combat/countermeasure-system.js';
+import { CombatTelemetry } from '../../src/performance/combat-telemetry.js';
 
 function makeCountermeasures({ hostileAircraft = [], hostileShots: initialHostileShots = [], random, chaffConfig } = {}) {
   const scene = new THREE.Scene();
@@ -128,6 +129,8 @@ describe('CountermeasureSystem', () => {
       hostileAircraft: [trackingEnemy, searchingEnemy],
       random: () => 0,
     });
+    const telemetry = new CombatTelemetry();
+    system.setTelemetry(telemetry);
     system.player = player;
 
     expect(system.deployChaff()).toBe(true);
@@ -135,6 +138,11 @@ describe('CountermeasureSystem', () => {
     expect(trackingEnemy.radarTrackDisruptionRemaining).toBe(2.8);
     expect(trackingEnemy.chaffTrackReevaluationRemaining).toBe(5);
     expect(searchingEnemy.radarTrackDisruptionRemaining).toBeUndefined();
+    expect(telemetry.snapshot().countermeasures).toMatchObject({
+      uses: { player: { chaff: 1 } },
+      attempts: { chaff: { player: { radarTrack: 1 } } },
+      successes: { chaff: { player: { radarTrack: 1 } } },
+    });
   });
 
   it('keeps a failed track-break roll from being rerolled by another chaff deployment', () => {
@@ -162,14 +170,82 @@ describe('CountermeasureSystem', () => {
     const radarMissile = makeMissile('radar');
     const infraredMissile = makeMissile('ir');
     const { system } = makeCountermeasures({ hostileShots: [radarMissile, infraredMissile], random: () => 0 });
+    const telemetry = new CombatTelemetry();
+    system.setTelemetry(telemetry);
     system.player = player;
 
     expect(system.deployChaff()).toBe(true);
 
-    expect(radarMissile.chaffAttempted).toBe(true);
+    expect(radarMissile.chaffAttemptCount).toBe(1);
+    expect(radarMissile.lastChaffAttemptDeployment).toBe(1);
     expect(radarMissile.chaffDisruptedRemaining).toBe(3.3);
-    expect(infraredMissile.chaffAttempted).toBeUndefined();
+    expect(infraredMissile.chaffAttemptCount).toBeUndefined();
     expect(infraredMissile.chaffDisruptedRemaining).toBeUndefined();
+    expect(telemetry.snapshot().countermeasures).toMatchObject({
+      uses: { player: { chaff: 1 } },
+      attempts: { chaff: { player: { radarMissile: 1 } } },
+      successes: { chaff: { player: { radarMissile: 1 } } },
+    });
+  });
+
+  it('allows a later chaff burst to retry a failed radar missile break roll', () => {
+    const player = { position: new THREE.Vector3(), quaternion: new THREE.Quaternion() };
+    const missile = {
+      missile: true,
+      seeker: 'radar',
+      mesh: new THREE.Object3D(),
+      target: player,
+      guidanceActive: true,
+      life: 5,
+    };
+    missile.mesh.position.set(0, 100, 500);
+    const rolls = [.99, 0];
+    const { system } = makeCountermeasures({ hostileShots: [missile], random: () => rolls.shift() ?? 0 });
+    system.fx = null;
+    system.player = player;
+
+    expect(system.deployChaff()).toBe(true);
+    expect(missile.chaffAttemptCount).toBe(1);
+    expect(missile.lastChaffAttemptDeployment).toBe(1);
+    expect(missile.chaffDisruptedRemaining).toBeUndefined();
+
+    system.tick(1.7);
+    expect(system.deployChaff()).toBe(true);
+    expect(missile.chaffAttemptCount).toBe(2);
+    expect(missile.lastChaffAttemptDeployment).toBe(2);
+    expect(missile.chaffDisruptedRemaining).toBe(3.3);
+  });
+
+  it('skips another attempt during active disruption and retries after it expires', () => {
+    const player = { position: new THREE.Vector3(), quaternion: new THREE.Quaternion() };
+    const missile = {
+      missile: true,
+      seeker: 'radar',
+      mesh: new THREE.Object3D(),
+      target: player,
+      guidanceActive: true,
+      life: 5,
+      chaffDisruptedRemaining: 2,
+    };
+    missile.mesh.position.set(0, 100, 500);
+    const { system } = makeCountermeasures({ hostileShots: [missile], random: () => 0 });
+    system.fx = null;
+    system.player = player;
+
+    expect(system.deployChaff()).toBe(true);
+    expect(missile.chaffAttemptCount).toBeUndefined();
+
+    system.tick(1.7);
+    expect(system.deployChaff()).toBe(true);
+    expect(missile.chaffAttemptCount).toBeUndefined();
+
+    // ProjectileSystem owns and decrements the active guidance disruption.
+    missile.chaffDisruptedRemaining = 0;
+    system.tick(1.7);
+    expect(system.deployChaff()).toBe(true);
+    expect(missile.chaffAttemptCount).toBe(1);
+    expect(missile.lastChaffAttemptDeployment).toBe(3);
+    expect(missile.chaffDisruptedRemaining).toBe(3.3);
   });
 
   it('keeps expired decoys while a missile tracks them, then disposes them after release', () => {
