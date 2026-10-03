@@ -57,7 +57,7 @@ export class GroundSpawnSystem {
       red.position.set(redPos.x,redPos.y,redPos.z); red.rotation.y=heading+(supportMission?Math.PI:0);
       battle.scene.add(blue,red);
       const blueUnit={mesh:blue,hp:blueSpec.hp,maxHp:blueSpec.hp,team:'blue',role:'defender',cool:1+i*.33,phase:i*.8,armed:true,airAaCooldown:2+rnd()*5,airAaBurstClock:0,airAaBurstRemaining:0,speed:blueSpec.kind==='tracked'?10.5+rnd()*2:14+rnd()*2.5,flank:i%2===0?1:-1,velocity:new THREE.Vector3(),travel:new THREE.Vector3(),toTarget:new THREE.Vector3(),tangent:new THREE.Vector3(),waypoint:new THREE.Vector3(),separation:new THREE.Vector3(),facing:new THREE.Vector3(),pathDirection:new THREE.Vector3()};
-      const redUnit={mesh:red,hp:redSpec.hp,maxHp:redSpec.hp,team:'red',role:'assault',cool:2+i*.25,phase:i*.8+1,armed:true,speed:redSpec.kind==='tracked'?10+rnd()*2:13.5+rnd()*2.5,flank:i%2===0?-1:1,velocity:new THREE.Vector3(),aaCooldown:(battle.difficulty?.groundAA?.initialDelay ?? 2)+rnd()*(battle.difficulty?.groundAA?.initialJitter ?? 5),aaBurstClock:0,aaBurstRemaining:0,aaTarget:null,aaThreatTimer:0,aaFiringPause:0,assaultTarget:blue.position,travel:new THREE.Vector3(),toTarget:new THREE.Vector3(),tangent:new THREE.Vector3(),waypoint:new THREE.Vector3(),separation:new THREE.Vector3(),facing:new THREE.Vector3(),pathDirection:new THREE.Vector3()};
+      const redUnit={mesh:red,hp:redSpec.hp,maxHp:redSpec.hp,team:'red',role:'assault',missionTargetRoleKey:'combat.groundTargetRole.armor',cool:2+i*.25,phase:i*.8+1,armed:true,speed:redSpec.kind==='tracked'?10+rnd()*2:13.5+rnd()*2.5,flank:i%2===0?-1:1,velocity:new THREE.Vector3(),aaCooldown:(battle.difficulty?.groundAA?.initialDelay ?? 2)+rnd()*(battle.difficulty?.groundAA?.initialJitter ?? 5),aaBurstClock:0,aaBurstRemaining:0,aaTrackTimer:null,aaPlayerTracking:false,aaTarget:null,aaThreatTimer:0,aaFiringPause:0,assaultTarget:blue.position,travel:new THREE.Vector3(),toTarget:new THREE.Vector3(),tangent:new THREE.Vector3(),waypoint:new THREE.Vector3(),separation:new THREE.Vector3(),facing:new THREE.Vector3(),pathDirection:new THREE.Vector3()};
       battle.friends.push(blueUnit);battle.redUnits.push(redUnit);
       blueUnit.collider={type:'vehicle',mesh:blue,x:bluePos.x,y:bluePos.y,z:bluePos.z,radius:blueSpec.radius,height:blueSpec.totalHeight,velocity:blueUnit.velocity,collisionKey:'combat.collisionFriendlyVehicle',vehicle:blueSpec.name};
       redUnit.collider={type:'vehicle',mesh:red,x:redPos.x,y:redPos.y,z:redPos.z,radius:redSpec.radius,height:redSpec.totalHeight,velocity:redUnit.velocity,collisionKey:'combat.collisionHostileVehicle',vehicle:redSpec.name};
@@ -73,17 +73,20 @@ export class GroundSpawnSystem {
       Math.max(1800,frontSpan*.8),
       safeRouteAlignedSquareSpan(convoyCenter,battle.routeForward,battle.routeRight,theaterHalf),
     );
+    let reinforcementSourceSpawned = false;
     for(let i=0;i<battle.mission.groundTrucks;i++){
       const truck=createGroundVehicle('ural4320','russian');
-      const lateral=(rnd()-.5)*convoySpan;
+      const reinforcementSource = supportMission && !reinforcementSourceSpawned;
+      const lateral=reinforcementSource?0:(rnd()-.5)*convoySpan;
       const depth=(rnd()-.5)*360;
       const x=convoyCenter.x+battle.routeRight.x*lateral+battle.routeForward.x*depth;
       const z=convoyCenter.z+battle.routeRight.z*lateral+battle.routeForward.z*depth;
       const spec=getGroundVehicleSpec('ural4320');
       const dryPoint=nearestDryPoint(battle.terrain,x,z);
       if(!dryPoint)continue;
+      reinforcementSourceSpawned ||= reinforcementSource;
       truck.position.set(dryPoint.x,dryPoint.y,dryPoint.z); truck.rotation.y=heading+(supportMission?Math.PI:0); battle.scene.add(truck);
-      const convoy={mesh:truck,hp:spec.hp,maxHp:spec.hp,team:'red',role:'logistics',cool:0,phase:rnd()*Math.PI*2,armed:false,speed:12+rnd()*3,flank:1,velocity:new THREE.Vector3(),routeOrigin:truck.position.clone(),routeHeading:battle.routeForward.clone(),routeTravel:0,routeLimit:1800,routeSign:1,travel:new THREE.Vector3(),toTarget:new THREE.Vector3(),tangent:new THREE.Vector3(),waypoint:new THREE.Vector3(),separation:new THREE.Vector3(),facing:new THREE.Vector3(),pathDirection:new THREE.Vector3()};
+      const convoy={mesh:truck,hp:spec.hp,maxHp:spec.hp,team:'red',role:'logistics',reinforcementSource,missionTargetRoleKey:reinforcementSource?'combat.groundTargetRole.logistics':null,cool:0,phase:rnd()*Math.PI*2,armed:false,speed:12+rnd()*3,flank:1,velocity:new THREE.Vector3(),routeOrigin:truck.position.clone(),routeHeading:battle.routeForward.clone(),routeTravel:0,routeLimit:1800,routeSign:1,travel:new THREE.Vector3(),toTarget:new THREE.Vector3(),tangent:new THREE.Vector3(),waypoint:new THREE.Vector3(),separation:new THREE.Vector3(),facing:new THREE.Vector3(),pathDirection:new THREE.Vector3()};
       battle.redUnits.push(convoy);
       convoy.collider={type:'vehicle',mesh:truck,x:truck.position.x,z:truck.position.z,y:truck.position.y,radius:spec.radius,height:spec.totalHeight,velocity:convoy.velocity,collisionKey:'combat.collisionHostileVehicle',vehicle:spec.name};
       battle.colliders.push(convoy.collider);
@@ -148,6 +151,7 @@ export class GroundSpawnSystem {
       const unit = {
         mesh, hp: spec.hp, maxHp: spec.hp, team,
         role: 'airDefense',
+        missionTargetRoleKey: team === 'red' ? 'combat.groundTargetRole.airDefense' : null,
         cool: 0, phase: rnd() * Math.PI * 2, armed: true, speed: 0,
         flank: team === 'blue' ? 1 : -1,
         velocity: new THREE.Vector3(), travel: new THREE.Vector3(),
@@ -157,7 +161,7 @@ export class GroundSpawnSystem {
         airAaCooldown: 5 + index * 4 + rnd() * 4,
         airAaBurstClock: 0, airAaBurstRemaining: 0, airAaTarget: null,
         aaCooldown: (battle.difficulty?.groundAA?.initialDelay ?? 2) + rnd() * (battle.difficulty?.groundAA?.initialJitter ?? 5),
-        aaBurstClock: 0, aaBurstRemaining: 0,
+        aaBurstClock: 0, aaBurstRemaining: 0, aaTrackTimer: null, aaPlayerTracking: false,
         samRail: index % 4, samAmmo: 4,
       };
       unit.collider = {

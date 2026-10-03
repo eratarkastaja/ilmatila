@@ -7,6 +7,7 @@ import {
 } from './air-combat-utils.js';
 
 const EMPTY_MISSILES = [];
+const MISSILE_LOCK_WARNING_SECONDS = 2.5;
 
 /** Runs hostile fighter engagement, target selection, and defensive maneuvers. */
 export class HostileFighterAI {
@@ -22,7 +23,7 @@ export class HostileFighterAI {
     const playerPosition = battle.player.position;
 
     for (const enemy of battle.enemies) {
-      if (enemy.dead) continue;
+      if (enemy.dead || enemy.identified === false) continue;
       if (enemy.kind === 'attack-helicopter') {
         battle.helicopterAI.update(battle, enemy, dt, playerForward, playerRight);
         continue;
@@ -159,9 +160,12 @@ export class HostileFighterAI {
       const engagementDomain = enemy.burstShots > 0 && enemy.burstTarget && !enemy.burstTarget.dead
         ? enemy.burstTargetDomain
         : enemy.engagementTargetDomain;
+      const strikeTargetPosition = enemy.missionRole === 'strike'
+        ? (battle.strikeTarget ?? playerPosition)
+        : null;
       const targetPosition = engagementTarget === battle.player
         ? playerPosition
-        : engagementTarget?.mesh?.position;
+        : engagementTarget?.mesh?.position ?? strikeTargetPosition;
       const targetVelocity = engagementTarget === battle.player
         ? battle.playerVelocity
         : engagementTarget?.velocity ?? zeroVelocity;
@@ -170,7 +174,9 @@ export class HostileFighterAI {
       const gunMaxRange = battle.difficulty?.fighter?.gun?.maxRange ?? 2200;
       const missileMaxRange = battle.difficulty?.fighter?.missile?.maxRange ?? 6400;
 
-      if (enemy.phase === 'staging') {
+      if (enemy.missionRole === 'strike') {
+        waypoint.copy(targetPosition ?? strikeTargetPosition ?? playerPosition);
+      } else if (enemy.phase === 'staging') {
         const laneDrift = Math.sin(enemy.phaseClock * .22 + enemy.stagingLane) * 70;
         waypoint.copy(playerPosition)
           .addScaledVector(battle.playerVelocity, .7)
@@ -215,7 +221,7 @@ export class HostileFighterAI {
       // Give each hostile a slightly different run line while keeping the pass legible.
       const runOffset = Math.sin(enemy.phaseClock * (.2 + enemy.attackPattern * .035) + enemy.lane * 1.8)
         * (105 + enemy.attackPattern * 45);
-      waypoint.addScaledVector(enemy.attackRight, runOffset);
+      if (enemy.missionRole !== 'strike') waypoint.addScaledVector(enemy.attackRight, runOffset);
       const pursuitRange = Math.max(gunMaxRange * 2, missileMaxRange);
       if (canEngage && engagementDomain === 'air' && engagementTarget
         && engagementRange < pursuitRange && enemy.evasiveTimer <= 0) {
@@ -318,25 +324,73 @@ export class HostileFighterAI {
       const missileMinRange = battle.difficulty?.fighter?.missile?.minRange ?? 3000;
       const missileBoresight = battle.difficulty?.fighter?.missile?.boresight ?? .93;
       const missileSpeed = battle.difficulty?.fighter?.missile?.projectile?.speed ?? MISSILE_PROFILES.hostile.speed;
-      const assignedPlayerTarget = battle.difficulty?.id !== 'hard' || enemy.engagementTarget === battle.player;
-      const toPlayer = leadPoint(
+      const wingmanMissileTarget = enemy.targetPreference === 'wingmen'
+        && battle.allies?.includes(engagementTarget)
+        && !engagementTarget.dead
+        ? engagementTarget
+        : null;
+      const missileTarget = wingmanMissileTarget ?? battle.player;
+      const missileTargetPosition = missileTarget === battle.player
+        ? playerPosition
+        : missileTarget.mesh.position;
+      const missileTargetVelocity = missileTarget === battle.player
+        ? battle.playerVelocity
+        : missileTarget.velocity;
+      const missileRange = enemy.mesh.position.distanceTo(missileTargetPosition);
+      const hasAssignedMissileTarget = enemy.missionRole !== 'strike'
+        && (enemy.targetPreference === 'wingmen'
+          ? Boolean(wingmanMissileTarget)
+          : battle.difficulty?.id !== 'hard' || enemy.engagementTarget === battle.player);
+      const toMissileTarget = leadPoint(
         enemy.mesh.position,
-        playerPosition,
-        battle.playerVelocity,
+        missileTargetPosition,
+        missileTargetVelocity,
         missileSpeed,
         battle.difficulty?.fighter?.missile?.leadTime ?? 12,
+        enemy.lead,
+        enemy.leadOffset,
       )
         .sub(enemy.mesh.position).normalize();
-      if (
-        assignedPlayerTarget && enemy.missileClock <= 0 && enemy.missilesFired < missileCapacity && enemy.phase !== 'staging' &&
-        range > missileMinRange && range < missileMaxRange && enemyNose.dot(toPlayer) > missileBoresight
-      ) {
-        const seeker = battle.weaponAI.chooseHostileMissileSeeker();
-        if (this.canLaunchMissile(enemy, seeker)) {
-          battle.weaponAI.launchEnemyMissile(battle, enemy, seeker);
-          enemy.missileClock = (battle.difficulty?.fighter?.missile?.cooldown ?? 14)
-            + this.random() * (battle.difficulty?.fighter?.missile?.cooldownJitter ?? 5);
-          enemy.missilesFired++;
+      const hasMissileLaunchSolution = Boolean(
+        hasAssignedMissileTarget && enemy.missileClock <= 0 && enemy.missilesFired < missileCapacity && enemy.phase !== 'staging' &&
+        missileRange > missileMinRange && missileRange < missileMaxRange && enemyNose.dot(toMissileTarget) > missileBoresight &&
+        battle.canStartHostileMissileAttack?.(enemy, missileTarget) !== false &&
+        (enemy.missileLockRemaining == null || enemy.missileLockTarget === missileTarget)
+      );
+      if (!hasMissileLaunchSolution) {
+        if (enemy.missileLockTarget && enemy.missileLockTarget !== battle.player) {
+          battle.clearWingmanMissileLock?.(enemy, enemy.missileLockTarget);
+        }
+        enemy.missileLockRemaining = null;
+        enemy.missileLockSeeker = null;
+        enemy.missileLockTarget = null;
+      } else {
+        if (enemy.missileLockSeeker == null) {
+          enemy.missileLockSeeker = battle.weaponAI.chooseHostileMissileSeeker();
+        }
+        if (!this.canLaunchMissile(enemy, enemy.missileLockSeeker)) {
+          if (enemy.missileLockTarget && enemy.missileLockTarget !== battle.player) {
+            battle.clearWingmanMissileLock?.(enemy, enemy.missileLockTarget);
+          }
+          enemy.missileLockRemaining = null;
+          enemy.missileLockTarget = null;
+        } else if (enemy.missileLockRemaining == null) {
+          enemy.missileLockRemaining = MISSILE_LOCK_WARNING_SECONDS;
+          enemy.missileLockTarget = missileTarget;
+          if (missileTarget !== battle.player) {
+            battle.reportWingmanMissileLock?.(enemy, missileTarget, enemy.missileLockSeeker);
+          }
+        } else {
+          enemy.missileLockRemaining = Math.max(0, enemy.missileLockRemaining - dt);
+          if (enemy.missileLockRemaining <= 0) {
+            battle.weaponAI.launchEnemyMissile(battle, enemy, enemy.missileLockSeeker, missileTarget);
+            enemy.missileClock = (battle.difficulty?.fighter?.missile?.cooldown ?? 14)
+              + this.random() * (battle.difficulty?.fighter?.missile?.cooldownJitter ?? 5);
+            enemy.missilesFired++;
+            enemy.missileLockRemaining = null;
+            enemy.missileLockSeeker = null;
+            enemy.missileLockTarget = null;
+          }
         }
       }
     }
@@ -374,6 +428,38 @@ export class HostileFighterAI {
 
   selectEnemyEngagementTarget(battle, enemy, playerRange, result) {
     const selection = result ?? {};
+    if (enemy.targetPreference === 'wingmen') {
+      let nearestWingman = null;
+      let nearestRange = Infinity;
+      for (const ally of battle.allies) {
+        if (ally.dead) continue;
+        const range = enemy.mesh.position.distanceTo(ally.mesh.position);
+        if (range < nearestRange) {
+          nearestRange = range;
+          nearestWingman = ally;
+        }
+      }
+      if (nearestWingman) {
+        selection.target = nearestWingman;
+        selection.domain = 'air';
+        return selection;
+      }
+    }
+    if (enemy.missionRole === 'strike') {
+      let nearestTarget = null;
+      let nearestRange = Infinity;
+      for (const unit of battle.friendlyGroundUnits ?? EMPTY_MISSILES) {
+        if (unit.dead || unit.armed === false || !unit.mesh?.position) continue;
+        const range = enemy.mesh.position.distanceTo(unit.mesh.position);
+        if (range < nearestRange) {
+          nearestRange = range;
+          nearestTarget = unit;
+        }
+      }
+      selection.target = nearestTarget;
+      selection.domain = 'ground';
+      return selection;
+    }
     const targeting = battle.difficulty?.fighter?.targeting;
     const priorityRange = targeting?.airPriorityRange ?? 13000;
     const playerTrackAvailable = playerRange <= priorityRange

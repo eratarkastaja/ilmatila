@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { clampToTheater, getAircraftEdgeMargin, leadPoint, steerAircraft } from './air-combat-utils.js';
 import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
 
+const AIR_MISSILE_LOCK_WARNING_SECONDS = 2.5;
+
 /** Controls Mi-24 target selection, orbiting, and attack timing. */
 export class HelicopterAI {
   constructor(random = createSeededRandom(DEFAULT_RANDOM_SEED)) {
@@ -48,6 +50,7 @@ export class HelicopterAI {
 
     const playerRange = enemy.mesh.position.distanceTo(playerPosition);
     if (enemy.airToAirMissilesRemaining > 0 && enemy.airMissileCooldown <= 0
+      && battle.canStartHostileMissileAttack?.(enemy, battle.player) !== false
       && playerRange > 1600 && playerRange < 4700) {
       const missileSpeed = 455;
       const playerLead = leadPoint(
@@ -56,10 +59,22 @@ export class HelicopterAI {
       ).sub(enemy.mesh.position).normalize();
       const nose = enemy.direction.set(0, 0, 1).applyQuaternion(enemy.mesh.quaternion).normalize();
       if (nose.dot(playerLead) > .68) {
-        battle.weaponAI.fireHelicopterAirMissile(battle, enemy);
-        enemy.airToAirMissilesRemaining--;
-        enemy.airMissileCooldown = 10 + this.random() * 4;
+        if (enemy.airMissileLockRemaining == null) {
+          enemy.airMissileLockRemaining = AIR_MISSILE_LOCK_WARNING_SECONDS;
+        } else {
+          enemy.airMissileLockRemaining = Math.max(0, enemy.airMissileLockRemaining - dt);
+          if (enemy.airMissileLockRemaining <= 0) {
+            battle.weaponAI.fireHelicopterAirMissile(battle, enemy);
+            enemy.airToAirMissilesRemaining--;
+            enemy.airMissileCooldown = 10 + this.random() * 4;
+            enemy.airMissileLockRemaining = null;
+          }
+        }
+      } else {
+        enemy.airMissileLockRemaining = null;
       }
+    } else {
+      enemy.airMissileLockRemaining = null;
     }
 
     if (!target || enemy.rocketCooldown > 0) return;

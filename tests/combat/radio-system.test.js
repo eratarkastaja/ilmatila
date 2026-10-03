@@ -146,4 +146,52 @@ describe('RadioSystem', () => {
     expect(radio.message.textContent).toBe('Missile inbound!');
     expect(radio.radio.queue.map(entry => entry.key)).toContain('radio.phase.engagement');
   });
+
+  it('reports a wingman missile lock and names the attacker on the inbound call', () => {
+    expect(radio.radio.emit('wingman.missileLock', {
+      wingmanId: 'wingman2', scope: 'track-31', params: { attacker: 'MiG-29' },
+    })).toBe(true);
+    expect(radio.message.textContent).toBe('Defensive! Missile lock from MiG-29!');
+
+    radio.radio.update(3.1);
+    expect(radio.radio.emit('wingman.rescueMissileInbound', {
+      wingmanId: 'wingman2', scope: 'missile-31', params: { attacker: 'MiG-29' },
+    })).toBe(true);
+    expect(radio.message.textContent).toBe('Missile inbound from MiG-29!');
+  });
+
+  it('reports the pop-up contact bearing and range before the identification call', () => {
+    const params = { bearing: '310', range: '18.0' };
+    expect(radio.radio.emit('threat.newContact', { scope: 'reinforcement', params })).toBe(true);
+    expect(radio.message.textContent).toBe(
+      'New contact, bearing 310, 18.0 kilometres, fast mover. Radar return uncertain.',
+    );
+
+    radio.radio.update(4.1);
+    setLanguage('fi');
+    expect(radio.radio.emit('threat.contactIdentified', { scope: 'reinforcement', params })).toBe(true);
+    expect(radio.message.textContent).toBe(
+      'Viholliskontakti tunnistettu, suuntima 310, 18.0 kilometriä. Kohde lähestyy.',
+    );
+  });
+
+  it('preserves uncertain contact timing while adding CAS tasking context', () => {
+    const params = { bearing: '270', range: '12.0' };
+    expect(radio.radio.emit('support.contactAwaitingOrders', { params, scope: 'support-reinforcement' })).toBe(true);
+    expect(radio.message.textContent).toBe(
+      'Uncertain contact, bearing 270, 12.0 kilometres, closing fast. Ground forces still need CAS; wingman tasking is yours.',
+    );
+
+    radio.radio.update(5.1);
+    expect(radio.radio.emit('support.fightersIdentified', { params, scope: 'support-reinforcement' })).toBe(true);
+    expect(radio.message.textContent).toBe(
+      'Two hostile fighters identified, bearing 270, 12.0 kilometres. CAS continues.',
+    );
+
+    setLanguage('fi');
+    radio.radio.refreshLanguage();
+    expect(radio.message.textContent).toBe(
+      'Kaksi vihollishävittäjää tunnistettu, suuntima 270, 12.0 kilometriä. CAS-tuki jatkuu.',
+    );
+  });
 });

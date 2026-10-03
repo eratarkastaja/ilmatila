@@ -33,6 +33,8 @@ function makeHostile(position, phase = 'inbound') {
     detectedPlayerTimer: 0,
     gunCooldown: 0,
     missileClock: 100,
+    missileLockRemaining: null,
+    missileLockSeeker: null,
     missilesFired: DIFFICULTY_PRESETS.standard.fighter.missile.capacity,
     effectClock: 0,
     countermeasureCooldown: 0,
@@ -127,6 +129,26 @@ describe('HostileFighterAI radar tracking', () => {
     expect(ai.canLaunchMissile(enemy, 'radar')).toBe(true);
   });
 
+  it('honors a wingman-pressure encounter even when the player is within normal priority range', () => {
+    const ai = new HostileFighterAI();
+    const player = { position: new THREE.Vector3(0, 300, 0) };
+    const wingman = { dead: false, mesh: { position: new THREE.Vector3(0, 300, 900) } };
+    const enemy = makeHostile(new THREE.Vector3(0, 300, 1200));
+    enemy.targetPreference = 'wingmen';
+    const battle = {
+      player,
+      allies: [wingman],
+      enemies: [enemy],
+      friendlyGroundUnits: [],
+      difficulty: DIFFICULTY_PRESETS.standard,
+    };
+
+    expect(ai.selectEnemyEngagementTarget(battle, enemy, 1200)).toEqual({
+      target: wingman,
+      domain: 'air',
+    });
+  });
+
   it('coordinates Hard target assignments and tightens focus when the player has low energy', () => {
     const ai = new HostileFighterAI(() => .5);
     const player = { position: new THREE.Vector3(0, 300, 0) };
@@ -216,6 +238,155 @@ describe('HostileFighterAI radar tracking', () => {
     expect(launchEnemyMissile).not.toHaveBeenCalled();
   });
 
+  it('shows a fire-control lock window before a fighter can launch its missile', () => {
+    const enemy = makeHostile(new THREE.Vector3(0, 300, -3000));
+    enemy.engagementTarget = null;
+    enemy.targetRefreshTimer = 0;
+    enemy.missileClock = 0;
+    enemy.missilesFired = 0;
+    enemy.gunCooldown = 100;
+    enemy.tacticalManeuverCooldown = 100;
+    enemy.groundStrafeCooldown = 100;
+    const launchEnemyMissile = vi.fn();
+    const battle = makeBattle(enemy, vi.fn());
+    battle.weaponAI.chooseHostileMissileSeeker = () => 'radar';
+    battle.weaponAI.launchEnemyMissile = launchEnemyMissile;
+    const ai = new HostileFighterAI(() => .5);
+    const playerThreat = { lockedTarget: null, incomingMissiles: [] };
+    const forward = new THREE.Vector3(0, 0, 1);
+    const right = new THREE.Vector3(1, 0, 0);
+    const restoreLaunchGeometry = () => {
+      enemy.mesh.position.set(0, 300, -3000);
+      enemy.mesh.rotation.set(0, 0, 0);
+      enemy.heading = 0;
+      enemy.pitch = 0;
+      enemy.phase = 'inbound';
+      enemy.engagementTarget = battle.player;
+      enemy.targetRefreshTimer = 100;
+    };
+
+    restoreLaunchGeometry();
+    ai.updateJets(battle, 0, forward, right, playerThreat);
+    expect(enemy.missileLockRemaining).toBe(2.5);
+    expect(launchEnemyMissile).not.toHaveBeenCalled();
+
+    for (let index = 0; index < 4; index++) {
+      restoreLaunchGeometry();
+      ai.updateJets(battle, .5, forward, right, playerThreat);
+      expect(enemy.missileLockRemaining).toBeGreaterThan(0);
+      expect(launchEnemyMissile).not.toHaveBeenCalled();
+    }
+
+    restoreLaunchGeometry();
+    ai.updateJets(battle, .5, forward, right, playerThreat);
+    expect(launchEnemyMissile).toHaveBeenCalledOnce();
+    expect(enemy.missileLockRemaining).toBeNull();
+  });
+
+  it('gives a wingman-pressure fighter a warned missile solution on its assigned wingman', () => {
+    const enemy = makeHostile(new THREE.Vector3(0, 300, -3000));
+    const wingman = { dead: false, mesh: { position: new THREE.Vector3(0, 300, 0) }, velocity: new THREE.Vector3() };
+    enemy.targetPreference = 'wingmen';
+    enemy.engagementTarget = wingman;
+    enemy.targetRefreshTimer = 100;
+    enemy.missileClock = 0;
+    enemy.missilesFired = 0;
+    enemy.gunCooldown = 100;
+    enemy.tacticalManeuverCooldown = 100;
+    enemy.groundStrafeCooldown = 100;
+    const launchEnemyMissile = vi.fn();
+    const reportWingmanMissileLock = vi.fn();
+    const battle = makeBattle(enemy, vi.fn());
+    battle.allies = [wingman];
+    battle.weaponAI.chooseHostileMissileSeeker = () => 'radar';
+    battle.weaponAI.launchEnemyMissile = launchEnemyMissile;
+    battle.reportWingmanMissileLock = reportWingmanMissileLock;
+    const ai = new HostileFighterAI(() => .5);
+    const playerThreat = { lockedTarget: null, incomingMissiles: [] };
+    const forward = new THREE.Vector3(0, 0, 1);
+    const right = new THREE.Vector3(1, 0, 0);
+    const restoreLaunchGeometry = () => {
+      enemy.mesh.position.set(0, 300, -3000);
+      enemy.mesh.rotation.set(0, 0, 0);
+      enemy.heading = 0;
+      enemy.pitch = 0;
+      enemy.phase = 'inbound';
+      enemy.engagementTarget = wingman;
+      enemy.targetRefreshTimer = 100;
+    };
+
+    restoreLaunchGeometry();
+    ai.updateJets(battle, 0, forward, right, playerThreat);
+    expect(enemy.missileLockTarget).toBe(wingman);
+    expect(reportWingmanMissileLock).toHaveBeenCalledWith(enemy, wingman, 'radar');
+    expect(launchEnemyMissile).not.toHaveBeenCalled();
+
+    for (let index = 0; index < 5; index++) {
+      restoreLaunchGeometry();
+      ai.updateJets(battle, .5, forward, right, playerThreat);
+    }
+
+    expect(launchEnemyMissile).toHaveBeenCalledWith(battle, enemy, 'radar', wingman);
+  });
+
+  it('sends a Strike fighter toward friendly ground units instead of selecting air targets', () => {
+    const ai = new HostileFighterAI(() => .99);
+    const enemy = makeHostile(new THREE.Vector3(0, 300, -5000));
+    enemy.missionRole = 'strike';
+    const fartherUnit = {
+      dead: false,
+      armed: true,
+      mesh: { position: new THREE.Vector3(500, 0, 0) },
+    };
+    const otherUnit = {
+      dead: false,
+      armed: true,
+      mesh: { position: new THREE.Vector3(100, 0, 200) },
+    };
+    const battle = {
+      player: { position: new THREE.Vector3(0, 300, 0) },
+      playerVelocity: new THREE.Vector3(),
+      allies: [{ dead: false, mesh: { position: new THREE.Vector3(0, 300, -4900) } }],
+      enemies: [enemy],
+      friendlyGroundUnits: [otherUnit, fartherUnit],
+      difficulty: DIFFICULTY_PRESETS.standard,
+    };
+
+    expect(ai.selectEnemyEngagementTarget(battle, enemy, 5000)).toEqual({
+      target: fartherUnit,
+      domain: 'ground',
+    });
+  });
+
+  it('keeps a Strike fighter on its target area and prevents player missile launches', () => {
+    const enemy = makeHostile(new THREE.Vector3(0, 300, -5000));
+    enemy.missionRole = 'strike';
+    enemy.missileClock = 0;
+    enemy.missilesFired = 0;
+    enemy.gunCooldown = 100;
+    const launchEnemyMissile = vi.fn();
+    const fireEnemy = vi.fn();
+    const battle = makeBattle(enemy, fireEnemy);
+    battle.strikeTarget = new THREE.Vector3(4200, 300, 6100);
+    battle.weaponAI.chooseHostileMissileSeeker = () => 'ir';
+    battle.weaponAI.launchEnemyMissile = launchEnemyMissile;
+
+    new HostileFighterAI(() => .99).updateJets(
+      battle,
+      1 / 60,
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(1, 0, 0),
+      { lockedTarget: null, incomingMissiles: [] },
+    );
+
+    expect(enemy.engagementTarget).toBeNull();
+    expect(enemy.engagementTargetDomain).toBe('ground');
+    expect(enemy.waypoint.x).toBeCloseTo(4200);
+    expect(enemy.waypoint.z).toBeCloseTo(6100);
+    expect(launchEnemyMissile).not.toHaveBeenCalled();
+    expect(fireEnemy).not.toHaveBeenCalled();
+  });
+
   it('turns an extending fighter back toward its selected air target', () => {
     const enemy = makeHostile(new THREE.Vector3(0, 300, 1000), 'extend');
     const ai = new HostileFighterAI(() => .99);
@@ -244,5 +415,26 @@ describe('HostileFighterAI radar tracking', () => {
     ai.updateJets(battle, .1, forward, right, playerThreat);
 
     expect(fireEnemy).toHaveBeenCalledWith(battle, enemy, battle.player, 'air');
+  });
+
+  it('holds a new hostile missile lock while the complication slot is occupied', () => {
+    const enemy = makeHostile(new THREE.Vector3(0, 300, -4000));
+    const fireEnemy = vi.fn();
+    enemy.missileClock = 0;
+    enemy.missilesFired = 0;
+    enemy.gunCooldown = 100;
+    const battle = makeBattle(enemy, fireEnemy);
+    battle.canStartHostileMissileAttack = () => false;
+
+    new HostileFighterAI(() => .5).updateJets(
+      battle,
+      1 / 60,
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(1, 0, 0),
+      { lockedTarget: null, incomingMissiles: [] },
+    );
+
+    expect(enemy.missileLockRemaining).toBeNull();
+    expect(fireEnemy).not.toHaveBeenCalled();
   });
 });

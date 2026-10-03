@@ -83,6 +83,71 @@ describe('combat radar target and lock logic', () => {
     expect(radar.lockCueConfirmed).toBe(false);
   });
 
+  it('keeps an uncertain pop-up return visible in ground mode and unselectable until identification', () => {
+    const { radar } = setupRadar();
+    const contact = makeContact(0, 0, 12000);
+    contact.identified = false;
+    contact.popUpContact = true;
+    const contacts = {
+      airFriendly: [], airHostile: [contact], groundFriendly: [], groundHostile: [],
+    };
+
+    radar.toggleMode();
+    radar.updateContacts(0.016, 0, contacts);
+
+    let track = radar.tracks.get(contact.mesh);
+    expect(track.team).toBe('unknown');
+    expect(track.node.className).toContain('unknown');
+    expect(radar.cycleTarget([], [])).toBe(false);
+
+    radar.toggleMode();
+    radar.updateContacts(0.016, 0, contacts);
+    track = radar.tracks.get(contact.mesh);
+    expect(radar.cycleTarget([contact], [])).toBe(false);
+
+    contact.identified = true;
+    radar.updateContacts(0.016, 0, contacts);
+
+    expect(track.team).toBe('hostile');
+    expect(track.node.className).toContain('hostile');
+    expect(radar.cycleTarget([contact], [])).toBe(true);
+  });
+
+  it('highlights the threatened wingman and missile attacker in both radar modes', () => {
+    const { radar } = setupRadar();
+    const wingman = makeContact(250, 300, 1800);
+    wingman.rescueHighlight = true;
+    wingman.rescueFocusKind = 'rescue-wingman';
+    const attacker = makeContact(-250, 300, 2200);
+    attacker.rescueHighlight = true;
+    attacker.rescueFocusKind = 'rescue-attacker';
+    const contacts = {
+      airFriendly: [wingman], airHostile: [attacker], groundFriendly: [], groundHostile: [],
+    };
+
+    radar.toggleMode();
+    radar.updateContacts(.016, 0, contacts);
+    expect(radar.tracks.get(wingman.mesh).node.className).toContain('rescue-wingman');
+    expect(radar.tracks.get(attacker.mesh).node.className).toContain('rescue-attacker');
+
+    radar.toggleMode();
+    radar.updateContacts(.016, 0, contacts);
+    expect(radar.tracks.get(wingman.mesh).node.className).toContain('rescue-focus');
+    expect(radar.tracks.get(attacker.mesh).node.className).toContain('rescue-focus');
+  });
+
+  it('marks mission-role ground contacts on the scope', () => {
+    const { radar } = setupRadar();
+    const relay = makeContact(0, 0, 2200);
+    relay.missionTargetRoleKey = 'combat.groundTargetRole.logistics';
+    radar.toggleMode();
+    radar.updateContacts(0.016, 0, {
+      airFriendly: [], airHostile: [], groundFriendly: [], groundHostile: [relay],
+    });
+
+    expect(radar.tracks.get(relay.mesh).node.className).toContain('mission-target');
+  });
+
   it('cycles only to a detected in-range hostile and confirms lock in the nose envelope', () => {
     const { radar, audio } = setupRadar();
     const hostile = makeContact(0, 0, 2000);

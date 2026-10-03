@@ -197,7 +197,8 @@ export class TacticalHud {
         : targetType;
       setTextIfChanged(this.targetCode, platform ? `${targetNumber} · ${platform}` : targetNumber);
       setTextIfChanged(this.selectedTrackName, platform || targetNumber);
-      setTextIfChanged(this.selectedTrackType, `${targetNumber} · ${targetType}`);
+      const targetRole = target.missionTargetRoleKey ? t(target.missionTargetRoleKey) : targetType;
+      setTextIfChanged(this.selectedTrackType, `${targetNumber} · ${targetRole}`);
       setTextIfChanged(this.selectedTrackRange, rangeText);
       const lockText = !radar.targetInSensorRange
         ? t('combat.sensorContactLost')

@@ -34,6 +34,12 @@ export class AirSpawnSystem {
         burstShots: 0,
         target: null,
         groundTarget: null,
+        rescueTimer: 0,
+        rescueLockActive: false,
+        rescueMissile: null,
+        rescueAttacker: null,
+        rescueHighlight: false,
+        lastEvadedMissile: null,
         targetRefresh: 0,
         groundMissiles: 2,
         groundMissileCooldown: 2 + i * 1.2,
@@ -70,20 +76,24 @@ export class AirSpawnSystem {
     return spawned;
   }
 
-  spawnReinforcements(battle, reinforcement) {
-    if (!reinforcement?.scheduled || reinforcement.hostiles <= 0) return false;
+  spawnEncounter(battle, event) {
+    const response = event?.response;
+    if (!response || response.hostiles <= 0) return false;
     const mission = {
       ...battle.mission,
-      hostiles: reinforcement.hostiles,
+      hostiles: response.hostiles,
       hostileHelicopters: 0,
-      hostileComposition: reinforcement.composition,
-      hostileSpawnDistance: reinforcement.spawnDistance ?? battle.mission.hostileSpawnDistance,
-      hostileMinimumSpawnDistance: reinforcement.minimumSpawnDistance
+      hostileComposition: response.composition,
+      hostileRoles: response.hostileRoles,
+      hostileTargetPreference: response.targetPreference,
+      hostileGroupId: event.id,
+      hostileSpawnDistance: response.spawnDistance ?? battle.mission.hostileSpawnDistance,
+      hostileMinimumSpawnDistance: response.minimumSpawnDistance
         ?? battle.mission.hostileMinimumSpawnDistance,
-      hostileLateralSpacing: reinforcement.lateralSpacing ?? battle.mission.hostileLateralSpacing,
-      hostileEntry: reinforcement.entry ?? 'scramble',
+      hostileLateralSpacing: response.lateralSpacing ?? battle.mission.hostileLateralSpacing,
+      hostileEntry: response.entry ?? 'scramble',
     };
-    const heading = battle.currentPlayerHeading();
+    const heading = THREE.MathUtils.degToRad(response.bearingDegrees ?? 0);
     return this.spawnHostileWave(
       battle,
       mission,
@@ -124,6 +134,7 @@ export class AirSpawnSystem {
       const lane = i - (hostileCount - 1) * .5;
       const laneCoordinate = lane / Math.max(.5, (hostileCount - 1) * .5);
       jet.position.copy(formation.positions[i]);
+      const missionRole = mission.hostileRoles?.[i] ?? 'sweep';
 
       const ground = battle.terrain?.sampleHeight(jet.position.x, jet.position.z) ?? -Infinity;
       jet.position.y = Math.max(battle.player.position.y + altitudeOffsets[i % altitudeOffsets.length], ground + 360);
@@ -144,6 +155,8 @@ export class AirSpawnSystem {
       battle.enemies.push({
         mesh: jet,
         label: jet.userData.platformName,
+        identified: true,
+        missionRole,
         hp: maxHp,
         maxHp,
         heading: initialHeading,
@@ -154,7 +167,7 @@ export class AirSpawnSystem {
         // including larger test formations.
         lane: laneCoordinate || (i % 2 ? 1 : -1),
         altitudeOffset: altitudeOffsets[i % altitudeOffsets.length],
-        phase: mission.hostileEntry === 'scramble' ? 'inbound' : 'staging',
+        phase: missionRole === 'strike' || mission.hostileEntry === 'scramble' ? 'inbound' : 'staging',
         phaseClock: 0,
         detectedPlayerTimer: 0,
         radarTrackDisruptionRemaining: 0,
@@ -166,6 +179,9 @@ export class AirSpawnSystem {
         burstClock: 0,
         burstShots: 0,
         missileClock: (battle.difficulty?.fighter?.missile?.initialDelay ?? 7) + i * 1.1,
+        missileLockRemaining: null,
+        missileLockSeeker: null,
+        missileLockTarget: null,
         missilesFired: 0,
         effectClock: 0,
         countermeasures: battle.difficulty?.fighter?.evasion?.countermeasureCapacity ?? 2,
@@ -192,6 +208,8 @@ export class AirSpawnSystem {
         burstTargetDomain: 'air',
         boosting: false,
         dead: false,
+        encounterGroupId: mission.hostileGroupId ?? 'primary',
+        targetPreference: mission.hostileTargetPreference,
         attackForward: playerForward.clone(),
         attackRight: playerRight.clone(),
         waypoint:new THREE.Vector3(),steeringOffset:new THREE.Vector3(),direction:new THREE.Vector3(),
@@ -231,6 +249,7 @@ export class AirSpawnSystem {
       const health = 3.7 * (battle.difficulty?.fighter?.health ?? 1);
       battle.enemies.push({
         kind: 'attack-helicopter',
+        encounterGroupId: mission.hostileGroupId ?? 'primary',
         mesh,
         label: 'Mi-24V',
         hp: health,
@@ -247,6 +266,7 @@ export class AirSpawnSystem {
         rocketCooldown: 4 + i * 3,
         airToAirMissilesRemaining: 4,
         airMissileCooldown: 1.8 + i * 1.8,
+        airMissileLockRemaining: null,
         waypoint: new THREE.Vector3(),
         steeringOffset: new THREE.Vector3(),
         direction: new THREE.Vector3(),

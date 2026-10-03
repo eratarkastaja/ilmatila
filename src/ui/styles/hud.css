@@ -536,6 +536,34 @@
   background: #51291fbb;
 }
 
+.radar-contact.rescue-focus {
+  z-index: 7;
+  animation: radar-rescue-focus .72s ease-in-out infinite alternate;
+  filter: drop-shadow(0 0 5px currentColor);
+}
+
+.radar-contact.rescue-wingman {
+  color: #b9ffff;
+  border-color: #91ffff;
+}
+
+.radar-contact.rescue-attacker {
+  color: #ffd29c;
+  border-color: #ff9b58;
+}
+
+.radar-contact.rescue-focus:after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+
+@keyframes radar-rescue-focus {
+  to { transform: rotate(45deg) scale(1.22); }
+}
+
 .radar-scale {
   display: flex;
   justify-content: space-between;
@@ -1241,6 +1269,19 @@
   clip-path: polygon(50% 0,100% 100%,50% 76%,0 100%);
 }
 
+.radar-contact.unknown {
+  color: #e6d27a;
+}
+
+.radar-contact.unknown:before {
+  inset: 0;
+  border: 1px dashed currentColor;
+  border-radius: 50%;
+  background: transparent;
+  clip-path: none;
+  filter: drop-shadow(0 0 2px currentColor);
+}
+
 .radar-contact.ground {
   width: 8px;
   height: 8px;
@@ -1273,6 +1314,11 @@
 
 .radar-contact.ground.target:after {
   border-radius: 2px;
+}
+
+.radar-contact.mission-target {
+  z-index: 5;
+  filter: drop-shadow(0 0 4px #f2cf73);
 }
 
 .selected-track-panel {
@@ -1494,6 +1540,21 @@
 }
 
 .radar-warning[data-state="track"] {
+  border-color: #edc96c99;
+  border-left-color: #f0cf70;
+  background: #211d10df;
+  color: #f0dda0;
+}
+
+.radar-warning[data-state="lock"],
+.radar-warning[data-state="irLock"] {
+  border-color: #ff8a667d;
+  border-left-color: #ff795d;
+  background: #281510e8;
+  color: #ffc0a9;
+}
+
+.radar-warning[data-state="groundTrack"] {
   border-color: #edc96c99;
   border-left-color: #f0cf70;
   background: #211d10df;
@@ -1858,6 +1919,77 @@
   color: #bdcec3;
   font: 500 11px Rajdhani,sans-serif;
   letter-spacing: .08em;
+  font-variant-numeric: tabular-nums;
+}
+
+.support-force-status {
+  display: grid;
+  gap: 3px;
+  margin-top: 3px;
+  padding: 5px 0 1px;
+  border-top: 1px solid #91b4a52b;
+  color: #bdcec3;
+}
+
+.support-force-status[hidden] {
+  display: none;
+}
+
+.support-force-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.support-force-heading small {
+  color: #9fd9b2;
+  font: 600 9px Rajdhani,sans-serif;
+  letter-spacing: .16em;
+}
+
+.support-force-heading b {
+  color: #aee2c2;
+  font: 700 12px Rajdhani,sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.support-force-track {
+  height: 4px;
+  overflow: hidden;
+  background: #9bb8a72b;
+}
+
+.support-force-track i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #82d7ad;
+  transform: scaleX(1);
+  transform-origin: left center;
+  transition: transform .16s linear,background-color .16s linear;
+}
+
+.support-force-status[data-level="yellow"] .support-force-track i {
+  background: #e9c96d;
+}
+
+.support-force-status[data-level="red"] .support-force-track i {
+  background: #ff795d;
+}
+
+.support-force-status[data-level="yellow"] .support-force-heading b {
+  color: #e9c96d;
+}
+
+.support-force-status[data-level="red"] .support-force-heading b {
+  color: #ff9b78;
+}
+
+.support-force-status>span {
+  color: #9fb7a6;
+  font: 500 9px Rajdhani,sans-serif;
+  letter-spacing: .1em;
   font-variant-numeric: tabular-nums;
 }
 
@@ -2297,6 +2429,45 @@
   font: 700 10px Rajdhani,sans-serif;
   letter-spacing: .1em;
   text-align: right;
+}
+
+.wingman-rescue-warning {
+  display: grid;
+  gap: 2px;
+  margin: 4px 0 6px;
+  padding: 5px 7px;
+  border: 1px solid #ff9c6270;
+  border-left: 2px solid #ff9e65;
+  background: #361b15de;
+  color: #ffe0c2;
+  font: 700 9px Rajdhani,sans-serif;
+  letter-spacing: .09em;
+}
+
+.wingman-rescue-warning[hidden] {
+  display: none;
+}
+
+.wingman-rescue-warning b {
+  color: #ffe4ce;
+  font-size: 10px;
+}
+
+.wingman-rescue-warning small {
+  color: #efc39f;
+  font-size: 8px;
+  line-height: 1.25;
+}
+
+.wingman-rescue-warning[data-state="lock"] {
+  border-left-color: #f0cf70;
+  border-color: #edc96c80;
+  background: #292310ed;
+  color: #f5dda0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .radar-contact.rescue-focus { animation: none; }
 }
 
 .hull-row {

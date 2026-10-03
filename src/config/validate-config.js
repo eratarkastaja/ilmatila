@@ -130,7 +130,9 @@ const missionSchema = object({
   hostileStagingDistance: optional(number(1, 100000)),
   openingDelay: optional(number(0, 300)),
   hostileComposition: optional(array(string)),
+  hostileRoles: optional(array(string)),
   hostileEntry: optional(string),
+  wingmanInitialOrder: optional(string),
   wingmen: number(0, 10, true),
   groundBattle: boolean,
   groundPairs: number(0, 200, true),
@@ -154,18 +156,37 @@ const missionSchema = object({
 const MISSION_VARIANT_CHANGE_FIELDS = new Set([
   'navigationDistance', 'navigationRadius', 'ingressAltitudeAgl', 'departureDuration',
   'hostiles', 'hostileSpawnDistance', 'hostileMinimumSpawnDistance', 'hostileLateralSpacing',
-  'hostileStagingDistance', 'openingDelay', 'hostileComposition', 'hostileEntry',
+  'hostileStagingDistance', 'openingDelay', 'hostileComposition', 'hostileRoles', 'hostileEntry',
+  'wingmanInitialOrder',
   'groundPairs', 'groundTrucks', 'groundFriendlyTrucks', 'groundFrontSpan', 'convoyArea',
   'hostileHelicopters', 'hostileHelicopterSpawnDistance', 'hostileHelicopterMinimumSpawnDistance',
   'hostileHelicopterLateralSpacing', 'hostileHelicopterSpawnAltitude', 'groundIto90Count',
   'groundShilkaCount', 'battlefieldIngressOffset', 'objective', 'optionalObjectives',
 ]);
 
-const reinforcementSchema = object({
+const encounterSchema = object({
+  id: string,
   probability: number(0, 1),
-  delaySeconds: number(5, 600),
+  trigger: object({
+    primaryGroupRemainingAtMost: number(0, 100, true),
+    objectiveActive: optional(boolean),
+    playerCombatCapable: boolean,
+    primaryGroundRemainingAtLeast: optional(number(0, 500, true)),
+    reinforcementLogisticsRemainingAtLeast: optional(number(0, 500, true)),
+  }),
+  delayRangeSeconds: object({ min: number(12, 20, true), max: number(12, 20, true) }),
+  warningEvent: string,
+  responses: array({ type: 'encounterResponse' }),
+});
+
+const encounterResponseSchema = object({
+  id: string,
+  weight: number(.001, 1000),
   hostiles: number(1, 20, true),
   composition: array(string),
+  hostileRoles: array(string),
+  targetPreference: optional(string),
+  bearingDegrees: number(0, 359, true),
   spawnDistance: optional(number(1, 100000)),
   minimumSpawnDistance: optional(number(1, 100000)),
   lateralSpacing: optional(number(1, 20000)),
@@ -196,6 +217,10 @@ function validateNode(value, schema, path, errors) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       errors.push(`${path} must be an object`);
     }
+    return;
+  }
+  if (schema.type === 'encounterResponse') {
+    validateNode(value, encounterResponseSchema, path, errors);
     return;
   }
   if (schema.type === 'object') {
@@ -336,23 +361,52 @@ function validateHostileComposition(composition, path, errors) {
   }
 }
 
-function validateReinforcement(reinforcement, path, mission, changes, errors) {
-  validateNode(reinforcement, reinforcementSchema, path, errors);
-  if (!reinforcement || typeof reinforcement !== 'object' || Array.isArray(reinforcement)) return;
-  validateHostileComposition(reinforcement.composition, `${path}.composition`, errors);
-  if (reinforcement.entry !== undefined && !['staging', 'scramble'].includes(reinforcement.entry)) {
-    errors.push(`${path}.entry must be staging or scramble`);
+function validateHostileRoles(roles, hostileCount, path, errors) {
+  if (roles === undefined || !Array.isArray(roles)) return;
+  if (hostileCount !== undefined && roles.length !== hostileCount) {
+    errors.push(`${path} must contain one role for each hostile aircraft (${hostileCount})`);
   }
-  const spawnDistance = reinforcement.spawnDistance
-    ?? changes.hostileSpawnDistance
-    ?? mission.hostileSpawnDistance;
-  const minimumSpawnDistance = reinforcement.minimumSpawnDistance
-    ?? changes.hostileMinimumSpawnDistance
-    ?? mission.hostileMinimumSpawnDistance;
-  if (spawnDistance !== undefined && minimumSpawnDistance !== undefined
-    && minimumSpawnDistance > spawnDistance) {
-    errors.push(`${path}.minimumSpawnDistance must not exceed spawnDistance`);
+  roles.forEach((role, index) => {
+    if (!['sweep', 'strike'].includes(role)) errors.push(`${path}[${index}] must be sweep or strike`);
+  });
+}
+
+function validateWingmanInitialOrder(order, path, errors) {
+  if (order !== undefined && !['attack', 'defend', 'regroup', 'disengage'].includes(order)) {
+    errors.push(`${path} must be attack, defend, regroup, or disengage`);
   }
+}
+
+function validateEncounter(encounter, path, errors) {
+  validateNode(encounter, encounterSchema, path, errors);
+  if (!encounter || typeof encounter !== 'object' || Array.isArray(encounter)) return;
+  if (encounter.delayRangeSeconds && typeof encounter.delayRangeSeconds === 'object'
+    && encounter.delayRangeSeconds.min > encounter.delayRangeSeconds.max) {
+    errors.push(`${path}.delayRangeSeconds.min must not exceed max`);
+  }
+  if (!Array.isArray(encounter.responses)) return;
+  if (encounter.responses.length === 0) errors.push(`${path}.responses must contain at least one response`);
+  const responseIds = new Set();
+  encounter.responses.forEach((response, index) => {
+    const responsePath = `${path}.responses[${index}]`;
+    if (!response || typeof response !== 'object' || Array.isArray(response)) return;
+    if (responseIds.has(response.id)) errors.push(`${path}.responses contains duplicate id "${response.id}"`);
+    responseIds.add(response.id);
+    validateHostileComposition(response.composition, `${responsePath}.composition`, errors);
+    validateHostileRoles(response.hostileRoles, response.hostiles, `${responsePath}.hostileRoles`, errors);
+    if (response.targetPreference !== undefined && !['player', 'wingmen'].includes(response.targetPreference)) {
+      errors.push(`${responsePath}.targetPreference must be player or wingmen`);
+    }
+    if (response.entry !== undefined && !['staging', 'scramble'].includes(response.entry)) {
+      errors.push(`${responsePath}.entry must be staging or scramble`);
+    }
+    const spawnDistance = response.spawnDistance;
+    const minimumSpawnDistance = response.minimumSpawnDistance;
+    if (spawnDistance !== undefined && minimumSpawnDistance !== undefined
+      && minimumSpawnDistance > spawnDistance) {
+      errors.push(`${responsePath}.minimumSpawnDistance must not exceed spawnDistance`);
+    }
+  });
 }
 
 function validateMissionVariants(variants, path, mission, errors) {
@@ -367,7 +421,7 @@ function validateMissionVariants(variants, path, mission, errors) {
       errors.push(`${variantPath} must be an object`);
       return;
     }
-    const allowedKeys = ['id', 'labelKey', 'weight', 'changes', 'reinforcement'];
+    const allowedKeys = ['id', 'labelKey', 'weight', 'changes', 'encounters'];
     for (const key of Object.keys(variant)) {
       if (!allowedKeys.includes(key)) errors.push(`${variantPath}.${key} is not a recognized variant setting`);
     }
@@ -392,6 +446,13 @@ function validateMissionVariants(variants, path, mission, errors) {
         }
       }
       validateHostileComposition(changes.hostileComposition, `${variantPath}.changes.hostileComposition`, errors);
+      validateHostileRoles(
+        changes.hostileRoles,
+        changes.hostiles ?? mission.hostiles,
+        `${variantPath}.changes.hostileRoles`,
+        errors,
+      );
+      validateWingmanInitialOrder(changes.wingmanInitialOrder, `${variantPath}.changes.wingmanInitialOrder`, errors);
       if (changes.hostileEntry !== undefined && !['staging', 'scramble'].includes(changes.hostileEntry)) {
         errors.push(`${variantPath}.changes.hostileEntry must be staging or scramble`);
       }
@@ -409,9 +470,20 @@ function validateMissionVariants(variants, path, mission, errors) {
         errors.push(`${variantPath}.changes.hostileMinimumSpawnDistance must not exceed hostileSpawnDistance`);
       }
     }
-    if (variant.reinforcement !== undefined) {
-      validateReinforcement(variant.reinforcement, `${variantPath}.reinforcement`, mission,
-        variant.changes && typeof variant.changes === 'object' ? variant.changes : {}, errors);
+    if (variant.encounters !== undefined) {
+      if (!Array.isArray(variant.encounters)) {
+        errors.push(`${variantPath}.encounters must be an array`);
+      } else {
+        const encounterIds = new Set();
+        variant.encounters.forEach((encounter, encounterIndex) => {
+          const encounterPath = `${variantPath}.encounters[${encounterIndex}]`;
+          validateEncounter(encounter, encounterPath, errors);
+          if (encounter?.id && encounterIds.has(encounter.id)) {
+            errors.push(`${variantPath}.encounters contains duplicate id "${encounter.id}"`);
+          }
+          if (encounter?.id) encounterIds.add(encounter.id);
+        });
+      }
     }
   });
 }
@@ -446,6 +518,8 @@ function validateMissionRelations(mission, key, validIds, errors) {
     validateOptionalObjectives(mission.optionalObjectives, `${path}.optionalObjectives`, errors);
   }
   validateHostileComposition(mission.hostileComposition, `${path}.hostileComposition`, errors);
+  validateHostileRoles(mission.hostileRoles, mission.hostiles, `${path}.hostileRoles`, errors);
+  validateWingmanInitialOrder(mission.wingmanInitialOrder, `${path}.wingmanInitialOrder`, errors);
   if (mission.hostileEntry !== undefined && !['staging', 'scramble'].includes(mission.hostileEntry)) {
     errors.push(`${path}.hostileEntry must be staging or scramble`);
   }

@@ -97,31 +97,21 @@ function getScenarioContacts(missionResolution, terrain, origin, heading) {
   });
   addFormationContacts(contacts, helicopterPositions, 'hostile', origin, heading);
 
-  const reinforcement = missionResolution.reinforcement;
-  if (reinforcement?.scheduled) {
-    const reinforcementMission = {
-      ...mission,
-      hostiles: reinforcement.hostiles,
-      hostileSpawnDistance: reinforcement.spawnDistance ?? mission.hostileSpawnDistance,
-      hostileMinimumSpawnDistance: reinforcement.minimumSpawnDistance
-        ?? mission.hostileMinimumSpawnDistance,
-      hostileLateralSpacing: reinforcement.lateralSpacing ?? mission.hostileLateralSpacing,
-    };
-    const reinforcementPositions = formationPositions(
-      origin,
-      forward,
-      right,
-      terrain,
-      {
-        count: reinforcementMission.hostiles ?? 0,
-        requestedDistance: reinforcementMission.hostileSpawnDistance ?? 12000,
-        minimumDistance: reinforcementMission.hostileMinimumSpawnDistance ?? 10000,
-        lateralSpacing: reinforcementMission.hostileLateralSpacing ?? 560,
-        forwardLaneSpacing: 90,
-        margin: spawnMargin,
-      },
-    );
-    addFormationContacts(contacts, reinforcementPositions, 'hostile', origin, heading, { reinforcement: true });
+  for (const encounter of missionResolution.encounters ?? []) {
+    if (!encounter.scheduled || !encounter.response) continue;
+    const response = encounter.response;
+    const encounterHeading = THREE.MathUtils.degToRad(response.bearingDegrees ?? 0);
+    const encounterForward = new THREE.Vector3(Math.sin(encounterHeading), 0, Math.cos(encounterHeading));
+    const encounterRight = new THREE.Vector3(Math.cos(encounterHeading), 0, -Math.sin(encounterHeading));
+    const encounterPositions = formationPositions(origin, encounterForward, encounterRight, terrain, {
+      count: response.hostiles,
+      requestedDistance: response.spawnDistance ?? mission.hostileSpawnDistance ?? 12000,
+      minimumDistance: response.minimumSpawnDistance ?? mission.hostileMinimumSpawnDistance ?? 10000,
+      lateralSpacing: response.lateralSpacing ?? mission.hostileLateralSpacing ?? 560,
+      forwardLaneSpacing: 90,
+      margin: spawnMargin,
+    });
+    addFormationContacts(contacts, encounterPositions, 'hostile', origin, heading, { reinforcement: true });
   }
 
   return contacts;

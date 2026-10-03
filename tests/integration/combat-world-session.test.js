@@ -220,6 +220,110 @@ describe('CombatWorld sortie lifecycle', () => {
     expect(run(0x1234abce)).not.toEqual(baseline);
   });
 
+  it('publishes Support defender health from live ground-unit damage and losses', async () => {
+    installBrowserGlobals();
+    const { CombatWorld } = await import('../../src/combat/world.js');
+    const scene = new THREE.Scene();
+    const player = new THREE.Group();
+    player.position.set(0, 100, 0);
+    const mission = {
+      ...createMission(),
+      id: 'support',
+      groundPairs: 3,
+      groundTrucks: 0,
+      groundFriendlyTrucks: 1,
+      objective: { type: 'support' },
+    };
+    const world = new CombatWorld(
+      scene, player, createTerrain(), null, createAircraftAsset(), mission, null, vi.fn(), 'standard', null, 0x51,
+    );
+
+    try {
+      const defenders = world.friends.filter(unit => unit.role === 'defender');
+      const maximumHealth = defenders.reduce((total, unit) => total + unit.maxHp, 0);
+      const damagedDefender = defenders[0];
+      expect(defenders.length).toBeGreaterThan(0);
+      expect(world.hudState.supportForce).toMatchObject({
+        active: true,
+        fraction: 1,
+        unitsAlive: defenders.length,
+        unitsTotal: defenders.length,
+      });
+
+      damagedDefender.hp = damagedDefender.maxHp / 2;
+      world.refreshHudState();
+      expect(world.hudState.supportForce.fraction).toBeCloseTo(
+        1 - (damagedDefender.maxHp / 2) / maximumHealth,
+      );
+      expect(world.hudState.supportForce.unitsAlive).toBe(defenders.length);
+
+      damagedDefender.dead = true;
+      damagedDefender.hp = 0;
+      world.refreshHudState();
+      expect(world.hudState.supportForce.fraction).toBeCloseTo(
+        (maximumHealth - damagedDefender.maxHp) / maximumHealth,
+      );
+      expect(world.hudState.supportForce.unitsAlive).toBe(defenders.length - 1);
+    } finally {
+      world.dispose();
+    }
+  });
+
+  it('records a lost Intercept installation without ending the sortie', async () => {
+    installBrowserGlobals();
+    const { CombatWorld } = await import('../../src/combat/world.js');
+    const { MISSIONS } = await import('../../src/mission/missions.js');
+    const scene = new THREE.Scene();
+    const player = new THREE.Group();
+    player.position.set(0, 100, 0);
+    const world = new CombatWorld(
+      scene, player, createTerrain(), null, createAircraftAsset(), MISSIONS.intercept,
+      null, vi.fn(), 'standard', null, 0x4a11,
+    );
+
+    try {
+      world.airBattle.spawnHostiles();
+      const installationObjective = world.optionalObjectiveTracker.objectives
+        .find(objective => objective.type === 'interceptBeforeZone');
+      const strike = world.enemies[installationObjective.target.index];
+      expect(strike.missionRole).toBe('strike');
+      strike.mesh.position.copy(world.missionFlow.home);
+
+      const radioEmit = vi.spyOn(world.radio, 'emit');
+      world.update(0);
+
+      expect(world.optionalObjectiveTracker.results.find(result => result.id === installationObjective.id))
+        .toMatchObject({
+          status: 'failed',
+          detailKey: 'mission.optionalObjective.result.zoneReached',
+        });
+      expect(world.radio.current.key).toBe('radio.protectedSiteLost');
+      expect(world.missionSystem.outcome).toBe('active');
+      expect(world.missionFlow.outcome).toBe('active');
+
+      world.update(0);
+      expect(radioEmit.mock.calls.filter(([event]) => event === 'mission.protectedSiteLost')).toHaveLength(1);
+
+      for (const enemy of world.enemies) {
+        enemy.dead = true;
+        enemy.hp = 0;
+      }
+      world.missionSystem.activate();
+      world.update(0);
+      expect(world.missionSystem.objectiveSatisfied).toBe(true);
+      world.update(4);
+
+      expect(world.debriefData.outcome).toBe('complete');
+      expect(world.debriefData.optionalObjectives.find(result => result.id === installationObjective.id))
+        .toMatchObject({
+          status: 'failed',
+          detailKey: 'mission.optionalObjective.result.zoneReached',
+        });
+    } finally {
+      world.dispose();
+    }
+  });
+
   it('binds C to chaff and keeps F on flare deployment', async () => {
     const { document, window } = installBrowserGlobals();
     const { CombatWorld } = await import('../../src/combat/world.js');
@@ -338,6 +442,11 @@ describe('CombatWorld sortie lifecycle', () => {
     const onMissionEnd = vi.fn((outcome, result) => career.recordMission({ ...result, outcome }));
 
     const first = new CombatWorld(scene, player, terrain, null, aircraftAsset, mission, null, onMissionEnd, 'hard');
+    const attacker = {};
+    expect(first.airBattle.canStartHostileMissileAttack(attacker, player)).toBe(true);
+    first.encounterDirector.events.push({ status: 'warning' });
+    expect(first.airBattle.canStartHostileMissileAttack(attacker, player)).toBe(false);
+    first.encounterDirector.events.pop();
     expect(first.fuelSystem.capacitySeconds).toBe(4 * 60 * 60);
     expect(first.fuelSystem.fraction).toBe(1);
     expect(first.weaponSystem.missiles).toEqual({ air: 6, ground: 6 });

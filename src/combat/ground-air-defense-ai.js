@@ -14,6 +14,7 @@ const stationaryVelocity = new THREE.Vector3();
 const FRIENDLY_AA_TRACER_OPTIONS = { life: .16, trailTime: .065 };
 const AA_TRACER_OPTIONS = { life: .34, trailTime: .22 };
 const SHILKA_TRACER_OPTIONS = { life: .82, trailTime: .6 };
+const AA_TRACKING_WARNING_SECONDS = 1.5;
 const FRIENDLY_AA_PROFILES = Object.freeze({
   cv9030: { speed: 930, maxRange: 3300, maxAltitude: 2200, spread: .0085, damage: .18, rounds: 5, interval: .12, cooldown: 7.5, jitter: 4.5, muzzle: 2.45 },
   pasi: { speed: 820, maxRange: 2200, maxAltitude: 1500, spread: .014, damage: .085, rounds: 5, interval: .105, cooldown: 10, jitter: 5.5, muzzle: 1.65 },
@@ -216,7 +217,26 @@ export class GroundAirDefenseAI {
       * (battle.difficulty?.groundAA?.altitudeScale ?? 1)
       * (isShilka ? (battle.difficulty?.groundAA?.shilka?.altitudeScale ?? 1) : 1);
     const inEnvelope=range>190&&range<rangeLimit&&agl>20&&agl<altitudeLimit;
-    if(!inEnvelope){unit.aaBurstRemaining=0;return;}
+    if(!inEnvelope){
+      unit.aaBurstRemaining=0;
+      unit.aaTrackTimer=null;
+      unit.aaPlayerTracking=false;
+      return;
+    }
+    if(unit.aaBurstRemaining<=0){
+      let startedTracking=false;
+      if(unit.aaTrackTimer==null){
+        if(unit.aaCooldown>AA_TRACKING_WARNING_SECONDS)return;
+        unit.aaTrackTimer=AA_TRACKING_WARNING_SECONDS;
+        unit.aaPlayerTracking=true;
+        startedTracking=true;
+      }
+      this.aimAntiAirAtPlayer(unit,battle.player.position);
+      if(!startedTracking)unit.aaTrackTimer=Math.max(0,unit.aaTrackTimer-dt);
+      if(unit.aaTrackTimer>0||unit.aaCooldown>0)return;
+      unit.aaPlayerTracking=false;
+      unit.aaTrackTimer=null;
+    }
     if(unit.aaBurstRemaining<=0&&unit.aaCooldown<=0){
       const burstSize = (battle.difficulty?.groundAA?.burstRounds ?? 3) + aa.rounds;
       const shilkaBurstScale = platform === 'zsu23-4' ? (battle.difficulty?.groundAA?.shilka?.burstScale ?? 1) : 1;
@@ -226,6 +246,8 @@ export class GroundAirDefenseAI {
         ? (battle.difficulty?.groundAA?.cooldown ?? 8) * .8 * (battle.difficulty?.groundAA?.shilka?.cooldownScale ?? 1)
         : (battle.difficulty?.groundAA?.cooldown ?? 8))
         +this.random()*(battle.difficulty?.groundAA?.cooldownJitter ?? 5);
+      unit.aaPlayerTracking=false;
+      unit.aaTrackTimer=null;
       if(unit.role==='assault'){
         const stopChance=platform==='t72'
           ? (battle.difficulty?.groundAA?.t72StopToFireChance ?? .68)
@@ -241,6 +263,18 @@ export class GroundAirDefenseAI {
       unit.aaBurstRemaining--;
       unit.aaBurstClock+=aa.interval;
     }
+  }
+
+  aimAntiAirAtPlayer(unit, targetPosition) {
+    const mount=unit.mesh.userData.aaMount;
+    if(!mount)return;
+    unit.mesh.updateWorldMatrix(true,false);
+    mount.parent.updateWorldMatrix(true,false);
+    const aim=this.aaAim.copy(targetPosition);
+    mount.parent.worldToLocal(aim).sub(mount.position);
+    mount.rotation.y=Math.atan2(aim.x,aim.z);
+    mount.rotation.x=-Math.atan2(aim.y,Math.hypot(aim.x,aim.z));
+    mount.updateWorldMatrix(true,false);
   }
 
   fireAntiAir(battle, unit,range,profile) {

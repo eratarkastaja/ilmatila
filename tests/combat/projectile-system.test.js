@@ -311,6 +311,42 @@ describe('ProjectileSystem', () => {
     expect(missile.velocity.length()).toBeGreaterThan(640);
   });
 
+  it('resolves a hostile missile against its assigned wingman target', () => {
+    const onFriendlyAircraftHit = vi.fn();
+    const { system, scene, hostiles } = makeSystem({ onFriendlyAircraftHit });
+    const allyMesh = new THREE.Object3D();
+    allyMesh.position.set(0, 0, 25);
+    scene.add(allyMesh);
+    const ally = { mesh: allyMesh, velocity: new THREE.Vector3(), dead: false, hp: 3.6 };
+    const attacker = { mesh: new THREE.Object3D(), dead: false };
+    const missileMesh = new THREE.Object3D();
+    scene.add(missileMesh);
+    hostiles.push({
+      projectile: true,
+      missile: true,
+      homing: true,
+      seeker: 'ir',
+      mesh: missileMesh,
+      velocity: new THREE.Vector3(0, 0, 180),
+      speed: 180,
+      burnRemaining: 0,
+      coastDrag: 0,
+      motorBurning: false,
+      guidanceActive: false,
+      life: 2,
+      damage: 58,
+      proximityRadius: 20,
+      target: ally,
+      sourceUnit: attacker,
+      warningClock: 0,
+    });
+
+    system.update(.2);
+
+    expect(onFriendlyAircraftHit).toHaveBeenCalledWith(ally, 58, attacker);
+    expect(hostiles).toHaveLength(0);
+  });
+
   it('lets an infrared missile take a fresh flare only when it is ahead of and separated from its target', () => {
     const { system, player, scene, hostiles, decoys } = makeSystem({ random: () => 0 });
     player.position.set(0, 0, 1000);

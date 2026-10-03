@@ -50,6 +50,7 @@ describe('game configuration validation', () => {
     missions.patrol.hostiles = 1000;
     missions.intercept.hostileStagingDistance = 0;
     missions.support.hostileHelicopterMinimumSpawnDistance = 15000;
+    missions.support.wingmanInitialOrder = 'pursue';
     missions.support.unlocks = ['missing'];
 
     const errors = validateGameConfig({ difficulties: {}, missions });
@@ -59,13 +60,14 @@ describe('game configuration validation', () => {
     expect(errors).toContain('missions.patrol.hostiles must be between 0 and 100');
     expect(errors).toContain('missions.intercept.hostileStagingDistance must be between 1 and 100000');
     expect(errors).toContain('missions.support.hostileHelicopterMinimumSpawnDistance must not exceed hostileHelicopterSpawnDistance');
+    expect(errors).toContain('missions.support.wingmanInitialOrder must be attack, defend, regroup, or disengage');
     expect(errors).toContain('missions.support.unlocks contains unknown mission "missing"');
   });
 
-  it('validates optional objective selectors and mission variant reinforcement settings', () => {
+  it('validates optional objective selectors and mission variant encounter settings', () => {
     const missions = structuredClone(MISSIONS);
     missions.support.optionalObjectives[1].target.collection = 'friendlyGround';
-    missions.intercept.variants[0].reinforcement.probability = 1.5;
+    missions.intercept.variants[0].encounters[0].probability = 1.5;
     missions.training.variants[0].changes.optionalObjectives = [
       { id: 'invalid', type: 'unknownObjective' },
     ];
@@ -73,7 +75,31 @@ describe('game configuration validation', () => {
     const errors = validateGameConfig({ difficulties: DIFFICULTY_PRESETS, missions });
 
     expect(errors).toContain('missions.support.optionalObjectives[1].target.collection must be groundHostiles');
-    expect(errors).toContain('missions.intercept.variants[0].reinforcement.probability must be between 0 and 1');
+    expect(errors).toContain('missions.intercept.variants[0].encounters[0].probability must be between 0 and 1');
     expect(errors).toContain('missions.training.variants[0].changes.optionalObjectives[0].type is not a recognized optional objective type');
+  });
+
+  it('validates hostile roles against the spawned aircraft count and supported roles', () => {
+    const missions = structuredClone(MISSIONS);
+    missions.intercept.variants[0].changes.hostileRoles = ['sweep', 'strike'];
+    missions.intercept.variants[1].changes.hostileRoles[4] = 'ambush';
+
+    const errors = validateGameConfig({ difficulties: DIFFICULTY_PRESETS, missions });
+
+    expect(errors).toContain(
+      'missions.intercept.variants[0].changes.hostileRoles must contain one role for each hostile aircraft (4)',
+    );
+    expect(errors).toContain('missions.intercept.variants[1].changes.hostileRoles[4] must be sweep or strike');
+  });
+
+  it('validates the support reinforcement logistics trigger', () => {
+    const missions = structuredClone(MISSIONS);
+    missions.support.variants[0].encounters[0].trigger.reinforcementLogisticsRemainingAtLeast = -1;
+
+    const errors = validateGameConfig({ difficulties: DIFFICULTY_PRESETS, missions });
+
+    expect(errors).toContain(
+      'missions.support.variants[0].encounters[0].trigger.reinforcementLogisticsRemainingAtLeast must be between 0 and 500',
+    );
   });
 });

@@ -112,4 +112,20 @@ describe('MissionOptionalObjectives', () => {
 
     expect(results.map(result => result.status)).toEqual(['notApplicable', 'notApplicable']);
   });
+
+  it('tracks the designated support relay instead of any truck in the convoy', () => {
+    const relay = { dead: false, role: 'logistics', armed: false };
+    const otherTruck = { dead: false, role: 'logistics', armed: false };
+    const tracker = new MissionOptionalObjectives([{
+      id: 'relay',
+      type: 'destroyOptionalGroundTarget',
+      target: { collection: 'groundHostiles', role: 'logistics', index: 0 },
+    }]);
+    const state = makeState({ groundHostiles: [relay, otherTruck] });
+
+    otherTruck.dead = true;
+    expect(tracker.update(state)[0].status).toBe('pending');
+    relay.dead = true;
+    expect(tracker.update(state)[0].status).toBe('completed');
+  });
 });

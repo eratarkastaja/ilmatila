@@ -71,19 +71,24 @@ export class CombatRadar {
     if(this.mode==='ground'){
       this.updateContactList(groundFriendly,'friendly','ground');
       this.updateContactList(groundHostile,'hostile','ground');
+      this.updateContactList(airHostile,'hostile','air',true);
+      this.updateContactList(airFriendly,'friendly','air',false,true);
     }else{
       this.updateContactList(airFriendly,'friendly','air');
       this.updateContactList(airHostile,'hostile','air');
     }
   }
 
-  updateContactList(units,team,domain){
+  updateContactList(units,team,domain,popUpOnly=false,rescueOnly=false){
     for(const unit of units){
       if(unit.dead)continue;
+      if(popUpOnly&&!unit.popUpContact&&!unit.rescueHighlight)continue;
+      if(rescueOnly&&!unit.rescueHighlight)continue;
       const mesh=unit.mesh;
       const delta = this._delta.copy(mesh.position).sub(this.player.position);
       const distance = delta.length();
-      if (distance > this.range) continue;
+      const sensorRange=domain==='air'?this.airRange:this.groundRange;
+      if (distance > sensorRange) continue;
       // Keep the aircraft nose fixed at the top of the scope. Contacts rotate
       // around ownship with heading so the display reads as a heading-up radar.
       const bearing = Math.atan2(delta.x, delta.z) - this.playerHeading;
@@ -95,17 +100,22 @@ export class CombatRadar {
       }
       track.age = 0;
       track.domain = domain;
-      track.team = team;
+      track.team = unit.identified === false ? 'unknown' : team;
       if (this.target?.mesh === mesh) {
         this.targetLastKnownPosition.copy(mesh.position);
         this.hasLastKnownPosition = true;
       }
       const selected = this.target?.mesh === mesh;
+      const trackTeam = track.team;
+      const rescueClass = unit.rescueHighlight
+        ? ` rescue-focus ${unit.rescueFocusKind ?? (team === 'friendly' ? 'rescue-wingman' : 'rescue-attacker')}`
+        : '';
+      const missionTargetClass = unit.missionTargetRoleKey ? ' mission-target' : '';
       const className = selected
-        ? `radar-contact ${domain} ${team}${this.lockCueConfirmed ? ' target locked' : ' target'}`
-        : `radar-contact ${domain} ${team}`;
+        ? `radar-contact ${domain} ${trackTeam}${this.lockCueConfirmed ? ' target locked' : ' target'}${rescueClass}${missionTargetClass}`
+        : `radar-contact ${domain} ${trackTeam}${rescueClass}${missionTargetClass}`;
       if(track.node.className!==className)track.node.className=className;
-      const radius = THREE.MathUtils.clamp(distance / this.range, 0, 1) * 43;
+      const radius = THREE.MathUtils.clamp(distance / sensorRange, 0, 1) * 43;
       track.node.style.left = `${50 - Math.sin(bearing) * radius}%`;
       track.node.style.top = `${50 - Math.cos(bearing) * radius}%`;
       if(track.node.style.opacity!=='1')track.node.style.opacity = '1';
@@ -116,6 +126,7 @@ export class CombatRadar {
     const groundMode = this.mode === 'ground';
     const candidates = (groundMode ? groundHostiles : enemies).filter(contact => {
       if (contact.dead || !this.tracks.has(contact.mesh)) return false;
+      if (this.tracks.get(contact.mesh).team !== 'hostile') return false;
       return contact.mesh.position.distanceTo(this.player.position) <= this.range;
     });
     if (!candidates.length) return false;
@@ -151,7 +162,7 @@ export class CombatRadar {
 
     // Keep the pilot's selection after contact loss so the HUD can show its
     // bearing. It remains ineligible for weapon lock outside sensor range.
-    if (!candidate || candidate.dead || !candidates.includes(candidate)) candidate = null;
+    if (!candidate || candidate.dead || candidate.identified === false || !candidates.includes(candidate)) candidate = null;
 
     const targetChanged = candidate !== this.target;
     const hadTarget = this.lockCueTarget;

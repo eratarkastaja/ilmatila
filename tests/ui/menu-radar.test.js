@@ -72,14 +72,18 @@ describe('MenuRadar sortie preview', () => {
     expect(hostiles).toHaveLength(
       resolution.mission.hostiles
       + (resolution.mission.hostileHelicopters ?? 0)
-      + (resolution.reinforcement?.scheduled ? resolution.reinforcement.hostiles : 0),
+      + resolution.encounters
+        .filter(encounter => encounter.scheduled)
+        .reduce((count, encounter) => count + encounter.response.hostiles, 0),
     );
     expect(friendlies.every(contact => contact.position.z < 0 && contact.top > 50)).toBe(true);
-    expect(hostiles.every(contact => contact.position.z > 0 && contact.top < 50)).toBe(true);
+    expect(hostiles.filter(contact => !contact.reinforcement)
+      .every(contact => contact.position.z > 0 && contact.top < 50)).toBe(true);
     expect(hostiles.filter(contact => !contact.reinforcement)
       .every(contact => contact.range >= resolution.mission.hostileMinimumSpawnDistance)).toBe(true);
+    const selectedEncounter = resolution.encounters.find(encounter => encounter.scheduled);
     expect(hostiles.filter(contact => contact.reinforcement)
-      .every(contact => contact.range >= resolution.reinforcement.minimumSpawnDistance)).toBe(true);
+      .every(contact => contact.range >= selectedEncounter.response.minimumSpawnDistance)).toBe(true);
     expect(radar.contacts.every(contact => !contact.detected)).toBe(true);
     expect(elements.get('.radar-readout').textContent).toBe(t('menu.echoTrack', {
       detected: '00',

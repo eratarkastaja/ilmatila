@@ -9,10 +9,12 @@ import { AirWeaponAI } from './air-weapon-ai.js';
 import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
 
 const EMPTY_PLAYER_THREAT = Object.freeze({});
+// Keep scheduled reinforcements readable on radar before normal combat behavior starts.
+const POP_UP_IDENTIFICATION_DELAY = 5;
 
 /** Coordinates air units and advances their behavior in simulation order. */
 export class AirBattle {
-  constructor({ scene, player, aircraftAsset, mission, terrain, audio, fx, playerVelocity, getPlayerHeading, deployHostileCountermeasures, addHostileProjectile, addPlayerProjectile, onMissileLaunch, onWingmanRadio, difficulty = {}, random = createSeededRandom(DEFAULT_RANDOM_SEED), reinforcement = null }) {
+  constructor({ scene, player, aircraftAsset, mission, terrain, audio, fx, playerVelocity, getPlayerHeading, deployHostileCountermeasures, addHostileProjectile, addPlayerProjectile, onMissileLaunch, onWingmanRadio, onPopUpThreat, canStartHostileMissileAttack, difficulty = {}, random = createSeededRandom(DEFAULT_RANDOM_SEED) }) {
     this.scene = scene;
     this.player = player;
     this.aircraftAssets = aircraftAsset;
@@ -27,19 +29,23 @@ export class AirBattle {
     this.addPlayerProjectile = addPlayerProjectile;
     this.onMissileLaunch = onMissileLaunch;
     this.onWingmanRadio = onWingmanRadio;
+    this.onPopUpThreat = onPopUpThreat;
+    this.canStartHostileMissileAttack = canStartHostileMissileAttack;
     this.difficulty = difficulty;
     this.random = random;
-    this.reinforcement = reinforcement;
-    this.reinforcementElapsed = 0;
-    this.reinforcementSpawned = false;
+    this.reinforcementIdentificationElapsed = 0;
+    this.unidentifiedReinforcements = [];
     this._playerForward = new THREE.Vector3();
     this._playerRight = new THREE.Vector3();
     this.enemies = [];
     this.allies = [];
     this.groundUnits = [];
     this.friendlyGroundUnits = [];
-    this.wingmanOrder = 'attack';
+    // Strike aircraft keep a stable aim point even if ownship later moves away.
+    this.strikeTarget = player.position.clone();
+    this.wingmanOrder = mission.wingmanInitialOrder ?? 'attack';
     this.hostilesSpawned = false;
+    this.hostileProjectiles = [];
     this.spawnSystem = new AirSpawnSystem();
     this.hostileFighterAI = new HostileFighterAI(random);
     this.helicopterAI = new HelicopterAI(random);
@@ -56,12 +62,34 @@ export class AirBattle {
     return this.spawnSystem.spawnHostiles(this, heading, playerForward, playerRight);
   }
 
+  spawnEncounter(event) {
+    const previousCount = this.enemies.length;
+    const spawned = this.spawnSystem.spawnEncounter(this, event);
+    if (!spawned) return false;
+    this.unidentifiedReinforcements = this.enemies.slice(previousCount);
+    for (const enemy of this.unidentifiedReinforcements) {
+      enemy.identified = false;
+      enemy.popUpContact = true;
+    }
+    this.reinforcementIdentificationElapsed = 0;
+    this.onPopUpThreat?.('newContact', this.unidentifiedReinforcements);
+    return true;
+  }
+
   update(dt, playerThreat = EMPTY_PLAYER_THREAT) {
-    if (this.hostilesSpawned && this.reinforcement?.scheduled && !this.reinforcementSpawned) {
-      this.reinforcementElapsed += Math.max(0, dt);
-      if (this.reinforcementElapsed >= this.reinforcement.delaySeconds) {
-        this.reinforcementSpawned = true;
-        this.spawnSystem.spawnReinforcements(this, this.reinforcement);
+    const delta = Math.max(0, Number.isFinite(dt) ? dt : 0);
+    if (this.unidentifiedReinforcements.length) {
+      // The radar return closes on ownship, but both hostile and wingman AI stay gated.
+      for (const enemy of this.unidentifiedReinforcements) {
+        if (enemy.dead) continue;
+        enemy.mesh.position.addScaledVector(enemy.velocity, delta);
+      }
+      this.reinforcementIdentificationElapsed += delta;
+      if (this.reinforcementIdentificationElapsed >= POP_UP_IDENTIFICATION_DELAY) {
+        for (const enemy of this.unidentifiedReinforcements) enemy.identified = true;
+        const units = this.unidentifiedReinforcements.filter(enemy => !enemy.dead);
+        this.unidentifiedReinforcements = [];
+        if (units.length) this.onPopUpThreat?.('identified', units);
       }
     }
     const heading = this.currentPlayerHeading();
@@ -73,6 +101,19 @@ export class AirBattle {
 
   setFriendlyGroundUnits(units) {
     this.friendlyGroundUnits = units ?? [];
+    if (!this.friendlyGroundUnits.length) {
+      this.strikeTarget.copy(this.player.position);
+      return;
+    }
+    this.strikeTarget.set(0, 0, 0);
+    let targetCount = 0;
+    for (const unit of this.friendlyGroundUnits) {
+      if (unit.dead || unit.armed === false || !unit.mesh?.position) continue;
+      this.strikeTarget.add(unit.mesh.position);
+      targetCount++;
+    }
+    if (targetCount > 0) this.strikeTarget.multiplyScalar(1 / targetCount);
+    else this.strikeTarget.copy(this.player.position);
   }
 
   getWingmanController() {
@@ -90,6 +131,22 @@ export class AirBattle {
 
   damageWingman(ally, damage, sourceUnit = null) {
     this.getWingmanController().damageWingman(this, ally, damage, sourceUnit);
+  }
+
+  setHostileProjectiles(projectiles) {
+    this.hostileProjectiles = projectiles ?? [];
+  }
+
+  reportWingmanMissileLock(enemy, ally) {
+    this.getWingmanController().beginMissileLock(this, ally, enemy);
+  }
+
+  clearWingmanMissileLock(enemy, ally) {
+    this.getWingmanController().clearMissileLock(ally, enemy);
+  }
+
+  reportWingmanMissileInbound(enemy, ally, missile) {
+    this.getWingmanController().reportMissileInbound(this, ally, enemy, missile);
   }
 
   closestWingmanTo(position) {

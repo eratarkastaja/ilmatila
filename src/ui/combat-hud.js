@@ -28,6 +28,13 @@ export class CombatHud {
     this.fuelValue = document.querySelector('#fuel-value');
     this.fuelFill = document.querySelector('#fuel-fill');
     this.wingmanOrder = document.querySelector('#wingman-order');
+    this.wingmanRescue = document.querySelector('#wingman-rescue-warning');
+    this.wingmanRescueTitle = document.querySelector('#wingman-rescue-title');
+    this.wingmanRescueDetail = document.querySelector('#wingman-rescue-detail');
+    this.supportForce = document.querySelector('#support-force-status');
+    this.supportForceValue = document.querySelector('#support-force-value');
+    this.supportForceFill = document.querySelector('#support-force-fill');
+    this.supportForceUnits = document.querySelector('#support-force-units');
     this.radarWarning = document.querySelector('#radar-warning');
     this.radarWarningLabel = document.querySelector('#radar-warning-label');
     this.threatWarning = document.querySelector('#threat-warning');
@@ -49,6 +56,41 @@ export class CombatHud {
     setTextIfChanged(this.flareCount, String(state.countermeasures.flares).padStart(2, '0'));
     setTextIfChanged(this.chaffCount, String(state.countermeasures.chaff).padStart(2, '0'));
     setTextIfChanged(this.wingmanOrder, t(`combat.wingmanStatus.${state.wingmanOrder}`));
+    const rescue=state.wingmanRescue;
+    setHiddenIfChanged(this.wingmanRescue, state.session.destroyed || !rescue?.wingman);
+    if(rescue?.wingman){
+      const callsign=t(`radio.callsign.${rescue.wingman.radioId}`);
+      const attacker=rescue.attacker?.label??t('mission.optionalTarget.generic');
+      const seconds=Math.ceil(rescue.remaining);
+      setTextIfChanged(this.wingmanRescueTitle,t('hud.wingmanRescue.title',{callsign}));
+      const detailKey=rescue.missileInbound
+        ? seconds>0?'hud.wingmanRescue.inbound':'hud.wingmanRescue.inboundActive'
+        : 'hud.wingmanRescue.lock';
+      setTextIfChanged(this.wingmanRescueDetail,t(detailKey,{attacker,seconds}));
+      if(this.wingmanRescue?.dataset){
+        const stateName=rescue.missileInbound?'inbound':'lock';
+        if(this.wingmanRescue.dataset.state!==stateName)this.wingmanRescue.dataset.state=stateName;
+      }
+    }
+    const supportForce=state.supportForce;
+    setHiddenIfChanged(this.supportForce,!supportForce?.active);
+    if(supportForce?.active){
+      const percent=Math.max(0,Math.min(100,Math.round(supportForce.fraction*100)));
+      const level=percent>60?'green':percent>30?'yellow':'red';
+      setTextIfChanged(this.supportForceValue,`${percent}%`);
+      setTextIfChanged(this.supportForceUnits,t('hud.supportForce.units',{
+        alive:supportForce.unitsAlive,total:supportForce.unitsTotal,
+      }));
+      if(this.supportForce?.dataset&&this.supportForce.dataset.level!==level)this.supportForce.dataset.level=level;
+      const scale=`scaleX(${percent/100})`;
+      if(this.supportForceFill?.style&&this.supportForceFill.style.transform!==scale){
+        this.supportForceFill.style.transform=scale;
+      }
+      const ariaValue=String(percent);
+      if(this.supportForce?.getAttribute?.('aria-valuenow')!==ariaValue){
+        this.supportForce.setAttribute?.('aria-valuenow',ariaValue);
+      }
+    }
     setHiddenIfChanged(this.fuelGauge, state.fuel.unlimited);
     if (!state.fuel.unlimited && this.fuelGauge) {
       const percent = Math.max(0, Math.min(100, Math.round(state.fuel.fraction * 100)));

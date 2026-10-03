@@ -310,14 +310,22 @@ export class ProjectileSystem {
       shot.life -= dt;
       const previous = this._previousPosition.copy(shot.mesh.position);
       if (shot.missile) {
+        const missileTarget = shot.target?.mesh?.position ? shot.target : player;
+        const missileTargetPosition = missileTarget === player ? player.position : missileTarget.mesh.position;
+        const missileTargetVelocity = missileTarget === player
+          ? this.playerVelocity ?? stationaryVelocity
+          : missileTarget.velocity ?? stationaryVelocity;
+        if (missileTarget.dead) shot.life = 0;
         updateMissileMotor(shot, dt);
         if (shot.seeker === 'radar') {
           shot.chaffDisruptedRemaining = Math.max(0, (shot.chaffDisruptedRemaining ?? 0) - dt);
         }
+        const distanceToTarget = shot.mesh.position.distanceTo(missileTargetPosition);
+        const decoyingAway = Boolean(shot.decoyTarget?.active
+          && shot.decoyTarget.position.distanceToSquared(missileTargetPosition) > distanceToTarget ** 2);
         const distanceToPlayer = shot.mesh.position.distanceTo(player.position);
-        const decoyingAway = Boolean(shot.decoyTarget?.active && shot.decoyTarget.position.distanceToSquared(player.position) > distanceToPlayer ** 2);
-        if (!decoyingAway && distanceToPlayer < 9000) {
-          const separation = this._targetOffset.subVectors(player.position, shot.mesh.position);
+        if (missileTarget === player && !decoyingAway && distanceToTarget < 9000) {
+          const separation = this._targetOffset.subVectors(missileTargetPosition, shot.mesh.position);
           const distance = Math.max(1, separation.length());
           const relativeVelocity = this._steeringDirection.subVectors(this.playerVelocity, shot.velocity);
           const closingSpeed = -separation.dot(relativeVelocity) / distance;
@@ -348,10 +356,10 @@ export class ProjectileSystem {
         if (shot.guidanceActive && (shot.seeker !== 'radar' || (shot.chaffDisruptedRemaining ?? 0) <= 0)) {
           if (shot.decoyTarget && !shot.decoyTarget.active) shot.decoyTarget = null;
           if (!shot.decoyTarget) {
-            shot.decoyTarget = this.tryAcquireFlare(shot, player.position, decoys, 'player', player);
+            shot.decoyTarget = this.tryAcquireFlare(shot, missileTargetPosition, decoys, 'player', player);
           }
-          const aimTarget = shot.decoyTarget ? shot.decoyTarget.position : player.position;
-          const targetVelocity = shot.decoyTarget?.velocity ?? this.playerVelocity ?? stationaryVelocity;
+          const aimTarget = shot.decoyTarget ? shot.decoyTarget.position : missileTargetPosition;
+          const targetVelocity = shot.decoyTarget?.velocity ?? missileTargetVelocity;
           const missileSpeed = Math.max(1, shot.velocity.length());
           const targetOffset = this._targetOffset.subVectors(aimTarget, shot.mesh.position);
           const leadTime = estimateInterceptTime(targetOffset, targetVelocity, missileSpeed, shot.interceptLeadTime ?? 14);
@@ -369,10 +377,16 @@ export class ProjectileSystem {
         } else if (!shot.decoyTarget && this.collision.sweptDistanceSquared(
           previous,
           shot.mesh.position,
-          this.collision.lastCollisionPosition,
-          player.position,
+          missileTarget === player
+            ? this.collision.lastCollisionPosition
+            : this._targetStart.copy(missileTarget.mesh.position).addScaledVector(missileTargetVelocity, -dt),
+          missileTargetPosition,
         ) < (shot.proximityRadius ?? this.hostileMissileProximityRadius) ** 2) {
-          this.damagePlayer(shot.damage ?? this.hostileMissileDamage, 'combat.hostileMissile');
+          if (missileTarget === player) {
+            this.damagePlayer(shot.damage ?? this.hostileMissileDamage, 'combat.hostileMissile');
+          } else {
+            this.onFriendlyAircraftHit?.(missileTarget, shot.damage ?? this.hostileMissileDamage, shot.sourceUnit);
+          }
           this.addExplosion(shot.mesh.position, .48);
           shot.life = 0;
         }
