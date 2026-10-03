@@ -7,7 +7,7 @@ const AUDIO_FILES = {
   explosion: 'explosion.ogg',
   jetSurge: 'jet-takeoff.ogg',
 };
-const MUSIC_TRACKS = ['fm-rankaisija.ogg', 'orbital-decay.ogg'];
+const MUSIC_TRACKS = ['fm-rankaisija.ogg', 'orbital-decay.ogg', 'hard-lock.ogg'];
 const MUSIC_STORAGE_KEY = 'ilmatila-music-enabled';
 
 // AudioContext and bundled sound assets are initialized on the first user gesture

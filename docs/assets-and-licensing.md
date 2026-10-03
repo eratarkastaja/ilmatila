@@ -10,7 +10,7 @@ This inventory describes files used by the current game build. Full license text
 | Ground units and Mi-24 | Project-authored procedural low-detail geometry | Project source license; public military references inform visible features and role only | `src/ground/vehicles.js` and `src/aircraft/rotorcraft.js` |
 | Terrain | Four Finnish 32 × 32 km area packages | Maanmittauslaitos Elevation Model 2 m and Colour Orthophotos, CC BY 4.0 | Attribution, data names, retrieval date, and modification record travel with each terrain package |
 | Combat sound effects | Cannon, missile launch, explosion, jet takeoff | Three Freesound CC0 clips; one OpenGameArt CC BY 3.0 clip | Source links and creator credits in `public/assets/audio/ATTRIBUTION.md` |
-| Original soundtrack | Two Erätarkastaja recordings, Ogg Vorbis | Rights retained by Erätarkastaja; permission supplied for inclusion in ILMATILA; not covered by GPL | Track/source-file details and rights statement in `public/assets/audio/ATTRIBUTION.md` |
+| Original soundtrack | Three Erätarkastaja recordings, Ogg Vorbis | Rights retained by Erätarkastaja; permission supplied for inclusion in ILMATILA; not covered by GPL | Track/source-file details and rights statement in `public/assets/audio/ATTRIBUTION.md` |
 | Interface fonts | Barlow Condensed and Rajdhani loaded from Google Fonts | SIL Open Font License 1.1 | Upstream project and license links in third-party notices |
 | 3D rendering | Three.js | MIT | Full license in `public/licenses/THREE-MIT.txt` |
 

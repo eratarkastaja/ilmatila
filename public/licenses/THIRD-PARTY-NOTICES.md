@@ -32,7 +32,7 @@ Four audio effects are bundled under `assets/audio/`. Cannon fire and explosion 
 
 ## Original soundtrack
 
-`fm-rankaisija.ogg` and `orbital-decay.ogg` are original compositions and recordings by **Erätarkastaja**, the project owner. Copyright remains with Erätarkastaja, who has granted permission to include the tracks in ILMATILA. All other rights are reserved; the music is not covered by the project GPL license. See [`assets/audio/ATTRIBUTION.md`](../assets/audio/ATTRIBUTION.md).
+`fm-rankaisija.ogg`, `orbital-decay.ogg`, and `hard-lock.ogg` are original compositions and recordings by **Erätarkastaja**, the project owner. Copyright remains with Erätarkastaja, who has granted permission to include the tracks in ILMATILA. All other rights are reserved; the music is not covered by the project GPL license. See [`assets/audio/ATTRIBUTION.md`](../assets/audio/ATTRIBUTION.md).
 
 ## Procedural military visuals
 

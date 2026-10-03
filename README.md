@@ -1,6 +1,6 @@
 # ILMATILA
 
-ILMATILA is an independent browser-based air-combat game by ERÄGAMES. The current source version is **0.1.0-alpha.15**. It is an alpha build: missions, combat, progression, aircraft handling, radar, and weapons are playable, while balance and mission pacing remain under development. The simulation is fictional and is not intended for real-world training or operational use.
+ILMATILA is an independent browser-based air-combat game by ERÄGAMES. The current source version is **0.1.0-alpha.16**. It is an alpha build: missions, combat, progression, aircraft handling, radar, and weapons are playable, while balance and mission pacing remain under development. The simulation is fictional and is not intended for real-world training or operational use.
 
 **[Play ILMATILA in your browser](https://eratarkastaja.github.io/ilmatila/).**
 
