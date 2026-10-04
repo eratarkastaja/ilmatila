@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { disposeLoadedAircraftScenes } from './aircraft-assets.js';
 import { buildF35Asset, buildImportedEnemyAircraft, createAfterburnerFlame, disposeAircraftVisual } from './plane-models.js';
 
 export { createAfterburnerFlame };
@@ -55,6 +56,8 @@ export async function loadCombatAircraft(onProgress, signal) {
   ];
   const progress = files.map(() => 0);
   const reportProgress = () => onProgress?.({ loaded: progress.reduce((sum, value) => sum + value, 0), total: files.length });
+  const loadedScenes = new Set();
+  let loadError = null;
   try {
     const loaded = await Promise.all(files.map((file, index) => loader.loadAsync(
       `${import.meta.env.BASE_URL}${file}`,
@@ -65,6 +68,11 @@ export async function loadCombatAircraft(onProgress, signal) {
         }
       },
     ).then(gltf => {
+      if (loadError) {
+        disposeLoadedAircraftScenes([gltf.scene]);
+        throw loadError;
+      }
+      loadedScenes.add(gltf.scene);
       progress[index] = 1;
       reportProgress();
       return gltf.scene;
@@ -75,6 +83,12 @@ export async function loadCombatAircraft(onProgress, signal) {
       player: loaded[0],
       hostiles: { su27: loaded[1], mig29: loaded[2] },
     };
+  } catch (error) {
+    loadError = error;
+    if (!signal?.aborted) manager.abort();
+    disposeLoadedAircraftScenes([...loadedScenes]);
+    loadedScenes.clear();
+    throw error;
   } finally {
     signal?.removeEventListener('abort', abort);
   }

@@ -1,26 +1,7 @@
 import * as THREE from 'three';
+import { disposeLoadedAircraftScenes } from '../aircraft/aircraft-assets.js';
 import { loadCombatAircraft } from '../aircraft/plane.js';
 import { createTerrain, createTerrainLease, disposeTerrain } from '../environment/terrain.js';
-
-function disposeAircraftAsset(asset) {
-  const geometries = new Set();
-  const materials = new Set();
-  const textures = new Set();
-  for (const root of [asset?.player, ...Object.values(asset?.hostiles ?? {})]) {
-    root?.traverse(object => {
-      if (object.geometry) geometries.add(object.geometry);
-      const objectMaterials = Array.isArray(object.material) ? object.material : [object.material];
-      for (const material of objectMaterials) {
-        if (!material) continue;
-        materials.add(material);
-        for (const value of Object.values(material)) if (value?.isTexture) textures.add(value);
-      }
-    });
-  }
-  for (const geometry of geometries) geometry.dispose();
-  for (const texture of textures) texture.dispose();
-  for (const material of materials) material.dispose();
-}
 
 /** Shares in-flight loads and gives each terrain caller an idempotent dispose lease. */
 export class AssetRepository {
@@ -61,7 +42,7 @@ export class AssetRepository {
       }, task.controller.signal).then(asset => {
         task.settled = true;
         if (this.aircraftTask !== task) {
-          disposeAircraftAsset(asset);
+          disposeLoadedAircraftScenes([asset?.player, ...Object.values(asset?.hostiles ?? {})]);
           throw new DOMException('The operation was aborted.', 'AbortError');
         }
         this.aircraftProgress = 1;

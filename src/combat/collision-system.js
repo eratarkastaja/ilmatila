@@ -90,7 +90,7 @@ export class CollisionSystem {
       const centerY = collider.y + collider.height * .5;
       const displacement = collider.velocity ?? stationaryVelocity;
       const center=this._center.set(collider.x,centerY,collider.z);
-      const relativeStart = this._relativeStart.copy(start).addScaledVector(displacement, -dt).sub(center);
+      const relativeStart = this._relativeStart.copy(start).addScaledVector(displacement, dt).sub(center);
       const relativeEnd = this._relativeEnd.copy(position).sub(center);
       const fraction = closestSegmentFractionXZ(relativeStart, relativeEnd);
       const closestY = THREE.MathUtils.lerp(relativeStart.y, relativeEnd.y, fraction);
@@ -121,7 +121,7 @@ export class CollisionSystem {
   sweptAircraftCollision(start, end, aircraft, dt) {
     if (aircraft.dead) return false;
     const displacement = aircraft.velocity ?? stationaryVelocity;
-    const relativeStart = this._relativeStart.copy(start).addScaledVector(displacement, -dt).sub(aircraft.mesh.position);
+    const relativeStart = this._relativeStart.copy(start).addScaledVector(displacement, dt).sub(aircraft.mesh.position);
     const relativeEnd = this._relativeEnd.copy(end).sub(aircraft.mesh.position);
     return pointSegmentDistanceSquared(origin, relativeStart, relativeEnd) < 14 ** 2;
   }

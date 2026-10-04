@@ -57,6 +57,32 @@ describe('CollisionSystem', () => {
     expect(onPlayerDestroyed).toHaveBeenCalledWith('combat.collisionHostile');
   });
 
+  it('detects a moving aircraft crossing the player collision path', () => {
+    const enemy = { mesh: new THREE.Object3D(), velocity: new THREE.Vector3(20, 0, 0), dead: false };
+    enemy.mesh.position.set(20, 100, 0);
+    const { system, onPlayerDestroyed } = makeCollisionSystem({ enemies: [enemy] });
+
+    expect(system.checkPlayerCollision(1)).toBe(true);
+    expect(onPlayerDestroyed).toHaveBeenCalledWith('combat.collisionHostile');
+  });
+
+  it('detects a moving ground vehicle crossing the player collision path', () => {
+    const collider = {
+      x: 20,
+      y: 0,
+      z: 0,
+      height: 200,
+      radius: 1,
+      velocity: new THREE.Vector3(20, 0, 0),
+      collisionKey: 'combat.collisionVehicle',
+      vehicle: true,
+    };
+    const { system, onPlayerDestroyed } = makeCollisionSystem({ colliders: [collider] });
+
+    expect(system.checkPlayerCollision(1)).toBe(true);
+    expect(onPlayerDestroyed).toHaveBeenCalledWith('combat.collisionVehicle', { vehicle: true });
+  });
+
   it('aborts at the theater edge and clamps the aircraft inside', () => {
     const { system, player, onPlayerDestroyed, onPlayerBoundaryAbort } = makeCollisionSystem({
       position: new THREE.Vector3(1001, 100, 0),
