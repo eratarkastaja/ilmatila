@@ -54,6 +54,12 @@ export default defineConfig({
         ...devices['Desktop Firefox'],
         viewport,
         deviceScaleFactor: 1,
+        launchOptions: {
+          firefoxUserPrefs: {
+            'webgl.force-enabled': true,
+            'webgl.forbid-software': false,
+          },
+        },
       },
     },
     {
