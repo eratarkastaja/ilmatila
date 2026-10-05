@@ -55,6 +55,7 @@ export default defineConfig({
         viewport,
         deviceScaleFactor: 1,
         launchOptions: {
+          ...(process.env.CI ? { headless: false } : {}),
           firefoxUserPrefs: {
             'webgl.force-enabled': true,
             'webgl.forbid-software': false,

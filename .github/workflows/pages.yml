@@ -89,7 +89,7 @@ jobs:
         run: npx playwright install --with-deps chrome msedge firefox webkit
 
       - name: Build production site and run browser smoke
-        run: npm run test:e2e
+        run: xvfb-run --auto-servernum npm run test:e2e
 
       - name: Upload browser smoke diagnostics
         if: failure()
