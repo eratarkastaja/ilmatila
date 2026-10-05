@@ -18,7 +18,7 @@ Run against the release-candidate worktree on 2026-10-05:
 | Production build | Passed. |
 | Production browser E2E | Passed: 13 passed, 7 intentional skips across Chrome, Edge, Firefox, and Linux WebKit. The full run took 19.2 minutes with SwiftShader. |
 | Version UI smoke | Passed: 8 checks across all 4 browser projects; menu and startup-error screens show the package version. |
-| GitHub Actions CI | `quality` passed in both attempts. Headless Firefox still could not create WebGL 2 on the GPU-less runner with software rendering enabled; the CI profile now runs Firefox headed inside Xvfb. This fix is awaiting rerun. No Pages deploy occurred. |
+| GitHub Actions CI | `quality` passed in all attempts. Firefox now passes WebGL and the startup/menu smokes in headed Xvfb, but its AudioContext remains suspended because the runner has no active audio server. The browser job now starts a PulseAudio null sink before the next run. No Pages deploy occurred. |
 | Staging package and smoke | Passed locally: preserved the current Pages root, served the candidate at `/staging/`, verified the build commit, and passed the full Chrome journey (10.6 minutes). Remote Pages deployment and four-browser staging smoke remain pending. |
 | Beta deploy and public smoke | Pending staging sign-off. |
 

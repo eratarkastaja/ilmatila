@@ -43,6 +43,18 @@ jobs:
       - name: Install desktop browsers
         run: npx playwright install --with-deps chrome msedge firefox webkit
 
+      - name: Start virtual audio output
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y pulseaudio pulseaudio-utils
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/ilmatila-xdg-runtime"
+          install -d -m 700 "$XDG_RUNTIME_DIR"
+          echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=ilmatila-ci
+          pactl set-default-sink ilmatila-ci
+          pactl info
+
       - name: Verify deployed build identity
         run: node tools/release/verify-deployed-build.mjs "$BUILD_INFO_URL" "$EXPECTED_COMMIT"
         env:
@@ -50,7 +62,7 @@ jobs:
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
 
       - name: Run the production browser matrix against the deployed URL
-        run: npm run test:e2e
+        run: xvfb-run --auto-servernum npm run test:e2e
         env:
           PLAYWRIGHT_BASE_URL: ${{ inputs.base_url }}
           PLAYWRIGHT_ASSET_BASE_PATH: ${{ inputs.asset_base_path }}
