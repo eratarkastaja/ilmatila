@@ -1,6 +1,7 @@
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
 import packageMetadata from '../../package.json' with { type: 'json' };
+import { preserveLiveBuildInfo } from './preserve-live-build-info.mjs';
 
 const outputDirectory = resolve('dist');
 const liveSiteUrl = new URL(process.env.ILMATILA_PAGES_URL ?? 'https://eratarkastaja.github.io/ilmatila/');
@@ -16,6 +17,7 @@ if (!liveResponse.ok) throw new Error(`Cannot preserve the current Pages site: H
 
 const liveHtml = await liveResponse.text();
 const candidateHtml = await readFile(resolve(outputDirectory, 'index.html'), 'utf8');
+const preservedBuildInfo = await preserveLiveBuildInfo(liveSiteUrl, outputDirectory);
 const referencedAssets = [...liveHtml.matchAll(/\b(?:src|href)=(['"])(.*?)\1/g)]
   .map((match) => match[2])
   .filter((reference) => reference.startsWith(deploymentBasePath))
@@ -48,4 +50,4 @@ await writeFile(resolve(outputDirectory, 'staging/build-info.json'), `${JSON.str
   commit,
 }, null, 2)}\n`);
 
-console.log(`Staging page prepared at /staging/; preserved ${referencedAssets.length} live bundle references.`);
+console.log(`Staging page prepared at /staging/; preserved the ${preservedBuildInfo.version} live build and ${referencedAssets.length} bundle references.`);
