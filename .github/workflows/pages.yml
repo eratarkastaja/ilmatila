@@ -205,7 +205,11 @@ jobs:
         uses: actions/deploy-pages@v5
 
   staging-smoke:
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'staging'
+    if: >-
+      always() &&
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.target == 'staging' &&
+      needs.deploy.result == 'success'
     needs: deploy
     uses: ./.github/workflows/deployed-browser-smoke.yml
     with:
@@ -216,9 +220,12 @@ jobs:
 
   beta-smoke:
     if: >-
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'beta') ||
-      startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-beta.')
-    needs: deploy
+      always() &&
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'beta' ||
+       startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-beta.')) &&
+      needs.deploy.result == 'success' &&
+      needs['staging-preflight'].result == 'success'
+    needs: [deploy, staging-preflight]
     uses: ./.github/workflows/deployed-browser-smoke.yml
     with:
       base_url: https://eratarkastaja.github.io/ilmatila/
