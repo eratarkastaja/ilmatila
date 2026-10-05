@@ -6,6 +6,9 @@ const harness = vi.hoisted(() => ({
   assets: null,
   controls: null,
   audio: null,
+  terrainLoader: null,
+  terrainCalls: [],
+  disposedTerrains: [],
   raf: [],
   resumeOrder: [],
 }));
@@ -42,7 +45,9 @@ vi.mock('../../src/assets/asset-repository.js', () => ({
       if (this.aircraftError) return Promise.reject(this.aircraftError);
       return Promise.resolve({ id: 'aircraft-assets' });
     }
-    ensureTerrainLoaded(areaId) {
+    ensureTerrainLoaded(areaId, onProgress, signal) {
+      harness.terrainCalls.push({ areaId, signal });
+      if (harness.terrainLoader) return harness.terrainLoader(areaId, onProgress, signal);
       if (this.terrainError) return Promise.reject(this.terrainError);
       return Promise.resolve(makeTerrain(areaId));
     }
@@ -55,8 +60,12 @@ vi.mock('../../src/environment/terrain.js', async importOriginal => {
   return {
     ...original,
     createPreviewTerrain: () => makeTerrain('preview', THREE),
-    disposeTerrain: vi.fn(),
-    TERRAIN_AREAS: [{ id: 'paijanne', label: 'Päijänne' }],
+    disposeTerrain: terrain => harness.disposedTerrains.push(terrain),
+    TERRAIN_AREAS: [
+      { id: 'paijanne', label: 'Päijänne' },
+      { id: 'virolahti', label: 'Virolahti' },
+      { id: 'keitele', label: 'Keitele' },
+    ],
   };
 });
 
@@ -229,6 +238,16 @@ function makeTerrain(id, THREE = globalThis.THREE_FOR_TESTS) {
   };
 }
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((onResolve, onReject) => {
+    resolve = onResolve;
+    reject = onReject;
+  });
+  return { promise, resolve, reject };
+}
+
 function createDocument() {
   class MockDocument extends EventTarget {
     constructor() {
@@ -275,7 +294,7 @@ function createDocument() {
 let documentMock;
 let windowMock;
 
-async function loadMain(missionId = 'training') {
+async function loadMain(missionId = 'training', { quickStartSeen = true } = {}) {
   vi.resetModules();
   const THREE = await import('three');
   globalThis.THREE_FOR_TESTS = THREE;
@@ -298,6 +317,7 @@ async function loadMain(missionId = 'training') {
     return harness.raf.length;
   };
   const storage = new Map();
+  if (quickStartSeen) storage.set('ilmatila.quick-start-seen', 'true');
   globalThis.localStorage = {
     getItem: key => storage.get(key) ?? null,
     setItem: (key, value) => storage.set(key, value),
@@ -309,12 +329,23 @@ async function loadMain(missionId = 'training') {
 async function launch(document) {
   const expectedWorldCount = harness.worlds.length + 1;
   document.querySelector('#launch-mission').dispatch('click');
+  await completeTriggeredLaunch(document, expectedWorldCount);
+}
+
+async function completeTriggeredLaunch(document, expectedWorldCount) {
   await vi.waitFor(() => expect(harness.raf.length).toBeGreaterThan(1));
   harness.raf.pop()(0);
   await vi.waitFor(() => {
     expect(harness.worlds).toHaveLength(expectedWorldCount);
     expect(document.querySelector('#game').classList.contains('flight-active')).toBe(true);
   });
+}
+
+async function returnToMenuFromFlight(document) {
+  pressPauseKey(document);
+  document.querySelector('#quit-to-menu').dispatch('click');
+  document.querySelector('#confirm-quit-to-menu').dispatch('click');
+  expect(document.querySelector('#start-menu').hidden).toBe(false);
 }
 
 function pressKey(document, code) {
@@ -333,6 +364,9 @@ describe('main game session lifecycle', () => {
 
   beforeEach(() => {
     harness.worlds.length = 0;
+    harness.terrainLoader = null;
+    harness.terrainCalls.length = 0;
+    harness.disposedTerrains.length = 0;
     harness.raf.length = 0;
     harness.resumeOrder.length = 0;
   });
@@ -351,6 +385,20 @@ describe('main game session lifecycle', () => {
 
     expect(controlsDialog.open).toBe(false);
     expect(menu.hidden).toBe(false);
+  });
+
+  it('starts Training directly from the first-visit Quick Start', async () => {
+    const document = await loadMain('patrol', { quickStartSeen: false });
+    const quickStart = document.querySelector('#quick-start-dialog');
+
+    expect(quickStart.open).toBe(true);
+    const expectedWorldCount = harness.worlds.length + 1;
+    document.querySelector('#quick-start-training').dispatch('click');
+    await completeTriggeredLaunch(document, expectedWorldCount);
+
+    const { MISSIONS } = await import('../../src/mission/missions.js');
+    expect(harness.worlds.at(-1).mission).toBe(MISSIONS.training);
+    expect(quickStart.open).toBe(false);
   });
 
   it('completes a sortie, saves career progress, returns to menu, and launches again cleanly', async () => {
@@ -502,10 +550,13 @@ describe('main game session lifecycle', () => {
   it('lets Escape release only the mouse and recaptures it on a canvas click', async () => {
     const document = await loadMain();
     await launch(document);
+    document.exitPointerLock = vi.fn(() => {
+      document.pointerLockElement = null;
+      document.dispatchEvent(new Event('pointerlockchange'));
+    });
     const escapeEvent = pressKey(document, 'Escape');
     expect(escapeEvent.defaultPrevented).toBe(false);
-    document.pointerLockElement = null;
-    document.dispatchEvent(new Event('pointerlockchange'));
+    expect(document.exitPointerLock).toHaveBeenCalledOnce();
 
     expect(document.querySelector('#pause-dialog').open).toBe(false);
     expect(document.querySelector('#game').classList.contains('flight-active')).toBe(true);
@@ -617,9 +668,11 @@ describe('main game session lifecycle', () => {
   it('restores launch controls after assets fail and allows a later retry', async () => {
     const document = await loadMain();
     harness.assets.aircraftError = new Error('aircraft unavailable');
+    const launchErrorDialog = document.querySelector('#launch-error-dialog');
     document.querySelector('#launch-mission').dispatch('click');
     await vi.waitFor(() => expect(document.querySelector('#launch-mission').disabled).toBe(false));
 
+    expect(launchErrorDialog.open).toBe(true);
     expect(harness.worlds).toHaveLength(0);
     expect(harness.controls.enabled).toBe(false);
     expect(document.querySelector('#menu-difficulty').disabled).toBe(false);
@@ -627,7 +680,134 @@ describe('main game session lifecycle', () => {
     expect(document.querySelector('#launch-mission').getAttribute('aria-busy')).toBe('false');
 
     harness.assets.aircraftError = null;
+    document.querySelector('#retry-launch').dispatch('click');
+    await completeTriggeredLaunch(document, 1);
+    expect(launchErrorDialog.open).toBe(false);
+    expect(harness.worlds).toHaveLength(1);
+  });
+
+  it('returns from a launch error to a usable mission menu', async () => {
+    const document = await loadMain();
+    harness.assets.aircraftError = new Error('aircraft unavailable');
+    document.querySelector('#launch-mission').dispatch('click');
+    await vi.waitFor(() => expect(document.querySelector('#launch-error-dialog').open).toBe(true));
+
+    document.querySelector('#launch-error-return').dispatch('click');
+    expect(document.querySelector('#launch-error-dialog').open).toBe(false);
+    expect(document.querySelector('#start-menu').hidden).toBe(false);
+    expect(document.querySelector('#launch-mission').disabled).toBe(false);
+    expect(document.querySelector('#launch-mission').getAttribute('aria-busy')).toBe('false');
+
+    harness.assets.aircraftError = null;
     await launch(document);
     expect(harness.worlds).toHaveLength(1);
+  });
+
+  it('releases pointer lock if an asset failure wins before the gesture capture resolves', async () => {
+    const document = await loadMain();
+    harness.assets.aircraftError = new Error('aircraft unavailable');
+    let resolveCapture;
+    harness.controls.capturePromise = new Promise(resolve => { resolveCapture = resolve; });
+    const launchButton = document.querySelector('#launch-mission');
+
+    launchButton.dispatch('click');
+    await vi.waitFor(() => expect(launchButton.disabled).toBe(false));
+    expect(launchButton.getAttribute('aria-busy')).toBe('false');
+    expect(document.querySelector('#menu-theater').disabled).toBe(false);
+
+    resolveCapture(true);
+    await vi.waitFor(() => expect(document.pointerLockElement).toBe(null));
+    expect(harness.controls.enabled).toBe(false);
+    expect(document.querySelector('#start-menu').hidden).toBe(false);
+  });
+
+  it('releases an older menu terrain result after a newer theater request wins', async () => {
+    const document = await loadMain();
+    await vi.waitFor(() => expect(document.querySelector('#launch-mission').disabled).toBe(false));
+    const oldRequest = deferred();
+    const currentRequest = deferred();
+    const oldTerrain = makeTerrain('virolahti');
+    const currentTerrain = makeTerrain('keitele');
+    harness.terrainLoader = vi.fn()
+      .mockReturnValueOnce(oldRequest.promise)
+      .mockReturnValueOnce(currentRequest.promise);
+    const theater = document.querySelector('#menu-theater');
+    const launchButton = document.querySelector('#launch-mission');
+
+    theater.value = 'virolahti';
+    theater.dispatch('change');
+    theater.value = 'keitele';
+    theater.dispatch('change');
+    const [oldCall, currentCall] = harness.terrainCalls.slice(-2);
+    const oldSignal = oldCall.signal;
+    const currentSignal = currentCall.signal;
+
+    expect(oldSignal.aborted).toBe(true);
+    expect(currentSignal.aborted).toBe(false);
+    currentRequest.resolve(currentTerrain);
+    await vi.waitFor(() => expect(launchButton.disabled).toBe(false));
+    oldRequest.resolve(oldTerrain);
+    await vi.waitFor(() => expect(harness.disposedTerrains).toContain(oldTerrain));
+
+    expect(launchButton.getAttribute('aria-busy')).toBe('false');
+    expect(document.querySelector('#menu-status').dataset.state).toBe('ready');
+    await launch(document);
+    expect(harness.worlds[0].terrain).toBe(currentTerrain);
+    await returnToMenuFromFlight(document);
+    await launch(document);
+    expect(harness.worlds).toHaveLength(2);
+    expect(harness.worlds[1].terrain).toBe(currentTerrain);
+  });
+
+  it('cancels the menu terrain preview when launch takes ownership and still supports the next sortie', async () => {
+    const previewRequest = deferred();
+    const sortieRequest = deferred();
+    const stalePreview = makeTerrain('paijanne');
+    const sortieTerrain = makeTerrain('paijanne');
+    harness.terrainLoader = vi.fn()
+      .mockReturnValueOnce(previewRequest.promise)
+      .mockReturnValueOnce(sortieRequest.promise);
+    const document = await loadMain();
+    const launchButton = document.querySelector('#launch-mission');
+    const expectedWorldCount = harness.worlds.length + 1;
+
+    // A browser will not dispatch clicks to a disabled button; force the controller path
+    // to cover the preview/launch race if another caller starts the launch programmatically.
+    launchButton.disabled = false;
+    launchButton.dispatch('click');
+    await vi.waitFor(() => expect(harness.terrainCalls).toHaveLength(2));
+    const [menuCall, sortieCall] = harness.terrainCalls;
+    const menuSignal = menuCall.signal;
+    const sortieSignal = sortieCall.signal;
+    expect(menuSignal.aborted).toBe(true);
+    expect(sortieSignal.aborted).toBe(false);
+    sortieRequest.resolve(sortieTerrain);
+    await completeTriggeredLaunch(document, expectedWorldCount);
+    expect(harness.worlds[0].terrain).toBe(sortieTerrain);
+
+    previewRequest.resolve(stalePreview);
+    await vi.waitFor(() => expect(harness.disposedTerrains).toContain(stalePreview));
+    expect(harness.worlds[0].terrain).toBe(sortieTerrain);
+
+    await returnToMenuFromFlight(document);
+    expect(launchButton.disabled).toBe(false);
+    expect(launchButton.getAttribute('aria-busy')).toBe('false');
+    await launch(document);
+    expect(harness.worlds).toHaveLength(2);
+    expect(harness.worlds[1].terrain).toBe(sortieTerrain);
+  });
+
+  it('aborts menu terrain loading when the page exits and releases its late result', async () => {
+    const pendingTerrain = deferred();
+    const lateTerrain = makeTerrain('paijanne');
+    harness.terrainLoader = vi.fn().mockReturnValue(pendingTerrain.promise);
+    await loadMain();
+    const [menuCall] = harness.terrainCalls;
+
+    globalThis.window.dispatchEvent(new Event('pagehide'));
+    expect(menuCall.signal.aborted).toBe(true);
+    pendingTerrain.resolve(lateTerrain);
+    await vi.waitFor(() => expect(harness.disposedTerrains).toContain(lateTerrain));
+    expect(harness.worlds).toHaveLength(0);
   });
 });

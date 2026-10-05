@@ -1,10 +1,22 @@
-name: Deploy to GitHub Pages
+name: Validate and release ILMATILA
 
 on:
+  pull_request:
   push:
     branches:
       - master
+    tags:
+      - 'v*-beta.*'
   workflow_dispatch:
+    inputs:
+      target:
+        description: Deploy this commit to staging, or release it to beta after its staging smoke passes
+        required: true
+        type: choice
+        default: staging
+        options:
+          - staging
+          - beta
 
 permissions:
   contents: read
@@ -12,12 +24,14 @@ permissions:
   id-token: write
 
 concurrency:
-  group: github-pages
-  cancel-in-progress: true
+  group: ilmatila-pages
+  cancel-in-progress: false
 
 jobs:
   quality:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Check out source
         uses: actions/checkout@v7
@@ -28,18 +42,21 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
+      - name: Clean install
         run: npm ci
 
       - name: Lint
         run: npm run lint
 
-      - name: Test
+      - name: Unit and integration tests
         run: npm test
 
-  build:
+  browser-smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     needs: quality
+    permissions:
+      contents: read
     steps:
       - name: Check out source
         uses: actions/checkout@v7
@@ -50,10 +67,74 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
+      - name: Clean install
         run: npm ci
 
-      - name: Download terrain data release
+      - name: Download and verify Päijänne terrain
+        env:
+          TERRAIN_DATA_RELEASE: terrain-data-v1.2.0
+        run: |
+          set -euo pipefail
+          download_dir="$RUNNER_TEMP/ilmatila-terrain-smoke"
+          release_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TERRAIN_DATA_RELEASE}"
+          mkdir -p "$download_dir" public/terrain/areas
+          curl --fail --silent --show-error --location --retry 3 \
+            "$release_url/SHA256SUMS.txt" --output "$download_dir/SHA256SUMS.txt"
+          curl --fail --silent --show-error --location --retry 3 \
+            "$release_url/paijanne.zip" --output "$download_dir/paijanne.zip"
+          (cd "$download_dir" && grep '  paijanne.zip$' SHA256SUMS.txt | sha256sum --check -)
+          unzip -q "$download_dir/paijanne.zip" -d public/terrain/areas
+
+      - name: Install desktop browser matrix
+        run: npx playwright install --with-deps chrome msedge firefox webkit
+
+      - name: Build production site and run browser smoke
+        run: npm run test:e2e
+
+      - name: Upload browser smoke diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-test-results-${{ github.run_id }}
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  staging-preflight:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'beta') ||
+      startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-beta.')
+    needs: [quality, browser-smoke]
+    uses: ./.github/workflows/deployed-browser-smoke.yml
+    with:
+      base_url: https://eratarkastaja.github.io/ilmatila/staging/
+      asset_base_path: /ilmatila/
+      build_info_url: https://eratarkastaja.github.io/ilmatila/staging/build-info.json
+      expected_commit: ${{ github.sha }}
+
+  build:
+    if: >-
+      always() &&
+      (github.event_name == 'workflow_dispatch' || (startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-beta.'))) &&
+      needs.quality.result == 'success' &&
+      needs.browser-smoke.result == 'success' &&
+      (needs.staging-preflight.result == 'success' || needs.staging-preflight.result == 'skipped')
+    runs-on: ubuntu-latest
+    needs: [quality, browser-smoke, staging-preflight]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Clean install
+        run: npm ci
+
+      - name: Download and verify terrain packages
         env:
           TERRAIN_DATA_RELEASE: terrain-data-v1.2.0
         run: |
@@ -72,24 +153,63 @@ jobs:
             unzip -q "$download_dir/$area.zip" -d public/terrain/areas
           done
 
-      - name: Build site
+      - name: Build production site
         run: npm run build -- --base=/ilmatila/
+
+      - name: Preserve the live site and prepare staging path
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'staging'
+        run: node tools/release/prepare-staging-pages.mjs
+
+      - name: Write beta build identity
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'beta' || startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-beta.')
+        run: node tools/release/write-build-info.mjs dist
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v6
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v6
-
   deploy:
+    if: >-
+      always() && needs.build.result == 'success' &&
+      ((github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'staging') ||
+       (((github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'beta') ||
+         (startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-beta.'))) && needs.staging-preflight.result == 'success'))
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, staging-preflight]
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
     steps:
-      - name: Deploy to GitHub Pages
+      - name: Deploy Pages artifact
         id: deployment
         uses: actions/deploy-pages@v5
+
+  staging-smoke:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'staging'
+    needs: deploy
+    uses: ./.github/workflows/deployed-browser-smoke.yml
+    with:
+      base_url: https://eratarkastaja.github.io/ilmatila/staging/
+      asset_base_path: /ilmatila/
+      build_info_url: https://eratarkastaja.github.io/ilmatila/staging/build-info.json
+      expected_commit: ${{ github.sha }}
+
+  beta-smoke:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'beta') ||
+      startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-beta.')
+    needs: deploy
+    uses: ./.github/workflows/deployed-browser-smoke.yml
+    with:
+      base_url: https://eratarkastaja.github.io/ilmatila/
+      asset_base_path: /ilmatila/
+      build_info_url: https://eratarkastaja.github.io/ilmatila/build-info.json
+      expected_commit: ${{ github.sha }}

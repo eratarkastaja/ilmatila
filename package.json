@@ -1,6 +1,6 @@
 {
   "name": "ilmatila",
-  "version": "0.1.0-alpha.18",
+  "version": "0.2.0-beta.1",
   "description": "A browser-based air combat game built with Three.js.",
   "author": "ERÄGAMES",
   "license": "GPL-3.0-only",
@@ -14,7 +14,9 @@
     "build": "vite build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "npm run build && playwright test",
     "lint": "eslint .",
+    "profile:browser": "node tools/performance/profile-browser.mjs",
     "preview": "vite preview",
     "terrain:fetch": "node tools/terrain/fetch-finland-terrain.mjs",
     "assets:aircraft": "node tools/assets/convert-flightgear-aircraft.mjs"
@@ -26,6 +28,7 @@
     "@eslint/js": "^10.0.1",
     "@gltf-transform/core": "^4.5.1",
     "@gltf-transform/functions": "^4.5.1",
+    "@playwright/test": "^1.63.0",
     "assimpjs": "^0.0.10",
     "eslint": "^10.11.0",
     "geotiff": "^3.0.5",

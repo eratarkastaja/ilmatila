@@ -1,0 +1,157 @@
+.system-error-screen[hidden] {
+  display: none;
+}
+
+.system-error-screen {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: clamp(20px, 5vw, 64px);
+  color: #e6eee7;
+  background: radial-gradient(ellipse at 75% 15%, #17333c 0, transparent 42%), #07111b;
+  font-family: Rajdhani, sans-serif;
+}
+
+.system-error-card {
+  width: min(620px, 100%);
+  padding: clamp(28px, 6vw, 58px);
+  border: 1px solid rgba(174, 206, 193, .25);
+  background: linear-gradient(145deg, rgba(14, 28, 34, .98), rgba(7, 16, 23, .98));
+  box-shadow: 0 28px 100px #0009;
+}
+
+.system-error-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #a9e1bd;
+  font: 700 13px Rajdhani, sans-serif;
+  letter-spacing: .2em;
+}
+
+.system-error-brand img {
+  width: 34px;
+  height: 34px;
+}
+
+.system-error-kicker {
+  margin: 38px 0 8px;
+  color: #a9e1bd;
+  font: 600 13px "Barlow Condensed", sans-serif;
+  letter-spacing: .18em;
+}
+
+.system-error-card h1 {
+  margin: 0;
+  color: #f1f5ef;
+  font: 700 clamp(32px, 7vw, 56px)/.98 Rajdhani, sans-serif;
+  letter-spacing: .035em;
+}
+
+.system-error-card p {
+  max-width: 48ch;
+  margin: 20px 0 0;
+  color: #b4c4bd;
+  font: 500 18px/1.5 "Barlow Condensed", sans-serif;
+}
+
+.system-error-version {
+  margin-top: 10px !important;
+  color: #91a79d !important;
+  font: 600 12px/1.3 Rajdhani, sans-serif !important;
+  letter-spacing: .12em;
+}
+
+.system-error-version b {
+  color: #c0d0c5;
+}
+
+.system-error-languages {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 36px;
+  color: #94aaa0;
+  font: 600 12px "Barlow Condensed", sans-serif;
+  letter-spacing: .12em;
+}
+
+.system-error-languages button {
+  padding: 7px 10px;
+  border: 1px solid rgba(174, 206, 193, .2);
+  color: #c7d5ce;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.system-error-languages button[aria-pressed=true] {
+  border-color: #a9e1bd;
+  color: #07111b;
+  background: #a9e1bd;
+}
+
+.system-error-languages button:focus-visible {
+  outline: 2px solid #a9e1bd;
+  outline-offset: 3px;
+}
+
+.diagnostics-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-top: 12px;
+  color: #94aaa0;
+  font: 600 11px/1.35 "Barlow Condensed", sans-serif;
+  letter-spacing: .08em;
+}
+
+.diagnostics-tools [data-copy-diagnostics],
+.diagnostics-tools a {
+  display: inline-flex;
+  width: auto;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 1px solid rgba(174, 206, 193, .25);
+  color: #c7d5ce;
+  background: rgba(7, 17, 27, .56);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.diagnostics-tools [data-copy-diagnostics]:hover,
+.diagnostics-tools a:hover {
+  border-color: #a9e1bd;
+  color: #e8f6eb;
+}
+
+.diagnostics-tools [data-copy-diagnostics]:focus-visible,
+.diagnostics-tools a:focus-visible {
+  outline: 2px solid #a9e1bd;
+  outline-offset: 3px;
+}
+
+.diagnostics-tools [data-diagnostics-status],
+.diagnostics-tools p {
+  flex: 1 0 100%;
+  margin: 0;
+  color: #91a79d;
+  font: 500 12px/1.35 "Barlow Condensed", sans-serif;
+  letter-spacing: .02em;
+}
+
+.diagnostics-tools [data-diagnostics-status] {
+  min-height: 1em;
+  color: #a9e1bd;
+}
+
+.diagnostics-tools [data-copy-diagnostics]:disabled {
+  opacity: .65;
+  cursor: wait;
+}

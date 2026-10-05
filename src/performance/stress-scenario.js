@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createMissile, MISSILE_PROFILES } from '../combat/projectiles.js';
 import { CombatTelemetry } from './combat-telemetry.js';
+import { summarizeFrameIntervals } from './frame-profiler.js';
 
 const forward = new THREE.Vector3(0, 0, 1);
 const gunDirection = new THREE.Vector3();
@@ -137,17 +138,17 @@ export class CombatStressScenario {
   }
 
   snapshot() {
-    const samples = Array.from(this._frameSamples.subarray(0, this._sampleCount)).sort((a, b) => a - b);
-    const percentile = value => samples[Math.min(samples.length - 1, Math.floor(samples.length * value))] ?? 0;
-    const frameTime = percentile(.5);
-    const maxFrameTime = percentile(.95);
+    const frameIntervals = summarizeFrameIntervals(this._frameSamples.subarray(0, this._sampleCount));
     return {
       seconds: (performance.now() - this.started) / 1000,
       difficulty: this.combat.difficulty?.id ?? 'unknown',
-      fps: frameTime > 0 ? 1000 / frameTime : 0,
-      frameMsMedian: frameTime,
-      frameMsP95: maxFrameTime,
-      frameSamples: samples.length,
+      fps: frameIntervals.median > 0 ? 1000 / frameIntervals.median : 0,
+      frameMsAverage: frameIntervals.average,
+      frameMsMedian: frameIntervals.median,
+      frameMsP95: frameIntervals.p95,
+      frameMsWorst: frameIntervals.worst,
+      frameMsWorstTen: frameIntervals.worstTen,
+      frameSamples: frameIntervals.samples,
       enemies: this.combat.enemies.length,
       allies: this.combat.allies.length,
       groundUnits: this.combat.friends.length + this.combat.redUnits.length,

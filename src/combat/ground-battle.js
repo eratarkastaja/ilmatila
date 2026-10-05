@@ -7,6 +7,10 @@ import { GroundWeaponSystem } from './ground-weapon-system.js';
 import { GroundAirDefenseAI } from './ground-air-defense-ai.js';
 import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
 
+// Beyond 8 km even a 10 m vehicle is about one pixel tall at the default 1080p FOV.
+const GROUND_VEHICLE_RENDER_DISTANCE = 8_000;
+const GROUND_VISIBILITY_UPDATE_INTERVAL = 0.25;
+
 /** Owns battlefield state and coordinates ground-unit simulation updates. */
 export class GroundBattle {
   constructor({ scene, player, playerVelocity, terrain, mission, audio, fx, difficulty = {}, enemies = [], addProjectile, addFriendlyProjectile, random = createSeededRandom(DEFAULT_RANDOM_SEED) }) {
@@ -52,6 +56,7 @@ export class GroundBattle {
     this.airDefenseAI = new GroundAirDefenseAI(random);
     this.spawn();
     this.groundUnits = [...this.friends, ...this.redUnits];
+    this.groundVisibilityElapsed = GROUND_VISIBILITY_UPDATE_INTERVAL;
   }
 
   setAirDefenseActive(active = true) {
@@ -64,6 +69,16 @@ export class GroundBattle {
 
   update(dt) {
     this.unitAI.update(this, dt);
+    this.groundVisibilityElapsed += Math.max(0, dt);
+    if (this.groundVisibilityElapsed < GROUND_VISIBILITY_UPDATE_INTERVAL) return;
+    this.groundVisibilityElapsed %= GROUND_VISIBILITY_UPDATE_INTERVAL;
+
+    const maxDistanceSq = GROUND_VEHICLE_RENDER_DISTANCE ** 2;
+    for (const unit of this.groundUnits) {
+      if (unit.dead) continue;
+      const shouldRender = unit.mesh.position.distanceToSquared(this.player.position) <= maxDistanceSq;
+      if (unit.mesh.visible !== shouldRender) unit.mesh.visible = shouldRender;
+    }
   }
 
   dispose() {

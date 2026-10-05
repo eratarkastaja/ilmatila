@@ -4,7 +4,8 @@
 
 ```text
 src/
-  main.js                 app entry and lifecycle coordinator
+  bootstrap.js           compatibility preflight and startup failure boundary
+  main.js                 app lifecycle coordinator
   assets/                 runtime asset loading and disposal
   aircraft/               player and hostile aircraft visuals
   audio/                  game audio
@@ -30,7 +31,7 @@ tests/
   mission/                progression tests
 ```
 
-`main.js` creates the Three.js scene, renderer, page-level controls, menu, and application frame loop. `SortieController` owns the preparation and lifecycle of one active sortie, including its seed. `CombatWorld` is the per-sortie combat composition root: it derives the gameplay random stream from that seed, constructs the systems, wires their dependencies, coordinates their combat update order, and presents combat/debrief state. Combat systems own focused state and behavior; callbacks and shared references connect them without making the world a second owner of every system's state.
+`bootstrap.js` checks for WebGL2 and Pointer Lock support and rejects touch/mobile devices before loading the game. It catches failures while importing `main.js`, including renderer creation failures, and displays a localized startup error view. `main.js` creates the Three.js scene, renderer, page-level controls, menu, and application frame loop. `SortieController` owns the preparation and lifecycle of one active sortie, including its seed. `CombatWorld` is the per-sortie combat composition root: it derives the gameplay random stream from that seed, constructs the systems, wires their dependencies, coordinates their combat update order, and presents combat/debrief state. Combat systems own focused state and behavior; callbacks and shared references connect them without making the world a second owner of every system's state.
 
 ## Combat responsibilities
 
@@ -110,7 +111,9 @@ The same `SortieController` is reused after returning to the menu, but each laun
 
 ## Runtime lifecycle
 
-At startup, `main.js` creates app-level scene, renderer, player, controls, audio, `FlightFX`, and `AssetRepository`, starts the menu/animation loop, and requests menu terrain and shared aircraft assets. Terrain selection cancels the previous menu subscription. The launch click requests pointer capture synchronously; the sortie starts only after both preparation and canvas lock confirmation succeed. During flight, P pauses through the app and releases pointer lock programmatically. Pressing P while paused requests pointer lock and resumes only after `pointerlockchange` confirms that the renderer canvas owns the pointer. Escape is left to the browser's default pointer-unlock behavior; losing pointer lock alone does not pause flight or show a message. `FlightControls` reacquires pointer lock on a mouse click in the flight canvas. A denied lock request during app resume leaves the sortie paused and shows a retry explanation in the pause dialog. `SortieController` owns sortie transitions and audio/input state, while `main.js` owns browser pointer-lock state and pause/resume input.
+After `bootstrap.js` confirms WebGL2 and Pointer Lock and accepts a desktop device, `main.js` creates the app-level scene, renderer, player, controls, audio, `FlightFX`, and `AssetRepository`, starts the menu/animation loop, and requests menu terrain and shared aircraft assets. Unsupported devices and startup exceptions show the localized system error view without partially starting the menu. Terrain selection cancels the previous menu subscription. The launch click requests pointer capture synchronously; the sortie starts only after both preparation and canvas lock confirmation succeed. Preparation and pointer-lock failures show retry and return-to-menu actions while restoring menu controls. During flight, P pauses through the app and releases pointer lock programmatically. Pressing P while paused requests pointer lock and resumes only after `pointerlockchange` confirms that the renderer canvas owns the pointer. Escape explicitly releases pointer lock while leaving active flight running; losing pointer lock alone does not pause flight or show a message. `FlightControls` reacquires pointer lock on a mouse click in the flight canvas. A denied lock request during app resume leaves the sortie paused and shows a retry explanation in the pause dialog. `SortieController` owns sortie transitions and audio/input state, while `main.js` owns browser pointer-lock state and pause/resume input.
+
+Sortie preparation gives terrain and aircraft loading independent timeouts. A failed or timed-out request aborts its sibling load, releases any terrain lease that arrived but was not installed, and returns a preparation failure to the menu. Disposing the controller during preparation aborts both subscriptions and notifies `main.js` to clear the loading state. Page exit also invalidates and aborts menu terrain loading. Generation checks dispose late terrain results after cancellation or when a newer menu terrain request has taken ownership.
 
 `MissionFlowSystem` advances from departure and ingress through contact/engagement/objective and RTB extraction. Completion, failure, or boundary abort produces a debrief through `CombatWorld`; `SortieController.finish()` freezes input and audio state, and `main.js` records progress and presents the debrief. Returning to the menu calls `dispose()`, which releases the combat world and session resources and resets player/menu state. `CombatWorld` removes its input/language/restart listeners, radar tracks, AI units, projectiles, radio state, and per-world effect pools. `MissionSystem` cancels its notice timer and pending reveal frame. The app coordinator also cancels its menu transition timer and clears the development telemetry/stress handles. A subsequent launch builds a fresh combat world.
 

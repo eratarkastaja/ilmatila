@@ -24,6 +24,29 @@
   display: none;
 }
 
+.launch-error-dialog .launch-error-card {
+  width: min(480px, calc(100vw - 32px));
+  padding: clamp(24px, 5vw, 38px);
+}
+
+.launch-error-card > p {
+  margin: 18px 0 26px;
+  color: #a7bab1;
+  font: 500 17px/1.45 "Barlow Condensed", sans-serif;
+}
+
+.launch-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.launch-error-actions .launch-button,
+.launch-error-actions .credits-button {
+  min-height: 48px;
+  flex: 1 1 160px;
+}
+
 .start-menu:before {
   content: "";
   position: fixed;
@@ -1325,6 +1348,134 @@
   background: #03090dc2;
   -webkit-backdrop-filter: blur(7px) saturate(.72);
   backdrop-filter: blur(7px) saturate(.72);
+}
+
+.quick-start-dialog {
+  width: min(560px,calc(100% - 32px));
+}
+
+.quick-start-card {
+  position: relative;
+  padding: clamp(22px,5vw,34px);
+}
+
+.quick-start-heading small {
+  color: #a9e1bd;
+  font: 700 11px Rajdhani,sans-serif;
+  letter-spacing: .18em;
+}
+
+.quick-start-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.quick-start-heading .language-picker {
+  flex: 0 0 auto;
+}
+
+.quick-start-heading h2 {
+  margin: 3px 0 0;
+  color: #edf2e9;
+  font: 700 clamp(27px,6vw,36px)/1.05 "Barlow Condensed",sans-serif;
+  letter-spacing: .045em;
+}
+
+.quick-start-intro {
+  margin: 15px 0 18px;
+  color: #c1cec6;
+  font: 500 16px/1.4 Rajdhani,sans-serif;
+}
+
+.quick-start-steps {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quick-start-steps li {
+  display: grid;
+  grid-template-columns: 105px minmax(0,1fr);
+  gap: 12px;
+  align-items: baseline;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #adc8b51f;
+}
+
+.quick-start-steps li strong {
+  color: #a9e1bd;
+  font: 700 11px Rajdhani,sans-serif;
+  letter-spacing: .11em;
+}
+
+.quick-start-steps li span {
+  color: #d5dfd8;
+  font: 500 14px/1.35 Rajdhani,sans-serif;
+}
+
+.quick-start-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.quick-start-actions button {
+  display: flex;
+  min-height: 43px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 13px;
+  border: 1px solid #a9e1bd4a;
+  color: #e6eee7;
+  background: #14231e;
+  font: 700 12px Rajdhani,sans-serif;
+  letter-spacing: .1em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.quick-start-actions button:hover {
+  border-color: #a9e1bd;
+  background: #1c3328;
+}
+
+.quick-start-actions .quick-start-primary {
+  min-height: 50px;
+  color: #07120d;
+  background: #a9e1bd;
+}
+
+.quick-start-actions .quick-start-primary:hover {
+  color: #040a07;
+  background: #c0efd0;
+}
+
+.quick-start-primary b,.quick-start-controls b {
+  color: inherit;
+  font: 500 17px Rajdhani,sans-serif;
+}
+
+.quick-start-actions .quick-start-secondary {
+  justify-content: center;
+  color: #c1cec6;
+  background: transparent;
+}
+
+.quick-start-actions .quick-start-controls {
+  min-height: 38px;
+  border-color: transparent;
+  color: #a9e1bd;
+  background: transparent;
+}
+
+.quick-start-actions .quick-start-controls:hover {
+  border-color: #a9e1bd4a;
+  background: #14231e;
 }
 
 .pause-card {

@@ -16,6 +16,27 @@
   <body>
     <div id="game"></div>
     <div class="vignette"></div>
+    <section id="system-error-screen" class="system-error-screen" hidden role="alertdialog" aria-modal="true" aria-labelledby="system-error-title" aria-describedby="system-error-message">
+      <div class="system-error-card">
+        <div class="system-error-brand"><img src="%BASE_URL%branding/eragames-mark.svg" alt="" /><span>ERÄGAMES · ILMATILA</span></div>
+        <p class="system-error-kicker" data-i18n="compatibility.kicker">COMPATIBILITY CHECK</p>
+        <h1 id="system-error-title">ILMATILA COULD NOT START</h1>
+        <p id="system-error-message">This browser or device cannot run the ILMATILA beta.</p>
+        <p class="system-error-version"><span data-i18n="menu.versionLabel">VERSION</span> <b id="system-error-version"></b></p>
+        <div class="diagnostics-tools" data-diagnostics-tools>
+          <button id="copy-diagnostics-startup" type="button" data-copy-diagnostics="startup" data-i18n="diagnostics.copy">COPY DIAGNOSTICS</button>
+          <a href="https://github.com/eratarkastaja/ilmatila/issues" target="_blank" rel="noreferrer" data-i18n="diagnostics.reportIssue">REPORT BETA ISSUE</a>
+          <small data-diagnostics-status role="status" aria-live="polite"></small>
+          <p data-i18n="diagnostics.privacy">Only game, browser, and sortie technical details are copied; no personal data is included.</p>
+          <p data-i18n="diagnostics.reportHint">Paste the copied diagnostics into your issue report.</p>
+        </div>
+        <div class="system-error-languages" role="group" data-i18n-aria-label="compatibility.languageLabel">
+          <span data-i18n="compatibility.languageLabel">LANGUAGE</span>
+          <button type="button" data-startup-language="en" aria-pressed="true">English</button>
+          <button type="button" data-startup-language="fi" aria-pressed="false">Suomi</button>
+        </div>
+      </div>
+    </section>
     <main id="start-menu" class="start-menu" aria-labelledby="menu-title">
       <div class="menu-topbar">
         <a class="menu-brand" href="#start" data-i18n-aria-label="menu.brandAria">
@@ -88,6 +109,13 @@
             <button id="open-credits" class="credits-button" type="button"><span>ⓘ</span><span data-i18n="menu.creditsButton">ASSETS &amp; LICENSES</span></button>
           </div>
           <button id="show-menu-controls" class="menu-controls-button" type="button"><span data-i18n="pause.controlsButton">SHOW CONTROLS</span><b aria-hidden="true">↗</b></button>
+          <div class="diagnostics-tools" data-diagnostics-tools>
+            <button id="copy-diagnostics-menu" type="button" data-copy-diagnostics="app" data-i18n="diagnostics.copy">COPY DIAGNOSTICS</button>
+            <a href="https://github.com/eratarkastaja/ilmatila/issues" target="_blank" rel="noreferrer" data-i18n="diagnostics.reportIssue">REPORT BETA ISSUE</a>
+            <small data-diagnostics-status role="status" aria-live="polite"></small>
+            <p data-i18n="diagnostics.privacy">Only game, browser, and sortie technical details are copied; no personal data is included.</p>
+            <p data-i18n="diagnostics.reportHint">Paste the copied diagnostics into your issue report.</p>
+          </div>
           <div class="menu-footnote"><span id="menu-status"><i></i> OPERATIONS READY · SELECT MISSION</span></div>
         </section>
 
@@ -108,6 +136,28 @@
       </div>
 
     </main>
+
+    <dialog id="quick-start-dialog" class="pause-dialog quick-start-dialog" aria-labelledby="quick-start-title" aria-describedby="quick-start-description">
+      <div class="quick-start-card">
+        <header class="quick-start-heading">
+          <div><small data-i18n="quickStart.kicker">FIRST FLIGHT</small><h2 id="quick-start-title" data-i18n="quickStart.title">YOUR FIRST SORTIE</h2></div>
+          <label class="language-picker" for="quick-start-language-select"><span data-i18n="language.label">LANGUAGE</span><select id="quick-start-language-select" data-i18n-aria-label="language.aria"><option value="en">English</option><option value="fi">Suomi</option></select></label>
+        </header>
+        <p id="quick-start-description" class="quick-start-intro" data-i18n="quickStart.intro">Start with Training to get comfortable with the aircraft. You can choose any mission from the menu instead.</p>
+        <ol class="quick-start-steps" data-i18n-aria-label="quickStart.aria">
+          <li><strong data-i18n="quickStart.flyLabel">FLY</strong><span data-i18n="quickStart.fly">Move the mouse to steer; W/S pitch, A/D turn.</span></li>
+          <li><strong data-i18n="quickStart.targetLabel">SELECT TARGET</strong><span data-i18n="quickStart.target">T selects the next radar target; Y selects the previous.</span></li>
+          <li><strong data-i18n="quickStart.lockLabel">LOCK</strong><span data-i18n="quickStart.lock">Keep the selected target ahead until lock is confirmed.</span></li>
+          <li><strong data-i18n="quickStart.fireLabel">FIRE</strong><span data-i18n="quickStart.fire">Space / LMB fires the cannon; M / RMB launches a missile after lock.</span></li>
+          <li><strong data-i18n="quickStart.pauseLabel">PAUSE</strong><span data-i18n="quickStart.pause">Press P to pause or resume.</span></li>
+        </ol>
+        <div class="quick-start-actions">
+          <button id="quick-start-training" class="quick-start-primary" type="button" autofocus><span data-i18n="quickStart.startTraining">START TRAINING</span><b aria-hidden="true">↗</b></button>
+          <button id="quick-start-menu" class="quick-start-secondary" type="button"><span data-i18n="quickStart.chooseMission">CHOOSE A MISSION</span></button>
+          <button id="quick-start-controls" class="quick-start-controls" type="button"><span data-i18n="quickStart.showControls">SHOW ALL CONTROLS</span><b aria-hidden="true">↗</b></button>
+        </div>
+      </div>
+    </dialog>
 
     <dialog id="menu-controls-dialog" class="pause-dialog menu-controls-dialog" aria-labelledby="menu-controls-title" aria-describedby="menu-controls-description">
       <div class="pause-card">
@@ -138,6 +188,25 @@
             <p id="menu-controls-description" class="menu-lock-instruction" data-i18n="menu.lockInstruction">T selects the next hostile track; Y selects the previous one. Keep the target ahead of the nose until lock is confirmed, then press M or right mouse button to fire. AIR and GND modes have separate missile stores.</p>
           </section>
         </section>
+      </div>
+    </dialog>
+
+    <dialog id="launch-error-dialog" class="pause-dialog launch-error-dialog" aria-labelledby="launch-error-title" aria-describedby="launch-error-message">
+      <div class="pause-card launch-error-card">
+        <header class="pause-controls-heading">
+          <div><small data-i18n="launch.failure.kicker">LAUNCH ERROR</small><h2 id="launch-error-title">SORTIE COULD NOT START</h2></div>
+        </header>
+        <p id="launch-error-message">Terrain or aircraft data could not be prepared.</p>
+        <div class="launch-error-actions">
+          <button id="retry-launch" class="launch-button" type="button"><span data-i18n="launch.retry">RETRY</span><b aria-hidden="true">↻</b></button>
+          <button id="launch-error-return" class="credits-button" type="button"><span data-i18n="launch.returnToMenu">RETURN TO MENU</span></button>
+        </div>
+        <div class="diagnostics-tools" data-diagnostics-tools>
+          <button id="copy-diagnostics-launch-error" type="button" data-copy-diagnostics="app" data-i18n="diagnostics.copy">COPY DIAGNOSTICS</button>
+          <a href="https://github.com/eratarkastaja/ilmatila/issues" target="_blank" rel="noreferrer" data-i18n="diagnostics.reportIssue">REPORT BETA ISSUE</a>
+          <small data-diagnostics-status role="status" aria-live="polite"></small>
+          <p data-i18n="diagnostics.reportHint">Paste the copied diagnostics into your issue report.</p>
+        </div>
       </div>
     </dialog>
 
@@ -174,6 +243,11 @@
             <button id="show-flight-controls" class="pause-controls-button" type="button"><span data-i18n="pause.controlsButton">SHOW CONTROLS</span><b aria-hidden="true">↗</b></button>
             <button id="resume-flight" class="pause-resume" type="button"><span data-i18n="pause.resume">RESUME FLIGHT</span><b>↗</b></button>
             <button id="quit-to-menu" class="pause-quit" type="button"><span data-i18n="pause.quit">RETURN TO MISSION SELECTION</span><b>⌂</b></button>
+            <div class="diagnostics-tools" data-diagnostics-tools>
+              <button id="copy-diagnostics-pause" type="button" data-copy-diagnostics="app" data-i18n="diagnostics.copy">COPY DIAGNOSTICS</button>
+              <a href="https://github.com/eratarkastaja/ilmatila/issues" target="_blank" rel="noreferrer" data-i18n="diagnostics.reportIssue">REPORT BETA ISSUE</a>
+              <small data-diagnostics-status role="status" aria-live="polite"></small>
+            </div>
           </div>
         </div>
         <section id="pause-confirm-panel" class="pause-confirm-panel" aria-labelledby="pause-confirm-title" aria-describedby="pause-confirm-description" hidden>
@@ -246,6 +320,12 @@
           <h3 id="debrief-optional-objectives-title" data-i18n="mission.optionalObjectives.debriefTitle">OPTIONAL OBJECTIVES</h3>
           <ul id="debrief-optional-objective-list" class="optional-objective-list"></ul>
         </section>
+        <div class="diagnostics-tools" data-diagnostics-tools>
+          <button id="copy-diagnostics-debrief" type="button" data-copy-diagnostics="app" data-i18n="diagnostics.copy">COPY DIAGNOSTICS</button>
+          <a href="https://github.com/eratarkastaja/ilmatila/issues" target="_blank" rel="noreferrer" data-i18n="diagnostics.reportIssue">REPORT BETA ISSUE</a>
+          <small data-diagnostics-status role="status" aria-live="polite"></small>
+          <p data-i18n="diagnostics.reportHint">Paste the copied diagnostics into your issue report.</p>
+        </div>
         <footer class="debrief-footer">
           <span data-i18n="mission.debrief.closed">SORTIE CLOSED</span>
           <button id="mission-debrief-return" type="button"><span data-i18n="mission.debrief.return">RETURN TO MISSION SELECTION</span><b>⌂</b></button>
@@ -302,8 +382,14 @@
         <h1 id="death-title" data-i18n="death.title">AIRCRAFT DESTROYED</h1>
         <p id="death-reason">TERRAIN COLLISION</p>
         <button id="restart" type="button"><span data-i18n="death.restart">RESTART MISSION</span> <span>↻</span></button>
+        <div class="diagnostics-tools" data-diagnostics-tools>
+          <button id="copy-diagnostics-death" type="button" data-copy-diagnostics="app" data-i18n="diagnostics.copy">COPY DIAGNOSTICS</button>
+          <a href="https://github.com/eratarkastaja/ilmatila/issues" target="_blank" rel="noreferrer" data-i18n="diagnostics.reportIssue">REPORT BETA ISSUE</a>
+          <small data-diagnostics-status role="status" aria-live="polite"></small>
+          <p data-i18n="diagnostics.reportHint">Paste the copied diagnostics into your issue report.</p>
+        </div>
       </div>
     </section>
-    <script type="module" src="/src/main.js"></script>
+    <script type="module" src="/src/bootstrap.js"></script>
   </body>
 </html>

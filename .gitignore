@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .vitest/
+playwright-report/
+test-results/
 .env*
 !.env.example
 

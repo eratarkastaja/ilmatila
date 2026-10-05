@@ -10,8 +10,8 @@ function withTimeout(promise, milliseconds, reason, onTimeout) {
   let timer;
   const timeout = new Promise((_, reject) => {
     timer = setTimeout(() => {
-      onTimeout?.();
       reject(new Error(reason));
+      onTimeout?.();
     }, milliseconds);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
@@ -45,6 +45,7 @@ export class SortieController {
     onResume = () => {},
     onFinish = () => {},
     onPrepareFailure = () => {},
+    onPrepareCancelled = () => {},
   }) {
     this.assets = assets;
     this.ensureTerrainLoaded = ensureTerrainLoaded;
@@ -73,6 +74,7 @@ export class SortieController {
       onResume,
       onFinish,
       onPrepareFailure,
+      onPrepareCancelled,
     };
 
     this.combat = null;
@@ -139,9 +141,6 @@ export class SortieController {
         90000,
         'Terrain data load timed out',
         () => terrainLoadController.abort(),
-      ).then(
-        value => ({ status: 'ready', value }),
-        error => ({ status: 'failed', error }),
       );
 
       // Subscribe to the new load before cancelling a menu request for the same area.
@@ -165,12 +164,10 @@ export class SortieController {
         'Aircraft model load timed out',
         () => aircraftLoadController.abort(),
       );
-      const [terrainResult, asset] = await Promise.all([terrainPromise, aircraftPromise]);
+      const [replacement, asset] = await Promise.all([terrainPromise, aircraftPromise]);
       if (generation !== this.generation) return false;
       this.loadControllers = null;
 
-      if (terrainResult.status !== 'ready') throw terrainResult.error;
-      const replacement = terrainResult.value;
       if (!replacement.real) throw new Error('Selected theater terrain is not a real map package');
       this.installTerrain(replacement);
       pendingTerrain = null;
@@ -311,6 +308,7 @@ export class SortieController {
 
   /** Aborts pending preparation and releases this sortie's combat resources. */
   dispose() {
+    const cancelledPreparation = this.launchInProgress;
     this.generation++;
     this.loadControllers?.terrainLoadController.abort();
     this.loadControllers?.aircraftLoadController.abort();
@@ -336,5 +334,6 @@ export class SortieController {
     this.launchInProgress = false;
     this.prepared = false;
     this.finished = false;
+    if (cancelledPreparation) this.callbacks.onPrepareCancelled();
   }
 }

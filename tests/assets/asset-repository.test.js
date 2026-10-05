@@ -107,4 +107,38 @@ describe('AssetRepository terrain ownership', () => {
     expect(base.geometryDispose).toHaveBeenCalledTimes(1);
     expect(base.materialDispose).toHaveBeenCalledTimes(1);
   });
+
+  it('does not let a late result from an abandoned request replace a newer request', async () => {
+    const abandonedLoad = deferred();
+    const currentLoad = deferred();
+    const abandonedBase = makeTerrain();
+    const currentBase = makeTerrain();
+    createTerrainMock
+      .mockReturnValueOnce(abandonedLoad.promise)
+      .mockReturnValueOnce(currentLoad.promise);
+    const repository = new AssetRepository();
+    const abandonedController = new AbortController();
+
+    const abandonedRequest = repository.ensureTerrainLoaded('north', undefined, abandonedController.signal);
+    const abandonedRejection = expect(abandonedRequest).rejects.toMatchObject({ name: 'AbortError' });
+    abandonedController.abort();
+    await abandonedRejection;
+
+    const currentRequest = repository.ensureTerrainLoaded('north');
+    expect(createTerrainMock).toHaveBeenCalledTimes(2);
+
+    abandonedLoad.resolve(abandonedBase.terrain);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(abandonedBase.geometryDispose).toHaveBeenCalledOnce();
+    expect(abandonedBase.materialDispose).toHaveBeenCalledOnce();
+
+    currentLoad.resolve(currentBase.terrain);
+    const currentLease = await currentRequest;
+    expect(currentLease.id).toBe('north');
+    expect(currentLease.mesh).toBe(currentBase.terrain.mesh);
+    disposeTerrain(currentLease);
+    expect(currentBase.geometryDispose).toHaveBeenCalledOnce();
+    expect(currentBase.materialDispose).toHaveBeenCalledOnce();
+  });
 });

@@ -77,4 +77,22 @@ describe('CombatHud wingman rescue alert', () => {
     hud.update(state);
     expect(hud.wingmanRescue.hidden).toBe(true);
   });
+
+  it('uses the translated generic attacker name when no attacker label is available', () => {
+    const nodes = new Map();
+    vi.stubGlobal('document', {
+      querySelector(selector) {
+        if (!nodes.has(selector)) nodes.set(selector, makeElement());
+        return nodes.get(selector);
+      },
+    });
+    const hud = new CombatHud();
+    const state = makeState();
+    state.wingmanRescue.attacker = null;
+
+    hud.update(state);
+
+    expect(hud.wingmanRescueDetail.textContent).toContain('hostile aircraft');
+    expect(hud.wingmanRescueDetail.textContent).not.toContain('mission.optionalTarget.generic');
+  });
 });

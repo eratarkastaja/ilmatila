@@ -1,10 +1,24 @@
 # ILMATILA
 
-ILMATILA is an independent browser-based air-combat game by ERÄGAMES. The current source version is **0.1.0-alpha.18**. It is an alpha build: missions, combat, progression, aircraft handling, radar, and weapons are playable, while balance and mission pacing remain under development. The simulation is fictional and is not intended for real-world training or operational use.
+ILMATILA is an independent browser-based air-combat game by ERÄGAMES. The current release candidate is **0.2.0-beta.1**. Missions, combat, progression, aircraft handling, radar, and weapons are playable; balance and mission pacing may still change during beta. The simulation is fictional and is not intended for real-world training or operational use.
 
 **[Play ILMATILA in your browser](https://eratarkastaja.github.io/ilmatila/).**
 
 The interface supports English and Finnish. The game runs in a modern browser with WebGL and needs no API key at runtime.
+
+## Supported Platforms and Browsers
+
+This beta supports desktop play with a keyboard, mouse, WebGL 2, and Pointer Lock. The verified browser engines are Google Chrome, Microsoft Edge, and Firefox. The browser runs recorded for this release candidate used Debian Linux: Chrome 154.0.8037.97, Edge 154.0.4258.53, and Playwright Firefox 155.0. Other operating systems and browser versions are not separately certified. See the [browser compatibility report](docs/browser-compatibility.md) for the checks and limitations.
+
+Touch and mobile devices are not supported in this beta. Apple Safari has not yet been verified and is outside the supported browser list until it passes a macOS smoke run.
+
+## Known Issues
+
+- Safari compatibility is unverified; use a supported desktop browser listed above.
+- Automated tab-switch testing confirms that a sortie survives switching away and back, but headless browsers do not reliably expose operating-system focus/visibility transitions. Real desktop focus behavior has not been certified across operating systems.
+- The `?stress=1` developer scenario intentionally exceeds the normal-mission performance target; it is a profiling tool, not a supported gameplay mode.
+
+No open P0/P1 issue is known for the verified Chrome, Edge, and Firefox runs. See the [release candidate notes](docs/beta-release-candidate.md) for the complete validation record.
 
 ## Run locally
 
@@ -36,7 +50,8 @@ The mission menu and pause menu open a **Show Controls** dialog with the flight 
 | Q / E | Roll around the aircraft's longitudinal axis |
 | Shift | Afterburner |
 | Space | Fire cannon |
-| T | Cycle detected hostile radar tracks |
+| T | Select the next detected hostile radar target |
+| Y | Select the previous detected hostile radar target |
 | M | Fire a missile when the selected target is in range and locked |
 | R | Switch radar between air and ground modes |
 | F | Deploy flares against infrared threats |
@@ -50,6 +65,8 @@ The mission menu and pause menu open a **Show Controls** dialog with the flight 
 
 After pressing Esc, click the flight view to capture the mouse again.
 
+To report a beta issue, use **Copy diagnostics** in the mission menu, pause dialog, debrief, aircraft-loss screen, or error screen, then open **Report beta issue** and paste the copied block. It includes the sortie seed and technical game/browser details, but no personal data.
+
 ## Terrain and GitHub Pages
 
 The game currently serves four Finnish areas: Päijänne, Virolahti, Ilomantsi, and Kuusamo. Each terrain package covers 32 × 32 km and contains Maanmittauslaitos elevation and colour orthophoto data. The playable boundary follows the usable elevation and orthophoto coverage; terrain outside that footprint is obscured and is not part of the mission area.
@@ -58,7 +75,7 @@ Generated terrain packages are published separately from the source repository. 
 
 ## Project layout
 
-- `src/main.js` starts the app and coordinates menu, mission, and lifecycle.
+- `src/bootstrap.js` checks browser support; `src/main.js` coordinates the menu, missions, and app lifecycle.
 - `src/aircraft/`, `src/ground/`, and `src/assets/` contain aircraft, procedural ground units, and asset loading.
 - `src/combat/` contains `CombatWorld` and the flight, weapon, projectile, collision, radar, mission, radio, and AI systems.
 - `src/environment/` contains terrain, terrain coverage and streaming, atmosphere, clouds, and sun effects.

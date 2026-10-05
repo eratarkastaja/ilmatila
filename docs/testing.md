@@ -2,7 +2,7 @@
 
 ## Test stack
 
-The repository uses Vitest (`vitest run`) with the Node environment. `vitest.config.js` discovers `tests/**/*.test.js` and clears mock call history between tests. Tests are ES modules and import the same source systems used by the browser game.
+The repository uses Vitest (`vitest run`) with the Node environment and Playwright Test for production-build browser smokes in Google Chrome, Microsoft Edge, Firefox, and WebKit. `vitest.config.js` discovers `tests/**/*.test.js` and clears mock call history between tests. The Playwright config keeps browser specs in `e2e/`, separate from the Node suite. Unit tests are ES modules and import the same source systems used by the browser game.
 
 Most combat and data tests run system logic directly in Node. They use Three.js objects where useful and small hand-written DOM/browser stubs for APIs a system touches. The main-session integration test mocks the renderer and major app dependencies; the combat-world integration test constructs the real combat world with mock DOM and event targets. These tests do not run a real browser, WebGL renderer, pointer lock, or browser audio stack.
 
@@ -13,13 +13,18 @@ npm ci
 npm test
 npm run lint
 npm run build
+npm run test:e2e
 ```
 
-For focused work, Vitest accepts a test path, for example `npm test -- tests/combat/radar.test.js`. `npm run test:watch` starts Vitest in watch mode. The Pages workflow installs dependencies, runs lint and tests, then downloads and verifies the terrain release before building the site with the `/ilmatila/` base path. Deployment waits for both the quality job and build job.
+For focused work, Vitest accepts a test path, for example `npm test -- tests/combat/radar.test.js`. `npm run test:watch` starts a Vitest watch session. `npm run test:e2e` builds the production site, starts Vite Preview, and runs the browser matrix. Install the local browser set with `npx playwright install --with-deps chrome msedge firefox webkit`. On machines where Chrome or Edge are already installed at nonstandard paths, set `ILMATILA_CHROME_EXECUTABLE` and/or `ILMATILA_EDGE_EXECUTABLE` before running Playwright.
+
+The tested versions and browser-specific limitations are recorded in [browser compatibility](browser-compatibility.md).
+
+The Pages workflow runs lint and unit/integration tests in `quality`, then installs Chrome, Edge, Firefox, and WebKit and runs production browser smokes in `browser-smoke`. That job downloads and verifies the real Päijänne terrain release package before building. Each supported browser runs Training, exercises WebGL2, audio unlock, Pointer Lock, mouse and keyboard input, Escape, P pause/resume, viewport resize and tab switching, then launches Patrol combat, fires the gun, returns to the menu, and launches again without reloading. The Chrome project also launches Intercept and Support, so every mission type receives a real browser launch/menu pass. Tests fail on asset errors, uncaught page errors, or console errors. WebKit is included as an engine check; it is not Apple Safari. Pull requests run quality and browser checks but never deploy Pages. Pushes to `master` run checks without publishing; the `workflow_dispatch` staging target preserves the live root under `/staging/`, and beta deployment is gated by a passing staging smoke for the same commit. A `v*-beta.*` tag deploys to beta only after that staging preflight and is followed by the same browser matrix at the live URL.
 
 ## Existing coverage
 
-The suite covers ballistics, boundary warnings, collision and hit tests, countermeasures, mission objectives/flow, projectile lifecycle and pooling, radar, radio, weapon behavior, asset sharing/abort/disposal, terrain coverage, controls, configuration validation, and local progression. Resource tests protect instance-owned versus shared Three.js resources.
+The suite covers ballistics, boundary warnings, collision and hit tests, countermeasures, mission objectives/flow, projectile lifecycle and pooling, radar, radio, weapon behavior, asset sharing/abort/disposal, terrain coverage, controls, configuration validation, and local progression. `tests/ui/i18n-coverage.test.js` keeps EN/FI keys aligned and checks every static source and HTML translation reference. `tests/ui/diagnostics.test.js` checks copied context and both clipboard paths. Startup tests cover WebGL2 and Pointer Lock capability checks, unsupported touch/mobile devices, the fatal startup boundary, and EN/FI error messages. Resource tests protect instance-owned versus shared Three.js resources.
 
 There are two useful lifecycle integration tests:
 
@@ -30,7 +35,7 @@ There are two useful lifecycle integration tests:
 
 `tests/combat/fuel-system.test.js` verifies difficulty fuel reserves, cruise and afterburner consumption, and afterburner lockout at empty. The flight-control test checks that an exhausted sortie loses afterburner and continues at glide speed; the world-session test checks HUD visibility and green/yellow/red gauge states.
 
-The scenario tests give wingman and ground-unit AI direct combat integration coverage; helicopter behavior and wider tactical choices still have focused unit coverage. The highest-value broader integration boundary remains a real-browser run that combines actual terrain and aircraft loading, pointer lock/audio, WebGL rendering, and the second-launch lifecycle. No browser automation stack is configured in the repository. Repository-level tests do cover shared-load cancellation and terrain leases; the `SortieController`'s timeout and preparation race behavior is a narrower remaining boundary.
+The scenario tests give wingman and ground-unit AI direct combat integration coverage; helicopter behavior and wider tactical choices still have focused unit coverage. The real-browser smoke covers actual terrain and aircraft loading, WebGL rendering, pointer lock during launch/resume, pointer-lock release/reacquisition, audio unlock, desktop input, focus/resize changes, all mission types, the second-launch lifecycle, and the localized compatibility view when WebGL2 is unavailable. `tests/game/sortie-controller.test.js`, `tests/assets/asset-repository.test.js`, and `tests/integration/main-session.test.js` cover load timeouts, failure and retry, cancellation during preparation, late-result disposal, competing menu terrain requests, and launch recovery including retry and return to the usable menu.
 
 ## What to test
 
@@ -63,7 +68,7 @@ If the bug depends on browser, rendering, or audio behavior that the Node harnes
 
 ## Manual Pointer Lock validation
 
-The repository has no browser automation stack, so the pointer-lock security behavior still needs manual validation in Chrome or Chromium:
+Playwright exercises pointer lock during launch and resume across its desktop browser projects. Keep this manual pass for browser security behavior and any browser-specific regression:
 
 1. Start a mission and verify the cursor is locked.
 2. Press Escape and verify the cursor becomes visible, the pause dialog stays closed, and flight continues.

@@ -1,8 +1,25 @@
 const dictionaries = {
   en: {
     'document.title': 'ILMATILA | ERÄGAMES',
+    'i18n.unavailable': 'Unavailable',
     'language.label': 'LANGUAGE',
     'language.aria': 'Select language',
+    'compatibility.kicker': 'COMPATIBILITY CHECK',
+    'compatibility.languageLabel': 'LANGUAGE',
+    'compatibility.webgl.title': 'WEBGL 2 REQUIRED',
+    'compatibility.webgl.message': 'This beta requires WebGL 2, which this browser or device does not provide. Enable hardware acceleration or try a desktop browser with WebGL 2 support.',
+    'compatibility.pointerLock.title': 'MOUSE CAPTURE REQUIRED',
+    'compatibility.pointerLock.message': 'This beta needs Pointer Lock for mouse flight controls. Use a desktop browser that supports Pointer Lock.',
+    'compatibility.touch.title': 'DESKTOP BROWSER REQUIRED',
+    'compatibility.touch.message': 'The ILMATILA beta supports keyboard and mouse on desktop. Touch and mobile play are not supported in this beta.',
+    'compatibility.startup.title': 'ILMATILA COULD NOT START',
+    'compatibility.startup.message': 'The game failed while creating its renderer or startup systems. Update your browser and graphics drivers, then try again.',
+    'diagnostics.copy': 'COPY DIAGNOSTICS',
+    'diagnostics.copied': 'DIAGNOSTICS COPIED',
+    'diagnostics.copyFailed': 'COPY FAILED · CHECK CLIPBOARD PERMISSION',
+    'diagnostics.reportIssue': 'REPORT BETA ISSUE',
+    'diagnostics.privacy': 'Only game, browser, and sortie technical details are copied; no personal data is included.',
+    'diagnostics.reportHint': 'Paste the copied diagnostics into your issue report.',
     'music.enabled': 'MUSIC ON',
     'music.disabled': 'MUSIC OFF',
     'music.enableAria': 'Turn background music on',
@@ -13,6 +30,23 @@ const dictionaries = {
     'menu.ready': 'READY',
     'menu.versionLabel': 'VERSION',
     'menu.intro': 'Choose a mission and area of operations.',
+    'quickStart.kicker': 'FIRST FLIGHT',
+    'quickStart.title': 'YOUR FIRST SORTIE',
+    'quickStart.intro': 'Start with Training to get comfortable with the aircraft. You can choose any mission from the menu instead.',
+    'quickStart.aria': 'Essential flight controls',
+    'quickStart.flyLabel': 'FLY',
+    'quickStart.fly': 'Move the mouse to steer; W/S pitch, A/D turn.',
+    'quickStart.targetLabel': 'SELECT TARGET',
+    'quickStart.target': 'T selects the next radar target; Y selects the previous.',
+    'quickStart.lockLabel': 'LOCK',
+    'quickStart.lock': 'Keep the selected target ahead until lock is confirmed.',
+    'quickStart.fireLabel': 'FIRE',
+    'quickStart.fire': 'Space / LMB fires the cannon; M / RMB launches a missile after lock.',
+    'quickStart.pauseLabel': 'PAUSE',
+    'quickStart.pause': 'Press P to pause or resume.',
+    'quickStart.startTraining': 'START TRAINING',
+    'quickStart.chooseMission': 'CHOOSE A MISSION',
+    'quickStart.showControls': 'SHOW ALL CONTROLS',
     'menu.chooseProfile': 'Select a mission',
     'menu.missionCount': '4 MISSIONS',
     'menu.areaLabel': 'AREA OF OPERATIONS',
@@ -154,6 +188,7 @@ const dictionaries = {
     'mission.optionalTarget.strikeAircraft': 'hostile strike aircraft',
     'mission.optionalTarget.reinforcementLogistics': 'reinforcement relay truck',
     'mission.optionalTarget.friendlyArmor': 'friendly armored forces',
+    'mission.optionalTarget.generic': 'hostile aircraft',
     'mission.optionalObjective.allWingmenSurvive.title': 'BRING ALL WINGMEN HOME',
     'mission.optionalObjective.allWingmenSurvive.briefing': 'Complete the sortie with every assigned wingman alive.',
     'mission.optionalObjective.noDamage.title': 'AVOID ALL DAMAGE',
@@ -291,6 +326,13 @@ const dictionaries = {
     'launch.loadingFailed': 'LOADING FAILED · TRY AGAIN',
     'launch.couldNotPrepare': 'FLIGHT PREPARATION FAILED · TRY AGAIN',
     'launch.pointerLockFailed': 'MOUSE CONTROL NOT GRANTED · CLICK START FLIGHT TO RETRY',
+    'launch.failure.kicker': 'LAUNCH ERROR',
+    'launch.failure.assets.title': 'SORTIE COULD NOT START',
+    'launch.failure.assets.message': 'Terrain or aircraft data could not be prepared. Retry the launch or return to mission selection.',
+    'launch.failure.pointerLock.title': 'MOUSE CAPTURE NOT AVAILABLE',
+    'launch.failure.pointerLock.message': 'The browser did not grant mouse capture. Retry the launch or return to mission selection.',
+    'launch.retry': 'RETRY',
+    'launch.returnToMenu': 'RETURN TO MENU',
     'terrain.fetchingArea': 'Loading area data',
     'terrain.areaFound': 'Area data found · loading elevation data',
     'terrain.elevationLoaded': 'Elevation data loaded · loading imagery',
@@ -484,8 +526,25 @@ const dictionaries = {
     'radar.hostileCode': 'H',  },
   fi: {
     'document.title': 'ILMATILA | ERÄGAMES',
+    'i18n.unavailable': 'Ei saatavilla',
     'language.label': 'KIELI',
     'language.aria': 'Valitse kieli',
+    'compatibility.kicker': 'YHTEENSOPIVUUSTARKISTUS',
+    'compatibility.languageLabel': 'KIELI',
+    'compatibility.webgl.title': 'WEBGL 2 VAADITAAN',
+    'compatibility.webgl.message': 'Beta-versio tarvitsee WebGL 2 -tuen, jota tämä selain tai laite ei tarjoa. Ota laitteistokiihdytys käyttöön tai kokeile WebGL 2:ta tukevaa työpöytäselainta.',
+    'compatibility.pointerLock.title': 'HIIREN LUKITUS VAADITAAN',
+    'compatibility.pointerLock.message': 'Beta-versio tarvitsee Pointer Lock -tuen hiirellä ohjaamiseen. Käytä työpöytäselainta, joka tukee hiiren lukitusta.',
+    'compatibility.touch.title': 'TYÖPÖYTÄSELAIN VAADITAAN',
+    'compatibility.touch.message': 'ILMATILA-betan ohjaus toimii näppäimistöllä ja hiirellä työpöydällä. Kosketus- ja mobiilipelaamista ei tueta tässä betassa.',
+    'compatibility.startup.title': 'ILMATILA EI KÄYNNISTYNYT',
+    'compatibility.startup.message': 'Pelin grafiikan tai muiden käynnistysjärjestelmien luonti epäonnistui. Päivitä selain ja näytönohjaimen ajurit ja yritä uudelleen.',
+    'diagnostics.copy': 'KOPIOI DIAGNOSTIIKKA',
+    'diagnostics.copied': 'DIAGNOSTIIKKA KOPIOITU',
+    'diagnostics.copyFailed': 'KOPIOINTI EPÄONNISTUI · TARKISTA LEIKEPÖYDÄN KÄYTTÖOIKEUS',
+    'diagnostics.reportIssue': 'ILMOITA BETAONGELMA',
+    'diagnostics.privacy': 'Kopioidaan vain pelin, selaimen ja sortie-teknisiä tietoja; henkilötietoja ei kopioida.',
+    'diagnostics.reportHint': 'Liitä kopioidut diagnostiikkatiedot vikailmoitukseen.',
     'music.enabled': 'MUSIIKKI PÄÄLLÄ',
     'music.disabled': 'MUSIIKKI POIS',
     'music.enableAria': 'Kytke taustamusiikki päälle',
@@ -496,6 +555,23 @@ const dictionaries = {
     'menu.ready': 'VALMIINA',
     'menu.versionLabel': 'VERSIO',
     'menu.intro': 'Valitse tehtävä ja toiminta-alue.',
+    'quickStart.kicker': 'ENSILENTO',
+    'quickStart.title': 'ENSIMMÄINEN LENTOTEHTÄVÄ',
+    'quickStart.intro': 'Aloita harjoituslennolla ja tutustu koneen ohjaamiseen. Voit myös valita valikosta minkä tahansa muun tehtävän.',
+    'quickStart.aria': 'Lennon tärkeimmät ohjaimet',
+    'quickStart.flyLabel': 'LENTÄMINEN',
+    'quickStart.fly': 'Ohjaa hiirellä; W/S kallistaa, A/D kääntää.',
+    'quickStart.targetLabel': 'VALITSE MAALI',
+    'quickStart.target': 'T valitsee seuraavan ja Y edellisen tutkamaalin.',
+    'quickStart.lockLabel': 'LUKITSE',
+    'quickStart.lock': 'Pidä valittu maali nokan suunnassa, kunnes lukitus vahvistuu.',
+    'quickStart.fireLabel': 'AMMU',
+    'quickStart.fire': 'Välilyönti / hiiren vasen ampuu; M / oikea laukaisee ohjuksen lukituksen jälkeen.',
+    'quickStart.pauseLabel': 'TAUKO',
+    'quickStart.pause': 'P pysäyttää lennon ja jatkaa sitä.',
+    'quickStart.startTraining': 'ALOITA HARJOITUS',
+    'quickStart.chooseMission': 'VALITSE TEHTÄVÄ',
+    'quickStart.showControls': 'NÄYTÄ KAIKKI OHJAIMET',
     'menu.chooseProfile': 'Valitse tehtävä',
     'menu.missionCount': '4 TEHTÄVÄÄ',
     'menu.areaLabel': 'TOIMINTA-ALUE',
@@ -637,6 +713,7 @@ const dictionaries = {
     'mission.optionalTarget.strikeAircraft': 'vihollisen rynnäkkökone',
     'mission.optionalTarget.reinforcementLogistics': 'vahvistusjoukkojen huoltoauto',
     'mission.optionalTarget.friendlyArmor': 'omat panssariyksiköt',
+    'mission.optionalTarget.generic': 'viholliskone',
     'mission.optionalObjective.allWingmenSurvive.title': 'TUO KAIKKI SIIPIMIEHET KOTIIN',
     'mission.optionalObjective.allWingmenSurvive.briefing': 'Suorita lento niin, että kaikki siipimiehet selviävät.',
     'mission.optionalObjective.noDamage.title': 'VÄLTÄ VAURIOT',
@@ -774,6 +851,13 @@ const dictionaries = {
     'launch.loadingFailed': 'LATAUS EPÄONNISTUI · YRITÄ UUDELLEEN',
     'launch.couldNotPrepare': 'LENTOA EI VOITU VALMISTELLA · YRITÄ UUDELLEEN',
     'launch.pointerLockFailed': 'HIIRTÄ EI LUKITTU · YRITÄ ALOITTAA LENTO UUDELLEEN',
+    'launch.failure.kicker': 'KÄYNNISTYSVIRHE',
+    'launch.failure.assets.title': 'LENTOA EI VOITU KÄYNNISTÄÄ',
+    'launch.failure.assets.message': 'Maasto- tai lentokoneaineiston valmistelu epäonnistui. Yritä uudelleen tai palaa tehtävävalintaan.',
+    'launch.failure.pointerLock.title': 'HIIRTÄ EI VOITU LUKITA',
+    'launch.failure.pointerLock.message': 'Selain ei sallinut hiiren lukitusta. Yritä uudelleen tai palaa tehtävävalintaan.',
+    'launch.retry': 'YRITÄ UUDELLEEN',
+    'launch.returnToMenu': 'PALAA VALIKKOON',
     'terrain.fetchingArea': 'Ladataan alueen tietoja',
     'terrain.areaFound': 'Alueaineisto löytyi · ladataan korkeustietoja',
     'terrain.elevationLoaded': 'Korkeusmalli ladattu · ladataan ortokuvia',
@@ -974,6 +1058,10 @@ export function getLanguage() {
   return language;
 }
 
+export function getTranslationKeys(targetLanguage = language) {
+  return Object.keys(dictionaries[targetLanguage] ?? {});
+}
+
 export function formatNumber(value, options) {
   return Number(value).toLocaleString(language === 'fi' ? 'fi-FI' : 'en-US', options);
 }
@@ -983,7 +1071,7 @@ export function formatPercent(value) {
 }
 
 export function t(key, params = {}) {
-  const template = dictionaries[language][key] ?? dictionaries.en[key] ?? key;
+  const template = dictionaries[language][key] ?? dictionaries.en[key] ?? dictionaries[language]['i18n.unavailable'];
   return template.replace(/\{([\w]+)\}/g, (_, name) => {
     const value = params[name];
     if (value && typeof value === 'object' && value.key) return t(value.key, value.params);
@@ -1013,8 +1101,17 @@ export function setLanguage(nextLanguage) {
   } catch {
     // Language selection still works for the current session without storage.
   }
+  syncLanguagePickers();
   applyTranslations();
   document.dispatchEvent(new CustomEvent('ilmatila:languagechange', { detail: { language } }));
+}
+
+function syncLanguagePickers() {
+  if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return;
+  for (const selector of ['#language-select', '#quick-start-language-select']) {
+    const picker = document.querySelector(selector);
+    if (picker) picker.value = language;
+  }
 }
 
 export function initializeLanguagePicker() {
@@ -1026,10 +1123,12 @@ export function initializeLanguagePicker() {
     // Keep English as the default when browser storage is unavailable.
   }
   language = saved;
-  const picker = document.querySelector('#language-select');
-  if (picker) {
-    picker.value = language;
-    picker.addEventListener('change', () => setLanguage(picker.value));
+  for (const selector of ['#language-select', '#quick-start-language-select']) {
+    const picker = document.querySelector(selector);
+    if (picker) {
+      picker.value = language;
+      picker.addEventListener('change', () => setLanguage(picker.value));
+    }
   }
   applyTranslations();
 }
