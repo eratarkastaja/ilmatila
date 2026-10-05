@@ -18,12 +18,14 @@ Run against the release-candidate worktree on 2026-10-05:
 | Production build | Passed. |
 | Production browser E2E | Passed: 13 passed, 7 intentional skips across Chrome, Edge, Firefox, and Linux WebKit. The full run took 19.2 minutes with SwiftShader. |
 | Version UI smoke | Passed: 8 checks across all 4 browser projects; menu and startup-error screens show the package version. |
-| GitHub Actions CI | `quality` passed in all attempts. Firefox now passes WebGL and the startup/menu smokes in headed Xvfb, but its AudioContext remains suspended because the runner has no active audio server. The browser job now starts a PulseAudio null sink before the next run. No Pages deploy occurred. |
-| Staging package and smoke | Passed locally: preserved the current Pages root, served the candidate at `/staging/`, verified the build commit, and passed the full Chrome journey (10.6 minutes). Remote Pages deployment and four-browser staging smoke remain pending. |
-| Beta deploy and public smoke | Pending staging sign-off. |
+| GitHub Actions validation | Passed on candidate commit `8b5dbe9` (run [37317010452](https://github.com/eratarkastaja/ilmatila/actions/runs/37317010452)): clean install, lint, unit/integration tests, and the four-project browser matrix. |
+| Staging deploy and URL smoke | Passed (run [37323452795](https://github.com/eratarkastaja/ilmatila/actions/runs/37323452795)). The deployed identity matched `8b5dbe9`; the four-project browser matrix passed against `/staging/` in 16m 13s. |
+| Beta deploy and public URL smoke | Passed (run [37327450294](https://github.com/eratarkastaja/ilmatila/actions/runs/37327450294)). Staging preflight passed in 17m 37s, the beta was deployed to the root URL, and the same browser matrix passed against the public URL in 13m 58s. Root `build-info.json` reports version `0.2.0-beta.1` and commit `8b5dbe9e73499809f7d728d11acdf1ffd8ee2bde`. |
 
-The full browser run produced no uncaught page or browser-console errors in the verified browser journeys. Playwright reported that `NO_COLOR` was ignored because `FORCE_COLOR` is set in this shell; this did not affect the run.
+The verified browser journeys produced no uncaught page or browser-console errors. The CI runner emitted a benign `ubuntu-latest` image migration notice for October 19, 2026. Local Playwright also reported that `NO_COLOR` was ignored because `FORCE_COLOR` is set in the shell; neither notice affected the checks. Safari on macOS remains unverified, and touch/mobile is unsupported; see the [known issues and supported browsers](../README.md#supported-platforms-and-browsers).
 
 ## Deployment gates
 
-The Pages workflow now keeps `master` pushes validation-only. Its manual `staging` target preserves the current live root and publishes this candidate at <https://eratarkastaja.github.io/ilmatila/staging/>. A `v*` tag is accepted only if that exact commit is already at staging and the full browser matrix passes there; the workflow then publishes the beta at <https://eratarkastaja.github.io/ilmatila/> and runs the same matrix again. These remote deploy jobs remain pending until the workflow is run.
+The Pages workflow keeps `master` pushes validation-only. The manual `staging` target preserves the current live root and publishes the candidate at <https://eratarkastaja.github.io/ilmatila/staging/>. After its deployed smoke passes, the manual `beta` target runs a staging preflight for the same commit, deploys the beta at <https://eratarkastaja.github.io/ilmatila/>, and runs the same matrix against the public URL. Both deployment targets completed successfully for `0.2.0-beta.1`.
+
+The first staging attempt exposed a workflow condition bug that skipped its post-deploy smoke when the staging preflight job was skipped. The workflow now checks the deploy result explicitly with `always()`; the successful staging run above confirms the post-deploy smoke executes.
