@@ -133,6 +133,9 @@ jobs:
       (needs.staging-preflight.result == 'success' || needs.staging-preflight.result == 'skipped')
     runs-on: ubuntu-latest
     needs: [quality, browser-smoke, staging-preflight]
+    outputs:
+      live_commit: ${{ steps.prepare_staging.outputs.live_commit }}
+      live_version: ${{ steps.prepare_staging.outputs.live_version }}
     steps:
       - name: Check out source
         uses: actions/checkout@v7
@@ -165,10 +168,21 @@ jobs:
             unzip -q "$download_dir/$area.zip" -d public/terrain/areas
           done
 
-      - name: Build production site
+      - name: Build isolated staging candidate
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'staging'
+        run: npm run build -- --base=/ilmatila/staging/ --outDir=dist/staging
+        env:
+          ILMATILA_COPY_PUBLIC_DIR: 'false'
+          VITE_PUBLIC_ASSET_BASE_URL: /ilmatila/
+
+      - name: Build beta site
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.target != 'staging'
         run: npm run build -- --base=/ilmatila/
+        env:
+          VITE_PUBLIC_ASSET_BASE_URL: /ilmatila/
 
       - name: Preserve the live site and prepare staging path
+        id: prepare_staging
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'staging'
         run: node tools/release/prepare-staging-pages.mjs
 
@@ -210,13 +224,30 @@ jobs:
       github.event_name == 'workflow_dispatch' &&
       github.event.inputs.target == 'staging' &&
       needs.deploy.result == 'success'
-    needs: deploy
+    needs: [build, deploy]
     uses: ./.github/workflows/deployed-browser-smoke.yml
     with:
       base_url: https://eratarkastaja.github.io/ilmatila/staging/
       asset_base_path: /ilmatila/
       build_info_url: https://eratarkastaja.github.io/ilmatila/staging/build-info.json
       expected_commit: ${{ github.sha }}
+      artifact_suffix: staging-candidate
+
+  staging-live-smoke:
+    if: >-
+      always() &&
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.target == 'staging' &&
+      needs.deploy.result == 'success'
+    needs: [build, deploy]
+    uses: ./.github/workflows/deployed-browser-smoke.yml
+    with:
+      base_url: https://eratarkastaja.github.io/ilmatila/
+      asset_base_path: /ilmatila/
+      build_info_url: https://eratarkastaja.github.io/ilmatila/build-info.json
+      expected_commit: ${{ needs.build.outputs.live_commit }}
+      expected_version: ${{ needs.build.outputs.live_version || '*' }}
+      artifact_suffix: staging-live
 
   beta-smoke:
     if: >-

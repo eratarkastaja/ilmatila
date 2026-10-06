@@ -38,13 +38,21 @@ describe('preserveLiveBuildInfo', () => {
       .resolves.toBe('{"version":"0.2.0-beta.1","commit":"abc123"}');
   });
 
-  it('fails instead of publishing staging when the live identity is missing', async () => {
+  it('allows a legacy live site without build identity metadata', async () => {
     outputDirectory = await mkdtemp(join(tmpdir(), 'ilmatila-release-'));
     const fetchImpl = vi.fn(async () => new Response('not found', { status: 404 }));
 
     await expect(preserveLiveBuildInfo('https://example.test/ilmatila/', outputDirectory, fetchImpl))
-      .rejects.toThrow('Cannot preserve the current Pages build identity: HTTP 404');
+      .resolves.toBeNull();
     await expect(readFile(join(outputDirectory, 'build-info.json'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('still fails on other build identity fetch errors', async () => {
+    outputDirectory = await mkdtemp(join(tmpdir(), 'ilmatila-release-'));
+    const fetchImpl = vi.fn(async () => new Response('unavailable', { status: 503 }));
+
+    await expect(preserveLiveBuildInfo('https://example.test/ilmatila/', outputDirectory, fetchImpl))
+      .rejects.toThrow('Cannot preserve the current Pages build identity: HTTP 503');
   });
 
   it('rejects incomplete metadata', async () => {

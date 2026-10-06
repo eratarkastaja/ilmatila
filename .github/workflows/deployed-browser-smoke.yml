@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       asset_base_path:
-        description: URL path under which the production build serves shared assets
+        description: URL path under which shared public assets are served
         required: true
         type: string
       build_info_url:
@@ -17,7 +17,16 @@ on:
         type: string
       expected_commit:
         description: Source commit that must be deployed
-        required: true
+        required: false
+        type: string
+      expected_version:
+        description: Expected app version in the deployed UI
+        required: false
+        type: string
+      artifact_suffix:
+        description: Name suffix for browser failure diagnostics
+        required: false
+        default: deployed
         type: string
 
 permissions:
@@ -56,6 +65,7 @@ jobs:
           pactl info
 
       - name: Verify deployed build identity
+        if: inputs.expected_commit != ''
         run: node tools/release/verify-deployed-build.mjs "$BUILD_INFO_URL" "$EXPECTED_COMMIT"
         env:
           BUILD_INFO_URL: ${{ inputs.build_info_url }}
@@ -66,12 +76,13 @@ jobs:
         env:
           PLAYWRIGHT_BASE_URL: ${{ inputs.base_url }}
           PLAYWRIGHT_ASSET_BASE_PATH: ${{ inputs.asset_base_path }}
+          PLAYWRIGHT_EXPECTED_APP_VERSION: ${{ inputs.expected_version }}
 
       - name: Upload browser smoke diagnostics
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: deployed-browser-smoke-${{ github.run_id }}
+          name: deployed-browser-smoke-${{ github.run_id }}-${{ inputs.artifact_suffix }}
           path: test-results/
           if-no-files-found: ignore
           retention-days: 7

@@ -7,6 +7,10 @@ export async function preserveLiveBuildInfo(liveSiteUrl, outputDirectory, fetchI
   const buildInfoUrl = new URL('build-info.json', siteUrl);
   const response = await fetchImpl(buildInfoUrl, { headers: { 'cache-control': 'no-cache' } });
 
+  // Older Pages artifacts did not include build metadata. Their HTML and bundle
+  // graph can still be preserved and browser-smoked during the first staging run.
+  if (response.status === 404) return null;
+
   if (!response.ok) {
     throw new Error(`Cannot preserve the current Pages build identity: HTTP ${response.status} (${buildInfoUrl})`);
   }

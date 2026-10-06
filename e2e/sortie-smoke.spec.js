@@ -2,12 +2,21 @@ import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
 const { version: appVersion } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+const expectedAppVersion = process.env.PLAYWRIGHT_EXPECTED_APP_VERSION || appVersion;
+
+async function expectAppVersion(locator) {
+  if (expectedAppVersion === '*') {
+    await expect(locator).not.toBeEmpty();
+    return;
+  }
+  await expect(locator).toHaveText(expectedAppVersion);
+}
 
 test('first visit quick start is keyboard accessible and returns focus from controls', async ({ page }) => {
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(error.message));
   await page.goto('./');
-  await expect(page.locator('#menu-version')).toHaveText(appVersion);
+  await expectAppVersion(page.locator('#menu-version'));
 
   const quickStart = page.locator('#quick-start-dialog');
   await expect(quickStart).toBeVisible();
@@ -62,7 +71,7 @@ test('unsupported WebGL2 browser receives a localized startup error', async ({ p
   await page.goto('./');
   const errorScreen = page.locator('#system-error-screen');
   await expect(errorScreen).toBeVisible();
-  await expect(page.locator('#system-error-version')).toHaveText(appVersion);
+  await expectAppVersion(page.locator('#system-error-version'));
   await expect(errorScreen).toHaveAttribute('data-reason', 'webgl');
   await expect(page.locator('#system-error-title')).toHaveText('WEBGL 2 REQUIRED');
   await expect(page.locator('#game canvas')).toHaveCount(0);

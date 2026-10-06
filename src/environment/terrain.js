@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { publicAssetUrl } from '../config/public-asset-base.js';
 import { ATMOSPHERE } from './atmosphere.js';
 import { createDetailStreamer } from './terrain/detail-streamer.js';
 import {
@@ -10,7 +11,7 @@ import {
   isInCoverage,
 } from './terrain/coverage.js';
 
-const TERRAIN_PATH = `${import.meta.env.BASE_URL}terrain`;
+const TERRAIN_PATH = publicAssetUrl('terrain');
 const FALLBACK_AREA_METERS = 32000;
 const ORTHO_TILE_METERS = 2000;
 const TILE_PIXELS = 320;

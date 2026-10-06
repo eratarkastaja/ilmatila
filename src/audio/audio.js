@@ -1,3 +1,4 @@
+import { publicAssetUrl } from '../config/public-asset-base.js';
 import { t } from '../ui/i18n.js';
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -92,7 +93,7 @@ export class GameAudio {
     if (!this.musicEnabled || this.paused) return;
     if (this.musicTrackIndex < 0) this.musicTrackIndex = Math.floor(Math.random() * MUSIC_TRACKS.length);
     if (!this.music.src) {
-      this.music.src = `${import.meta.env.BASE_URL}assets/audio/music/${MUSIC_TRACKS[this.musicTrackIndex]}`;
+      this.music.src = publicAssetUrl('assets/audio/music/' + MUSIC_TRACKS[this.musicTrackIndex]);
     }
     this.music.play().catch(() => {
       // A later explicit user gesture retries playback if the browser blocked it.
@@ -102,7 +103,7 @@ export class GameAudio {
   playNextMusicTrack() {
     if (!this.musicEnabled || this.paused) return;
     this.musicTrackIndex = (this.musicTrackIndex + 1) % MUSIC_TRACKS.length;
-    this.music.src = `${import.meta.env.BASE_URL}assets/audio/music/${MUSIC_TRACKS[this.musicTrackIndex]}`;
+    this.music.src = publicAssetUrl('assets/audio/music/' + MUSIC_TRACKS[this.musicTrackIndex]);
     this.music.play().catch(() => {});
   }
 
@@ -187,7 +188,7 @@ export class GameAudio {
 
   loadAudioAssets(ctx) {
     if (this.sampleLoadPromise) return this.sampleLoadPromise;
-    const base = `${import.meta.env.BASE_URL}assets/audio/`;
+    const base = publicAssetUrl('assets/audio/');
     this.sampleLoadPromise = Promise.all(Object.entries(AUDIO_FILES).map(async ([name, file]) => {
       try {
         const response = await fetch(`${base}${file}`);

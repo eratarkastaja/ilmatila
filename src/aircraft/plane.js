@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { publicAssetUrl } from '../config/public-asset-base.js';
 import { disposeLoadedAircraftScenes } from './aircraft-assets.js';
 import { buildF35Asset, buildImportedEnemyAircraft, createAfterburnerFlame, disposeAircraftVisual } from './plane-models.js';
 
@@ -60,7 +61,7 @@ export async function loadCombatAircraft(onProgress, signal) {
   let loadError = null;
   try {
     const loaded = await Promise.all(files.map((file, index) => loader.loadAsync(
-      `${import.meta.env.BASE_URL}${file}`,
+      publicAssetUrl(file),
       event => {
         if (event.total > 0) {
           progress[index] = THREE.MathUtils.clamp(event.loaded / event.total, 0, 1);
