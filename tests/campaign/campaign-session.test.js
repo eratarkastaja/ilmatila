@@ -174,12 +174,17 @@ describe('CampaignSession', () => {
     easySession.state.chapterIndex = 1;
     hardSession.state.chapterIndex = 1;
 
-    const easy = easySession.resolveCurrentMission().mission.objective;
-    const hard = hardSession.resolveCurrentMission().mission.objective;
+    const easyMission = easySession.resolveCurrentMission().mission;
+    const hardMission = hardSession.resolveCurrentMission().mission;
+    const easy = easyMission.objective;
+    const hard = hardMission.objective;
 
     expect(easy.type).toBe('assetDefense');
     expect(hard.graceDuration).toBeGreaterThan(easy.graceDuration);
     expect(hard.zoneRadius).toBeLessThan(7200);
+    expect(hardMission.hostileRoles).toEqual(['sweep', 'sweep', 'strike', 'strike']);
+    expect(hardMission.hostileSpawnDistance).toBe(18000);
+    expect(hardMission.hostileMinimumSpawnDistance).toBe(16500);
   });
 
   it('can resolve and advance through all ten campaign chapters', () => {

@@ -643,7 +643,9 @@ function validateCampaignMissionOverrides(overrides, path, errors) {
   }
   const allowed = new Set([
     'disableVariants', 'rulesOfEngagement', 'hostileDisposition',
-    'hostiles', 'wingmanInitialOrder', 'objective',
+    'hostiles', 'hostileSpawnDistance', 'hostileMinimumSpawnDistance',
+    'hostileLateralSpacing', 'hostileComposition', 'hostileRoles',
+    'hostileEntry', 'wingmanInitialOrder', 'objective',
   ]);
   for (const key of Object.keys(overrides)) {
     if (!allowed.has(key)) errors.push(`${path}.${key} is not a permitted campaign mission override`);
@@ -658,6 +660,30 @@ function validateCampaignMissionOverrides(overrides, path, errors) {
     errors.push(`${path}.hostileDisposition must be noncombatant`);
   }
   if (overrides.hostiles !== undefined) validateNode(overrides.hostiles, number(0, 100, true), `${path}.hostiles`, errors);
+  if (overrides.hostileSpawnDistance !== undefined) {
+    validateNode(overrides.hostileSpawnDistance, number(1, 100000), `${path}.hostileSpawnDistance`, errors);
+  }
+  if (overrides.hostileMinimumSpawnDistance !== undefined) {
+    validateNode(overrides.hostileMinimumSpawnDistance, number(1, 100000), `${path}.hostileMinimumSpawnDistance`, errors);
+  }
+  if (overrides.hostileLateralSpacing !== undefined) {
+    validateNode(overrides.hostileLateralSpacing, number(1, 20000), `${path}.hostileLateralSpacing`, errors);
+  }
+  validateHostileComposition(overrides.hostileComposition, `${path}.hostileComposition`, errors);
+  validateHostileRoles(
+    overrides.hostileRoles,
+    overrides.hostiles,
+    `${path}.hostileRoles`,
+    errors,
+  );
+  if (overrides.hostileEntry !== undefined && !['staging', 'scramble'].includes(overrides.hostileEntry)) {
+    errors.push(`${path}.hostileEntry must be staging or scramble`);
+  }
+  if (overrides.hostileMinimumSpawnDistance !== undefined
+    && overrides.hostileSpawnDistance !== undefined
+    && overrides.hostileMinimumSpawnDistance > overrides.hostileSpawnDistance) {
+    errors.push(`${path}.hostileMinimumSpawnDistance must not exceed hostileSpawnDistance`);
+  }
   if (overrides.wingmanInitialOrder !== undefined
     && !['attack', 'defend', 'regroup', 'disengage'].includes(overrides.wingmanInitialOrder)) {
     errors.push(`${path}.wingmanInitialOrder must be attack, defend, regroup, or disengage`);

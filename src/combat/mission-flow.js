@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { formatNumber, t } from '../ui/i18n.js';
 import { MISSION_OUTCOME } from './mission-objective.js';
+import { getMissionIngressDistance } from './air-combat-utils.js';
 
 export const MISSION_PHASE = Object.freeze({
   DEPARTURE: 'departure',
@@ -54,10 +55,9 @@ export class MissionFlowSystem {
     horizontal.y = 0;
     if (horizontal.lengthSq() < 1e-6) horizontal.set(0, 0, 1);
     else horizontal.normalize();
-    const halfTheater = (terrain?.worldSize ?? 32000) * 0.5;
     // Use more of the mapped theater for ingress and recovery routes while keeping
     // the waypoint comfortably inside the terrain boundary.
-    const ingressDistance = Math.min(mission.navigationDistance ?? 4200, Math.max(900, halfTheater * 0.55));
+    const ingressDistance = getMissionIngressDistance(mission, terrain);
     this.ingress = this.home.clone().addScaledVector(horizontal, ingressDistance);
     this.ingressAltitudeAgl = Math.max(0, mission.ingressAltitudeAgl ?? 0);
     if (this.ingressAltitudeAgl > 0) {

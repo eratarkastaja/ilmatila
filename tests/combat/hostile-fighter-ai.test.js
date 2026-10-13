@@ -400,6 +400,66 @@ describe('HostileFighterAI radar tracking', () => {
     expect(enemy.heading).toBeLessThan(0);
   });
 
+  it('forces an extending fighter to rejoin after the firing window', () => {
+    const enemy = makeHostile(new THREE.Vector3(0, 300, 1000), 'extend');
+    enemy.phaseClock = 3.25;
+    const battle = makeBattle(enemy, vi.fn());
+
+    new HostileFighterAI(() => .99).updateJets(
+      battle,
+      .1,
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(1, 0, 0),
+      { lockedTarget: null, incomingMissiles: [] },
+    );
+
+    expect(enemy.phase).toBe('rejoin');
+    expect(enemy.waypoint.z).toBeGreaterThan(5000);
+  });
+
+  it('starts the timed merge cycle when a wingman target is reached first', () => {
+    const enemy = makeHostile(new THREE.Vector3(0, 300, 1500));
+    const wingman = {
+      dead: false,
+      mesh: { position: new THREE.Vector3(0, 300, 0) },
+      velocity: new THREE.Vector3(),
+    };
+    enemy.engagementTarget = wingman;
+    enemy.targetRefreshTimer = 100;
+    const battle = makeBattle(enemy, vi.fn());
+    battle.allies = [wingman];
+
+    new HostileFighterAI(() => .99).updateJets(
+      battle,
+      .1,
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(1, 0, 0),
+      { lockedTarget: null, incomingMissiles: [] },
+    );
+
+    expect(enemy.phase).toBe('extend');
+  });
+
+  it('keeps staging aircraft at the configured spawn stand-off', () => {
+    const enemy = makeHostile(new THREE.Vector3(0, 300, 14000), 'staging');
+    const battle = makeBattle(enemy, vi.fn());
+    battle.mission = {
+      hostileStagingDistance: 6500,
+      hostileMinimumSpawnDistance: 14000,
+    };
+
+    new HostileFighterAI(() => .99).updateJets(
+      battle,
+      0,
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(1, 0, 0),
+      { lockedTarget: null, incomingMissiles: [] },
+    );
+
+    expect(battle.player.position.z).toBe(0);
+    expect(enemy.waypoint.z).toBeGreaterThan(13000);
+  });
+
   it('fires cannon bursts at air targets after hostile missile stores are empty', () => {
     const enemy = makeHostile(new THREE.Vector3(0, 300, -2000));
     const fireEnemy = vi.fn();

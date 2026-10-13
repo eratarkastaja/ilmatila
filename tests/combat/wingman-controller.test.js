@@ -160,4 +160,66 @@ describe('WingmanController air combat', () => {
     expect(ally.airMissiles).toBe(0);
     expect(fireAlly).toHaveBeenCalledWith(battle, ally, target);
   });
+
+  it('breaks a close wingman merge after the firing window instead of orbiting', () => {
+    const player = { position: new THREE.Vector3(0, 300, -10000), userData: {} };
+    const targetMesh = new THREE.Object3D();
+    targetMesh.position.set(0, 300, 1000);
+    const target = { mesh: targetMesh, velocity: new THREE.Vector3(), dead: false };
+    const allyMesh = new THREE.Object3D();
+    allyMesh.position.set(0, 300, 0);
+    const ally = {
+      mesh: allyMesh,
+      wing: -1,
+      target,
+      groundTarget: null,
+      targetRefresh: 10,
+      fireCooldown: 100,
+      burstClock: 0,
+      burstShots: 0,
+      airMissiles: 0,
+      airMissileCooldown: 100,
+      groundMissiles: 0,
+      groundMissileCooldown: 100,
+      threatTarget: null,
+      threatTimer: 0,
+      defensiveTimer: 0,
+      evasiveDirection: -1,
+      disengageTimer: 0,
+      phase: 'extend',
+      extendClock: 3.1,
+      speed: 235,
+      heading: 0,
+      pitch: 0,
+      velocity: new THREE.Vector3(0, 0, 235),
+      waypoint: new THREE.Vector3(),
+      steeringOffset: new THREE.Vector3(),
+      direction: new THREE.Vector3(0, 0, 1),
+      away: new THREE.Vector3(),
+      separation: new THREE.Vector3(),
+      lead: new THREE.Vector3(),
+      leadOffset: new THREE.Vector3(),
+    };
+    const battle = {
+      player,
+      playerVelocity: new THREE.Vector3(0, 0, 235),
+      allies: [ally],
+      enemies: [target],
+      groundUnits: [],
+      wingmanOrder: 'attack',
+      difficulty: DIFFICULTY_PRESETS.standard,
+      terrain: { sampleHeight: () => 0 },
+      weaponAI: {},
+    };
+
+    new WingmanController().updateAllies(
+      battle,
+      .2,
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(1, 0, 0),
+    );
+
+    expect(ally.phase).toBe('breakout');
+    expect(ally.waypoint.z).toBeLessThan(-1000);
+  });
 });

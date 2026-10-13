@@ -5,6 +5,7 @@ import { CombatTelemetry } from '../performance/combat-telemetry.js';
 import { TacticalHud } from '../ui/hud.js';
 import { MISSIONS } from '../mission/missions.js';
 import { createSortieSeed } from '../combat/random.js';
+import { planAirIngressStart } from '../combat/air-combat-utils.js';
 
 function withTimeout(promise, milliseconds, reason, onTimeout) {
   let timer;
@@ -169,19 +170,6 @@ export class SortieController {
       this.loadControllers = null;
 
       if (!replacement.real) throw new Error('Selected theater terrain is not a real map package');
-      this.installTerrain(replacement);
-      pendingTerrain = null;
-      this.pendingTerrain = null;
-      this.callbacks.onTerrainReady(replacement);
-      this.player.position.y = replacement.sampleHeight(this.player.position.x, this.player.position.z) + this.playerStartAgl;
-      this.callbacks.onResetForFlight();
-      terrainProgress = 1;
-
-      this.callbacks.onProgress(96, 'launch.buildingMission', 'launch.systemsStarting');
-      this.callbacks.onStatus('launch.finalizingArea', 'loading');
-      await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
-      if (generation !== this.generation) return false;
-
       const baseMission = requestedMission ?? MISSIONS[missionId];
       if (!baseMission) throw new Error(`Unknown mission: ${missionId}`);
       const mission = this.stressMode
@@ -201,6 +189,25 @@ export class SortieController {
             variants: [],
           }
         : baseMission;
+      this.installTerrain(replacement);
+      pendingTerrain = null;
+      this.pendingTerrain = null;
+      this.callbacks.onTerrainReady(replacement);
+      if (!this.stressMode && typeof this.player.position.copy === 'function') this.player.position.copy(planAirIngressStart(
+        this.player.position,
+        replacement,
+        this.controls.heading,
+        mission,
+      ));
+      this.player.position.y = replacement.sampleHeight(this.player.position.x, this.player.position.z) + this.playerStartAgl;
+      this.callbacks.onResetForFlight();
+      terrainProgress = 1;
+
+      this.callbacks.onProgress(96, 'launch.buildingMission', 'launch.systemsStarting');
+      this.callbacks.onStatus('launch.finalizingArea', 'loading');
+      await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+      if (generation !== this.generation) return false;
+
       preparedCombat = new CombatWorld(
         this.scene,
         this.player,

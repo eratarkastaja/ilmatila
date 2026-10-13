@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
 import { MISSILE_PROFILES } from './projectiles.js';
 import {
-  ENEMY_ATTACK_RUNS, constrainWaypoint, forward, getAircraftEdgeMargin,
+  ENEMY_ATTACK_RUNS, constrainWaypoint, forward, getAirSpawnMargin, getAircraftEdgeMargin,
   keepAircraftClear, leadPoint, rightOfHeading, steerAircraft, zeroVelocity,
 } from './air-combat-utils.js';
 
@@ -170,9 +170,26 @@ export class HostileFighterAI {
         ? battle.playerVelocity
         : engagementTarget?.velocity ?? zeroVelocity;
       const engagementRange = targetPosition ? enemy.mesh.position.distanceTo(targetPosition) : Infinity;
+      if (enemy.phase === 'inbound'
+        && enemy.missionRole !== 'strike'
+        && engagementDomain === 'air'
+        && engagementTarget
+        && engagementRange < (battle.difficulty?.fighter?.handling?.commitRange ?? 1800)) {
+        // Target-specific pressure (for example a wingman assignment) can
+        // bring the fighter into the merge before it reaches ownship. Move it
+        // into the same timed firing/extend cycle instead of allowing an
+        // endless lead-point orbit around that target.
+        enemy.phase = 'extend';
+        enemy.phaseClock = 0;
+      }
       const gunLeadTime = battle.difficulty?.fighter?.gun?.leadTime ?? 4.5;
       const gunMaxRange = battle.difficulty?.fighter?.gun?.maxRange ?? 2200;
       const missileMaxRange = battle.difficulty?.fighter?.missile?.maxRange ?? 6400;
+      const stagingDistance = Math.max(
+        enemy.stagingDistance ?? 0,
+        battle.mission.hostileStagingDistance ?? 6500,
+        battle.mission.hostileMinimumSpawnDistance ?? 0,
+      );
 
       if (enemy.missionRole === 'strike') {
         waypoint.copy(targetPosition ?? strikeTargetPosition ?? playerPosition);
@@ -180,7 +197,7 @@ export class HostileFighterAI {
         const laneDrift = Math.sin(enemy.phaseClock * .22 + enemy.stagingLane) * 70;
         waypoint.copy(playerPosition)
           .addScaledVector(battle.playerVelocity, .7)
-          .addScaledVector(enemy.attackForward, battle.mission.hostileStagingDistance ?? 6500)
+          .addScaledVector(enemy.attackForward, stagingDistance)
           .addScaledVector(enemy.attackRight, enemy.stagingLateral * .32 + laneDrift);
       } else if (enemy.phase === 'inbound') {
         const attackRun = ENEMY_ATTACK_RUNS[enemy.attackPattern];
@@ -198,7 +215,11 @@ export class HostileFighterAI {
           .addScaledVector(battle.playerVelocity, .65)
           .addScaledVector(enemy.attackForward, 5000)
           .addScaledVector(enemy.attackRight, enemy.lane * 2200);
-        if (waypoint.distanceTo(enemy.mesh.position) < 850 || range > 6200) {
+        // A fighter gets a short firing window after the pass, then must leave
+        // the merge. Without this timeout two opposing aircraft can keep
+        // steering onto each other's lead point indefinitely.
+        const extendDuration = battle.difficulty?.fighter?.handling?.extendDuration ?? 3.2;
+        if (enemy.phaseClock >= extendDuration || waypoint.distanceTo(enemy.mesh.position) < 850 || range > 6200) {
           enemy.phase = 'rejoin';
           enemy.phaseClock = 0;
         }
@@ -224,6 +245,7 @@ export class HostileFighterAI {
       if (enemy.missionRole !== 'strike') waypoint.addScaledVector(enemy.attackRight, runOffset);
       const pursuitRange = Math.max(gunMaxRange * 2, missileMaxRange);
       if (canEngage && engagementDomain === 'air' && engagementTarget
+        && enemy.phase !== 'rejoin'
         && engagementRange < pursuitRange && enemy.evasiveTimer <= 0) {
         const gunLead = leadPoint(
           enemy.mesh.position,
@@ -244,7 +266,10 @@ export class HostileFighterAI {
       }
       keepAircraftClear(battle, enemy, waypoint, playerRight, false);
       const attackAltitude = enemy.phase === 'inbound' ? ENEMY_ATTACK_RUNS[enemy.attackPattern].altitude : 0;
-      constrainWaypoint(battle, waypoint, playerPosition.y + enemy.altitudeOffset + attackAltitude, getAircraftEdgeMargin(battle));
+      const waypointMargin = enemy.phase === 'staging'
+        ? Math.min(getAircraftEdgeMargin(battle), getAirSpawnMargin(stagingDistance))
+        : getAircraftEdgeMargin(battle);
+      constrainWaypoint(battle, waypoint, playerPosition.y + enemy.altitudeOffset + attackAltitude, waypointMargin);
 
       enemy.boosting = (enemy.phase === 'extend' && range > 2300) || enemy.evasiveTimer > 0;
       enemy.mesh.userData.boosting = enemy.boosting;

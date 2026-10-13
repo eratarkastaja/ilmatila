@@ -78,6 +78,15 @@ export const CAMPAIGNS = deepFreeze({
         id: 'broken-silence', day: 1, areaId: 'virolahti', baseMissionId: 'intercept',
         decisiveObjectiveId: 'lead-intercept',
         missionOverrides: {
+          // Keep the strike package at the far theater edge when the flight
+          // reaches ingress. Sweep fighters screen the approach while the two
+          // strike aircraft fly toward the protected anchor, giving the player
+          // time to cross the sector and intercept them.
+          hostileComposition: ['mig29', 'mig29', 'su27', 'su27'],
+          hostileRoles: ['sweep', 'sweep', 'strike', 'strike'],
+          hostileSpawnDistance: 18000,
+          hostileMinimumSpawnDistance: 16500,
+          hostileLateralSpacing: 1200,
           objective: {
             type: 'assetDefense',
             target: { collection: 'airHostiles', index: 2 },

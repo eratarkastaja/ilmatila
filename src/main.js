@@ -20,6 +20,7 @@ import { SortieController } from './game/sortie-controller.js';
 import { disposeMissilePool } from './combat/projectiles.js';
 import { createSortieSeed } from './combat/random.js';
 import { getDifficultyPreset } from './combat/difficulty.js';
+import { planAirIngressStart } from './combat/air-combat-utils.js';
 import { renderOptionalObjectives } from './ui/optional-objectives.js';
 import { CampaignView } from './ui/campaign-view.js';
 import { formatPercent, getLanguage, t } from './ui/i18n.js';
@@ -445,7 +446,7 @@ function selectMission(id) {
   menuRadar?.setScenario(missionResolution, {
     seed: plannedSortieSeed,
     terrain,
-    origin: player.position,
+    origin: getMenuRadarOrigin(missionResolution.mission),
     heading: controls.heading,
   });
   for (const card of missionCards) {
@@ -504,7 +505,7 @@ function renderCampaignChapter() {
   menuRadar?.setScenario(resolved.preview, {
     seed: plannedSortieSeed,
     terrain,
-    origin: player.position,
+    origin: getMenuRadarOrigin(resolved.preview.mission),
     heading: controls.heading,
   });
   document.querySelector('#briefing-code').textContent = t(`mission.${selectedMissionId}.code`);
@@ -589,6 +590,10 @@ function updateMenuArea(area) {
   document.querySelector('#theater-area-name').textContent = name.toUpperCase();
 }
 
+function getMenuRadarOrigin(mission = selectedMissionResolution?.mission ?? selectedMissionDefinition) {
+  return planAirIngressStart(player.position, terrain, controls.heading, mission);
+}
+
 function installTerrain(replacement) {
   if (replacement === terrain) return;
   const previous = terrain;
@@ -598,7 +603,7 @@ function installTerrain(replacement) {
   menuRadar?.setScenario(selectedMissionResolution, {
     seed: plannedSortieSeed,
     terrain,
-    origin: player.position,
+    origin: getMenuRadarOrigin(selectedMissionResolution?.mission),
     heading: controls.heading,
   });
 }
@@ -1104,7 +1109,7 @@ menuRadar = new MenuRadar({
 menuRadar.setScenario(selectedMissionResolution, {
   seed: plannedSortieSeed,
   terrain,
-  origin: player.position,
+  origin: getMenuRadarOrigin(selectedMissionResolution?.mission),
   heading: controls.heading,
 });
 

@@ -3,7 +3,7 @@ import { createFighter } from '../aircraft/plane.js';
 import { createMi24AttackHelicopter } from '../aircraft/rotorcraft.js';
 import {
   ENEMY_ATTACK_RUNS, flightDirection, forwardOfHeading,
-  getAircraftEdgeMargin, planAirFormation, rightOfHeading, wrapAngle,
+  getAirSpawnDistance, getAirSpawnMargin, planAirFormation, rightOfHeading, wrapAngle,
 } from './air-combat-utils.js';
 
 /** Creates and places player support and hostile aircraft. */
@@ -106,8 +106,13 @@ export class AirSpawnSystem {
   spawnHostileWave(battle, mission, heading, playerForward, playerRight) {
     const hostileCount = Math.max(0, mission.hostiles ?? 0);
     const altitudeOffsets = [-110, 95, -45, 145, -160, 65];
-    const edgeMargin = getAircraftEdgeMargin(battle);
-    const spawnMargin = Math.min(edgeMargin, 1200);
+    const configuredMinimumDistance = mission.hostileMinimumSpawnDistance;
+    const requestedDistance = getAirSpawnDistance(mission.hostileSpawnDistance ?? 12000, configuredMinimumDistance);
+    const minimumDistance = getAirSpawnDistance(
+      mission.hostileMinimumSpawnDistance ?? 10000,
+      configuredMinimumDistance,
+    );
+    const spawnMargin = getAirSpawnMargin(minimumDistance);
     const lateralSpacing = mission.hostileLateralSpacing ?? 560;
     const formation = planAirFormation({
       origin: battle.player.position,
@@ -115,8 +120,8 @@ export class AirSpawnSystem {
       right: playerRight,
       terrain: battle.terrain,
       count: hostileCount,
-      requestedDistance: mission.hostileSpawnDistance ?? 12000,
-      minimumDistance: mission.hostileMinimumSpawnDistance ?? 10000,
+      requestedDistance,
+      minimumDistance,
       lateralSpacing,
       forwardLaneSpacing: 90,
       margin: spawnMargin,
@@ -179,6 +184,7 @@ export class AirSpawnSystem {
         chaffTrackReevaluationRemaining: 0,
         stagingLane: lane,
         stagingLateral: stagingOffset.dot(playerRight),
+        stagingDistance: formation.distance,
         attackPattern: Math.floor(battle.random() * ENEMY_ATTACK_RUNS.length),
         gunCooldown: (battle.difficulty?.fighter?.gun?.cooldown ?? 2.2) + i * .45,
         burstClock: 0,
@@ -222,23 +228,33 @@ export class AirSpawnSystem {
       });
     }
     if (mission.hostileHelicopters) {
-      this.spawnAttackHelicopters(battle, playerForward, playerRight, spawnMargin, mission);
+      this.spawnAttackHelicopters(battle, playerForward, playerRight, mission);
     }
     return hostileCount > 0 || (mission.hostileHelicopters ?? 0) > 0;
   }
 
-  spawnAttackHelicopters(battle, playerForward, playerRight, spawnMargin, mission = battle.mission) {
+  spawnAttackHelicopters(battle, playerForward, playerRight, mission = battle.mission) {
     const count = mission.hostileHelicopters ?? 0;
     if (!count) return;
     const lateralSpacing = battle.mission.hostileHelicopterLateralSpacing ?? 850;
+    const configuredMinimumDistance = mission.hostileHelicopterMinimumSpawnDistance;
+    const requestedDistance = getAirSpawnDistance(
+      mission.hostileHelicopterSpawnDistance ?? 9500,
+      configuredMinimumDistance,
+    );
+    const minimumDistance = getAirSpawnDistance(
+      mission.hostileHelicopterMinimumSpawnDistance ?? 8500,
+      configuredMinimumDistance,
+    );
+    const spawnMargin = getAirSpawnMargin(minimumDistance);
     const formation = planAirFormation({
       origin: battle.player.position,
       forward: playerForward,
       right: playerRight,
       terrain: battle.terrain,
       count,
-      requestedDistance: mission.hostileHelicopterSpawnDistance ?? 9500,
-      minimumDistance: mission.hostileHelicopterMinimumSpawnDistance ?? 8500,
+      requestedDistance,
+      minimumDistance,
       lateralSpacing,
       margin: spawnMargin,
       random: battle.spawnRandom,

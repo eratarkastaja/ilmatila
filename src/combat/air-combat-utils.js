@@ -7,12 +7,77 @@ export const eventLeadPoint = new THREE.Vector3();
 export const eventLeadOffset = new THREE.Vector3();
 export const contactOffset = new THREE.Vector3();
 export const AIR_SPAWN_LAYOUT_SEED_XOR = 0x9e3779b9;
+export const AIR_INGRESS_MINIMUM_SPAWN_DISTANCE = 25000;
 export const AIR_SPAWN_BEARINGS = [0, 10, -10, 20, -20, 30, -30, 40, -40, 50, -50, 60, -60, 70, -70, 80, -80];
 export const ENEMY_ATTACK_RUNS = [
   { trail: -850, lateral: 260, altitude: 0, passRange: 1450 },
   { trail: -1350, lateral: 540, altitude: 320, passRange: 1650 },
   { trail: -1750, lateral: 430, altitude: -100, passRange: 1850 },
 ];
+
+/** Returns the playable edge margin used while placing an incoming formation. */
+export function getAirSpawnMargin() {
+  return 1200;
+}
+
+/** Applies the long-range ingress rule to authored mission distances. */
+export function getAirSpawnDistance(distance, configuredMinimum = 0) {
+  const authoredDistance = Number.isFinite(distance) ? distance : 0;
+  const authoredMinimum = Number(configuredMinimum);
+  if (!Number.isFinite(authoredMinimum) || authoredMinimum < 9000) return authoredDistance;
+  return Math.max(authoredDistance, AIR_INGRESS_MINIMUM_SPAWN_DISTANCE);
+}
+
+/** Keeps the long-range opening leg inside the theater from the opposite edge. */
+export function getMissionIngressDistance(mission = {}, terrain) {
+  const halfTheater = (terrain?.worldSize ?? 32000) * .5;
+  return Math.min(mission.navigationDistance ?? 4200, Math.max(900, halfTheater * .55));
+}
+
+/**
+ * Places the player's home point near the rear edge when a mission uses the
+ * long-range hostile ingress rule. The resulting ingress and hostile contact
+ * occupy the same forward corridor instead of putting the hostile group in an
+ * outer airspace buffer.
+ */
+export function planAirIngressStart(origin, terrain, heading, mission = {}) {
+  if (!origin?.clone || !terrain?.operationBounds || (mission.hostiles ?? 0) <= 0) return origin?.clone?.() ?? new THREE.Vector3();
+  const configuredMinimum = mission.hostileMinimumSpawnDistance;
+  if (!Number.isFinite(Number(configuredMinimum)) || Number(configuredMinimum) < 9000) return origin.clone();
+
+  const distance = getAirSpawnDistance(mission.hostileSpawnDistance ?? 12000, configuredMinimum);
+  const ingressDistance = getMissionIngressDistance(mission, terrain);
+  const edgeMargin = 1200;
+  const headingForward = forwardOfHeading(heading);
+  const headingRight = rightOfHeading(heading);
+  const bounds = terrain.operationBounds;
+  const corners = [
+    [bounds.minX, bounds.minZ], [bounds.minX, bounds.maxZ],
+    [bounds.maxX, bounds.minZ], [bounds.maxX, bounds.maxZ],
+  ];
+  let minForward = Infinity;
+  let maxForward = -Infinity;
+  let minRight = Infinity;
+  let maxRight = -Infinity;
+  for (const [x, z] of corners) {
+    const forwardProjection = x * headingForward.x + z * headingForward.z;
+    const rightProjection = x * headingRight.x + z * headingRight.z;
+    minForward = Math.min(minForward, forwardProjection);
+    maxForward = Math.max(maxForward, forwardProjection);
+    minRight = Math.min(minRight, rightProjection);
+    maxRight = Math.max(maxRight, rightProjection);
+  }
+
+  const desiredForward = maxForward - distance - ingressDistance - edgeMargin;
+  const homeForward = THREE.MathUtils.clamp(desiredForward, minForward + edgeMargin, maxForward - edgeMargin);
+  const currentRight = origin.x * headingRight.x + origin.z * headingRight.z;
+  const homeRight = THREE.MathUtils.clamp(currentRight, minRight + edgeMargin, maxRight - edgeMargin);
+  return new THREE.Vector3(
+    headingForward.x * homeForward + headingRight.x * homeRight,
+    origin.y,
+    headingForward.z * homeForward + headingRight.z * homeRight,
+  );
+}
 
 export const wrapAngle = angle => THREE.MathUtils.euclideanModulo(angle + Math.PI, Math.PI * 2) - Math.PI;
 

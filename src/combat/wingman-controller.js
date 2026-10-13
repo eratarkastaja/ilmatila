@@ -148,6 +148,8 @@ export class WingmanController {
       }
       ally.targetRefresh = 0;
       ally.disengageTimer = order === 'disengage' ? 2.4 : 0;
+      ally.extendClock = 0;
+      ally.breakoutTimer = 0;
       ally.phase = order === 'disengage' ? 'extend' : 'formation';
     }
     return true;
@@ -216,9 +218,34 @@ export class WingmanController {
       const missileBreakout = Boolean(ally.rescueLockActive || ally.rescueMissile)
         && battle.wingmanOrder === 'disengage';
 
-      if (target && !groundTarget && ally.airMissiles <= 0) ally.phase = 'attack';
-      else if (target && targetRange < (groundTarget ? 650 : 1100)) ally.phase = 'extend';
-      else if (!target || (ally.phase === 'extend' && targetRange > 2050)) ally.phase = target ? 'attack' : 'formation';
+      // Start the pass/extend state before the nose-to-nose merge. A 1.1 km
+      // threshold lets two aircraft orbit around each other's lead point at
+      // cannon range without ever committing to a break.
+      const closeRange = groundTarget ? 650 : 1700;
+      if (ally.phase === 'breakout') {
+        ally.breakoutTimer = Math.max(0, (ally.breakoutTimer ?? 2.4) - dt);
+        if (ally.breakoutTimer <= 0) ally.phase = target ? 'attack' : 'formation';
+      } else if (target && targetRange < closeRange) {
+        if (ally.phase !== 'extend') {
+          ally.phase = 'extend';
+          ally.extendClock = 0;
+        }
+        ally.extendClock = (ally.extendClock ?? 0) + dt;
+        // Force a clean separation after the firing window. This prevents a
+        // wingman and a hostile that are both pursuing lead points from
+        // settling into a permanent close orbit.
+        if (ally.extendClock >= 3.2) {
+          ally.phase = 'breakout';
+          ally.breakoutTimer = 2.4;
+          ally.extendClock = 0;
+        }
+      } else if (target && !groundTarget && ally.airMissiles <= 0) {
+        ally.phase = 'attack';
+        ally.extendClock = 0;
+      } else if (!target || (ally.phase === 'extend' && targetRange > 2050)) {
+        ally.phase = target ? 'attack' : 'formation';
+        ally.extendClock = 0;
+      }
 
       if (ally.defensiveTimer > 0) {
         waypoint.copy(ally.mesh.position).addScaledVector(ally.direction, missileBreakout ? 2500 : 1450);
@@ -237,12 +264,23 @@ export class WingmanController {
             .addScaledVector(targetVelocity, .8)
             .addScaledVector(radial, 1600);
           waypoint.y+=70+ally.wing*30;
+        } else if (ally.phase === 'breakout') {
+          const radial = ally.separation.subVectors(ally.mesh.position, target.mesh.position);
+          radial.y = 0;
+          if (radial.lengthSq() < 1) radial.copy(playerRight).multiplyScalar(ally.wing);
+          radial.normalize();
+          waypoint.copy(ally.mesh.position)
+            .addScaledVector(radial, 2600)
+            .addScaledVector(targetVelocity, .5);
+          waypoint.y += 180 + ally.wing * 30;
         } else {
           waypoint.copy(leadPoint(ally.mesh.position, target.mesh.position, targetVelocity, ally.speed, 4,ally.lead,ally.leadOffset));
           waypoint.y+=45+ally.wing*28;
         }
       } else {
         ally.target = null;
+        ally.extendClock = 0;
+        ally.breakoutTimer = 0;
         ally.phase = 'formation';
         const aft = this._aft.copy(playerForward).negate();
         waypoint.copy(battle.player.position)

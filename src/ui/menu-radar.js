@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import { AIR_SPAWN_LAYOUT_SEED_XOR, getAircraftEdgeMargin, planAirFormation } from '../combat/air-combat-utils.js';
+import {
+  AIR_SPAWN_LAYOUT_SEED_XOR, getAirSpawnDistance, getAirSpawnMargin, planAirFormation,
+} from '../combat/air-combat-utils.js';
 import { createSeededRandom, DEFAULT_RANDOM_SEED } from '../combat/random.js';
 import { t } from './i18n.js';
 
@@ -72,7 +74,6 @@ function getScenarioContacts(missionResolution, terrain, origin, heading, seed =
   const spawnRandom = createSeededRandom((layoutSeed ^ AIR_SPAWN_LAYOUT_SEED_XOR) >>> 0);
   const forward = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
   const right = new THREE.Vector3(Math.cos(heading), 0, -Math.sin(heading));
-  const spawnMargin = Math.min(getAircraftEdgeMargin({ terrain }), 1200);
   const contacts = [];
 
   for (let index = 0; index < (mission.wingmen ?? 0); index++) {
@@ -85,11 +86,20 @@ function getScenarioContacts(missionResolution, terrain, origin, heading, seed =
 
   const hostilePositions = formationPositions(origin, forward, right, terrain, {
     count: mission.hostiles ?? 0,
-    requestedDistance: mission.hostileSpawnDistance ?? 12000,
-    minimumDistance: mission.hostileMinimumSpawnDistance ?? 10000,
+    requestedDistance: getAirSpawnDistance(
+      mission.hostileSpawnDistance ?? 12000,
+      mission.hostileMinimumSpawnDistance,
+    ),
+    minimumDistance: getAirSpawnDistance(
+      mission.hostileMinimumSpawnDistance ?? 10000,
+      mission.hostileMinimumSpawnDistance,
+    ),
     lateralSpacing: mission.hostileLateralSpacing ?? 560,
     forwardLaneSpacing: 90,
-    margin: spawnMargin,
+    margin: getAirSpawnMargin(getAirSpawnDistance(
+      mission.hostileMinimumSpawnDistance ?? 10000,
+      mission.hostileMinimumSpawnDistance,
+    )),
     random: spawnRandom,
   });
   addFormationContacts(
@@ -102,10 +112,19 @@ function getScenarioContacts(missionResolution, terrain, origin, heading, seed =
 
   const helicopterPositions = formationPositions(origin, forward, right, terrain, {
     count: mission.hostileHelicopters ?? 0,
-    requestedDistance: mission.hostileHelicopterSpawnDistance ?? 9500,
-    minimumDistance: mission.hostileHelicopterMinimumSpawnDistance ?? 8500,
+    requestedDistance: getAirSpawnDistance(
+      mission.hostileHelicopterSpawnDistance ?? 9500,
+      mission.hostileHelicopterMinimumSpawnDistance,
+    ),
+    minimumDistance: getAirSpawnDistance(
+      mission.hostileHelicopterMinimumSpawnDistance ?? 8500,
+      mission.hostileHelicopterMinimumSpawnDistance,
+    ),
     lateralSpacing: mission.hostileHelicopterLateralSpacing ?? 850,
-    margin: spawnMargin,
+    margin: getAirSpawnMargin(getAirSpawnDistance(
+      mission.hostileHelicopterMinimumSpawnDistance ?? 8500,
+      mission.hostileHelicopterMinimumSpawnDistance,
+    )),
     random: spawnRandom,
   });
   addFormationContacts(contacts, helicopterPositions, 'hostile', origin, heading);
@@ -118,11 +137,20 @@ function getScenarioContacts(missionResolution, terrain, origin, heading, seed =
     const encounterRight = new THREE.Vector3(Math.cos(encounterHeading), 0, -Math.sin(encounterHeading));
     const encounterPositions = formationPositions(origin, encounterForward, encounterRight, terrain, {
       count: response.hostiles,
-      requestedDistance: response.spawnDistance ?? mission.hostileSpawnDistance ?? 12000,
-      minimumDistance: response.minimumSpawnDistance ?? mission.hostileMinimumSpawnDistance ?? 10000,
+      requestedDistance: getAirSpawnDistance(
+        response.spawnDistance ?? mission.hostileSpawnDistance ?? 12000,
+        response.minimumSpawnDistance ?? mission.hostileMinimumSpawnDistance,
+      ),
+      minimumDistance: getAirSpawnDistance(
+        response.minimumSpawnDistance ?? mission.hostileMinimumSpawnDistance ?? 10000,
+        response.minimumSpawnDistance ?? mission.hostileMinimumSpawnDistance,
+      ),
       lateralSpacing: response.lateralSpacing ?? mission.hostileLateralSpacing ?? 560,
       forwardLaneSpacing: 90,
-      margin: spawnMargin,
+      margin: getAirSpawnMargin(getAirSpawnDistance(
+        response.minimumSpawnDistance ?? mission.hostileMinimumSpawnDistance ?? 10000,
+        response.minimumSpawnDistance ?? mission.hostileMinimumSpawnDistance,
+      )),
       random: spawnRandom,
     });
     addFormationContacts(contacts, encounterPositions, 'hostile', origin, heading, { reinforcement: true });
