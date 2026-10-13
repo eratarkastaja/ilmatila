@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { FlightFX } from '../../src/effects/fx.js';
+import { createAfterburnerFlame } from '../../src/aircraft/plane-models.js';
 
 describe('FlightFX missile trails', () => {
   it('samples a smooth trail at a fixed interval when frame times do not align', () => {
@@ -21,6 +22,25 @@ describe('FlightFX missile trails', () => {
     expect(trail.count).toBe(2);
     const sampledRearZ = trail.positions[5];
     expect(sampledRearZ).toBeCloseTo(13.15, 1);
+
+    fx.dispose();
+  });
+
+  it('amplifies afterburner materials only while night vision is active', () => {
+    const scene = new THREE.Scene();
+    const fx = new FlightFX(scene);
+    const aircraft = new THREE.Group();
+    const flame = createAfterburnerFlame();
+    aircraft.userData.afterburner = flame;
+    const baseline = flame.children[0].material.opacity;
+
+    fx.setNightVision(true);
+    fx.updateAfterburnerVisibility([aircraft]);
+    expect(flame.children[0].material.opacity).toBeGreaterThan(baseline);
+
+    fx.setNightVision(false);
+    fx.updateAfterburnerVisibility([aircraft]);
+    expect(flame.children[0].material.opacity).toBe(baseline);
 
     fx.dispose();
   });

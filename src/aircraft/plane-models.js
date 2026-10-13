@@ -311,6 +311,7 @@ export function buildFlanker(plane, m) {
 
 export function createAfterburnerFlame({ radius = 0.45, length = 2.5 } = {}) {
   const flame = new THREE.Group();
+  const nightVisionMaterials = [];
   const layers = [
     {
       radius: radius * 1.12, length: length * 1.18, opacity: 0.25,
@@ -341,6 +342,7 @@ export function createAfterburnerFlame({ radius = 0.45, length = 2.5 } = {}) {
       toneMapped: false,
     });
     material.userData.ilmatilaOwned=true;
+    nightVisionMaterials.push({ material, opacity: layer.opacity });
     const mesh = new THREE.Mesh(createFlameEnvelope(layer.radius, layer.length, layer.palette), material);
     mesh.userData.ilmatilaOwnedGeometry=true;
     flame.add(mesh);
@@ -357,10 +359,18 @@ export function createAfterburnerFlame({ radius = 0.45, length = 2.5 } = {}) {
     toneMapped: false,
   });
   coreMaterial.userData.ilmatilaOwned=true;
+  nightVisionMaterials.push({ material: coreMaterial, opacity: coreMaterial.opacity });
   const core = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.22, 20), coreMaterial);
   core.userData.ilmatilaOwnedGeometry=true;
   core.position.z = -0.015;
   flame.add(core);
+  flame.userData.setNightVision = enabled => {
+    const intensity = enabled ? 1.72 : 1;
+    for (const entry of nightVisionMaterials) {
+      entry.material.opacity = Math.min(1, entry.opacity * intensity);
+    }
+    flame.userData.nightVision = Boolean(enabled);
+  };
   flame.visible = false;
   return flame;
 }

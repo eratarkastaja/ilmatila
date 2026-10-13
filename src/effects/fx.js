@@ -11,6 +11,7 @@ const WING_VAPOR_COLOR = [0.88, 0.94, 0.97];
 export class FlightFX {
   constructor(scene) {
     this.scene = scene;
+    this.nightVision = false;
     this.maxParticles = 1800;
     this.nextParticle = 0;
     this.positions = new Float32Array(this.maxParticles * 3);
@@ -402,7 +403,23 @@ export class FlightFX {
     this.freeTracers.push(tracer);
   }
 
+  setNightVision(enabled) {
+    this.nightVision = Boolean(enabled);
+    if (this.tracerLines?.material) {
+      this.tracerLines.material.opacity = this.nightVision ? 1 : .92;
+    }
+  }
+
+  updateAfterburnerVisibility(aircraft) {
+    for (const mesh of aircraft) {
+      const flame = mesh?.userData?.afterburner;
+      if (!flame?.userData?.setNightVision || flame.userData.nightVision === this.nightVision) continue;
+      flame.userData.setNightVision(this.nightVision);
+    }
+  }
+
   update(dt, aircraft, missiles, terrain, weather, camera) {
+    this.updateAfterburnerVisibility(aircraft);
     this.updateWingVapor(dt, aircraft, terrain, weather, camera);
     this.updateContrails(dt, aircraft, terrain, weather);
     this.emitDamageSmoke(dt, aircraft, weather);
@@ -1129,11 +1146,12 @@ export class FlightFX {
       this.tracerPositions[offset + 4] = end.y;
       this.tracerPositions[offset + 5] = end.z;
       const fade = Math.min(1, tracer.life / tracer.maxLife);
+      const nightVisionIntensity = this.nightVision ? 1.72 : 1;
       for (let vertex = 0; vertex < 2; vertex++) {
         const colorOffset = offset + vertex * 3;
-        this.tracerColors[colorOffset] = tracer.color.r * fade;
-        this.tracerColors[colorOffset + 1] = tracer.color.g * fade;
-        this.tracerColors[colorOffset + 2] = tracer.color.b * fade;
+        this.tracerColors[colorOffset] = tracer.color.r * fade * nightVisionIntensity;
+        this.tracerColors[colorOffset + 1] = tracer.color.g * fade * nightVisionIntensity;
+        this.tracerColors[colorOffset + 2] = tracer.color.b * fade * nightVisionIntensity;
       }
       count++;
     }

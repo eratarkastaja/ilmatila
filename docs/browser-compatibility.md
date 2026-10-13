@@ -2,7 +2,10 @@
 
 ## Test run
 
-The `0.2.0-beta.1` production build was served with Vite Preview on Debian Linux on 2026-10-05. Playwright 1.63.0 drove actual browser binaries against the Päijänne terrain assets and aircraft GLBs; no browser implementations were mocked in the passing runs.
+The `0.2.0-beta.2` release uses the production browser matrix in the Pages
+workflow. Playwright 1.63.0 drives actual browser binaries against the
+Päijänne terrain assets and aircraft GLBs; no browser implementations are
+mocked in the passing runs.
 
 | Browser project | Browser build | Result |
 | --- | --- | --- |
@@ -22,7 +25,7 @@ The Pages-style `/staging/` composition also passed the full Chrome journey agai
 
 All local terrain and aircraft requests returned successfully in the full journey. Page exceptions and browser console errors failed the tests; none were observed in the passing Chrome, Edge, or Firefox runs.
 
-Playwright-driven tabs report both documents as focused and visible after `bringToFront` in this environment. The test performs the browser tab switch and verifies that the sortie survives it, but automation does not expose OS window blur/visibility transitions here. `tests/integration/main-session.test.js` separately covers input clearing on blur with its browser event harness. A headed tester should include a real OS window/tab switch before release.
+Playwright-driven tabs report both documents as focused and visible after `bringToFront` in this environment. The test performs the browser tab switch and verifies that the sortie survives it, but automation does not expose OS window blur/visibility transitions here. `tests/integration/main-session.test.js` separately covers input clearing on blur with its browser event harness. A headed tester can include a real OS window/tab switch when validating a browser/platform combination that is not covered by automation.
 
 ## Known issues and support status
 

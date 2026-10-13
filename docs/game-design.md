@@ -69,28 +69,21 @@ Wingman-pressure fighters can lock and launch at their assigned wingman. The win
 
 ## Campaign
 
-The first campaign layer implements the ten-chapter **Shadow at the Border**
-sequence, one persistent run per difficulty, three visible strategic state
-values, deterministic retries, and accept/retry handling after the tactical
-debrief. Campaign difficulty also scales authored force counts before the normal
-difficulty preset controls combat behavior and resources. Unknown Track has
-proximity identification, escort timing, unknown/neutral radar states, and
-weapons hold. Broken Silence has a primary asset-defense zone, and The Border
-Breaks resolves against friendly-line strength and a permitted hostile-survivor
-threshold. The remaining chapters use Patrol, Intercept, and Support as base
-combat templates with authored campaign effects; bespoke objective rules for
-those chapters remain follow-up content.
+**Shadow at the Border** is a ten-chapter campaign with one persistent run per
+difficulty, three visible strategic state values, deterministic retries, and an
+accept/retry decision after the tactical debrief. Its implementation and
+chapter table are documented in [campaign implementation](campaign-design.md).
 
-The scenario, difficulty targets, implemented campaign rules, and follow-up
-content are specified in [campaign design](campaign-design.md).
-Campaign sorties carry their remaining missiles, cannon rounds, flares, and
-chaff into the next accepted sortie. Three authored chapters offer one rare
-support decision: a partial rearm or field maintenance restores only a small,
-capped amount and consumes sortie readiness, so campaign logistics matter
-without creating a full reset after every flight.
-Selected optional objectives also add small authored campaign effects: saving a
-strike target, returning all wingmen, protecting friendly forces, or breaking a
-logistics relay can improve the strategic state for the next chapter, while
-missing one can create a limited penalty.
-Further non-binding ideas include richer AI tactics, loadout choices, and replay
-playback.
+The campaign carries remaining air-to-air missiles, air-to-ground missiles,
+cannon rounds, flares, and chaff into the next accepted sortie. Disperse, Hold
+the E18, and Counterstroke expose a limited sustainment choice: a capped partial
+rearm or field maintenance restoration consumes sortie readiness. Optional
+objectives can change air control, defense integrity, or sortie readiness when
+their results are accepted.
+
+Unknown Track implements proximity identification, escort timing, uncertain and
+neutral radar states, and weapons hold. Broken Silence implements a protected
+asset zone with a distant Sweep/Strike package. The Border Breaks uses a
+friendly-strength threshold and a hostile-ground survivor limit. The remaining
+chapters reuse Patrol, Intercept, and Support objective families with authored
+campaign effects and optional objectives.

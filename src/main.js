@@ -1387,6 +1387,7 @@ function animate() {
     renderer.toneMappingExposure = THREE.MathUtils.lerp(.78, 1.0, daylight) + (nightVision ? .2 : 0);
   }
   clouds.userData.setAtmosphere?.(daylight, sceneHazeColor);
+  fx.setNightVision?.(nightVision);
   flightHud.classList.toggle('night-vision', nightVision);
   renderer.domElement.classList.toggle('night-vision-scene', nightVision);
   if (sortie.started && !sortie.paused && combat) {

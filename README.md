@@ -1,6 +1,6 @@
 # ILMATILA
 
-ILMATILA is an independent browser-based air-combat game by ERÄGAMES. The current release candidate is **0.2.0-beta.1**. Missions, combat, progression, aircraft handling, radar, and weapons are playable; balance and mission pacing may still change during beta. The simulation is fictional and is not intended for real-world training or operational use.
+ILMATILA is an independent browser-based air-combat game by ERÄGAMES. The current public beta is **0.2.0-beta.2**. Missions, combat, progression, aircraft handling, radar, and weapons are playable; balance and mission pacing may still change during beta. The simulation is fictional and is not intended for real-world training or operational use.
 
 **[Play ILMATILA in your browser](https://eratarkastaja.github.io/ilmatila/).**
 
@@ -8,7 +8,7 @@ The interface supports English and Finnish. The game runs in a modern browser wi
 
 ## Supported Platforms and Browsers
 
-This beta supports desktop play with a keyboard, mouse, WebGL 2, and Pointer Lock. The verified browser engines are Google Chrome, Microsoft Edge, and Firefox. The browser runs recorded for this release candidate used Debian Linux: Chrome 154.0.8037.97, Edge 154.0.4258.53, and Playwright Firefox 155.0. Other operating systems and browser versions are not separately certified. See the [browser compatibility report](docs/browser-compatibility.md) for the checks and limitations.
+This beta supports desktop play with a keyboard, mouse, WebGL 2, and Pointer Lock. The verified browser engines are Google Chrome, Microsoft Edge, and Firefox. The browser runs recorded for this beta use Debian Linux: Chrome 154.0.8037.97, Edge 154.0.4258.53, and Playwright Firefox 155.0. Other operating systems and browser versions are not separately certified. See the [browser compatibility report](docs/browser-compatibility.md) for the checks and limitations.
 
 Touch and mobile devices are not supported in this beta. Apple Safari has not yet been verified and is outside the supported browser list until it passes a macOS smoke run.
 
@@ -18,7 +18,7 @@ Touch and mobile devices are not supported in this beta. Apple Safari has not ye
 - Automated tab-switch testing confirms that a sortie survives switching away and back, but headless browsers do not reliably expose operating-system focus/visibility transitions. Real desktop focus behavior has not been certified across operating systems.
 - The `?stress=1` developer scenario intentionally exceeds the normal-mission performance target; it is a profiling tool, not a supported gameplay mode.
 
-No open P0/P1 issue is known for the verified Chrome, Edge, and Firefox runs. See the [release candidate notes](docs/beta-release-candidate.md) for the complete validation record.
+No open P0/P1 issue is known for the verified Chrome, Edge, and Firefox runs. See the [beta release notes](docs/beta-release-0.2.0-beta.2.md) for the complete validation record.
 
 ## Run locally
 
@@ -35,7 +35,7 @@ The Vite development server shows a **DEV / CAMPAIGN MISSION** dropdown for jump
 
 ## Current game
 
-The available standalone sorties are Combat Air Patrol, Intercept Flight, Close Air Support, and Training. The campaign **Shadow at the Border** links ten sorties from an airspace incursion over Virolahti to a ground invasion and counterattack. It stores independent Easy, Standard, and Hard runs locally, carries air control, defense integrity, and sortie readiness between chapters, and lets the player accept a result or retry the same seeded encounter. Unknown Track uses visual-range identification, a sustained escort, and enforced weapons hold. Broken Silence can end in a recovered setback if its strike aircraft reaches the protected zone, while The Border Breaks uses the surviving defensive-line strength and permits hostile armor to remain. The remaining chapters use Patrol, Intercept, and Support as their combat templates while their bespoke objective rules are expanded.
+The available standalone sorties are Combat Air Patrol, Intercept Flight, Close Air Support, and Training. The campaign **Shadow at the Border** links ten sorties from an airspace incursion over Virolahti to a ground invasion and counterattack. It stores independent Easy, Standard, and Hard runs locally, carries air control, defense integrity, and sortie readiness between chapters, and lets the player accept a result or retry the same seeded encounter. Unknown Track uses visual-range identification, a sustained escort, and enforced weapons hold. Broken Silence can end in a recovered setback if its strike aircraft reaches the protected zone, while The Border Breaks uses the surviving defensive-line strength and permits hostile armor to remain. The remaining chapters reuse Patrol, Intercept, and Support with authored campaign effects and optional objectives.
 
 Combat missions use a briefing, departure, navigation, contact, engagement, objective, return-to-base, extraction, and debrief flow. Mission weather changes visibility, radar reach, visual identification, cloud cover, and ballistic drift without hiding required warnings. Standalone sorties let the player choose a starting time; campaign chapters use authored atmosphere times, and development mode can override them for testing. The local clock advances naturally during flight; the radar footer shows it, night sorties include a visible moon, and `N` toggles a green low-light display with phosphor scan lines and bright light bloom. The briefing lists each sortie's optional objectives, and the debrief reports completion, the decisive turning point, and the first protected threat that broke through; optional objectives do not determine primary mission success. Intercept Flight is an air-only mission; Close Air Support pits Finnish defenders against advancing armor and two Mi-24 gunships. Difficulty affects hostile detection, combat behavior, damage, and campaign force size. Mission records, unlocks, and campaign saves are stored locally in the browser.
 

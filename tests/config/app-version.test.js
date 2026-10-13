@@ -11,6 +11,6 @@ describe('application version source', () => {
     expect(packageLock.version).toBe(packageMetadata.version);
     expect(packageLock.packages[''].version).toBe(packageMetadata.version);
     expect(APP_VERSION).toBe(packageMetadata.version);
-    expect(readme).toContain(`current release candidate is **${packageMetadata.version}**`);
+    expect(readme).toContain(`current public beta is **${packageMetadata.version}**`);
   });
 });
