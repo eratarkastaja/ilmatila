@@ -45,6 +45,8 @@ export class AirSpawnSystem {
         groundMissileCooldown: 2 + i * 1.2,
         airMissiles: battle.difficulty?.wingman?.airMissile?.capacity ?? 3,
         airMissileCooldown: 2.5 + i * 1.8,
+        airMissileTargets: new Set(),
+        groundMissileTargets: new Set(),
         threatTarget: null,
         threatTimer: 0,
         groundRoundCount: 0,

@@ -109,7 +109,9 @@ export class MissionFlowSystem {
     } else if (this.phase === MISSION_PHASE.CONTACT) {
       this.contactDetected ||= detectedHostiles > 0;
       if (this.contactDetected || hostileEngaged) this.contactSeen = true;
-      if (this.contactSeen && (playerEngaged || hostileEngaged)) this.setPhase(MISSION_PHASE.ENGAGEMENT);
+      const contactSetupDuration = Math.max(0, this.mission.contactSetupDuration ?? 0);
+      if (this.contactSeen && (playerEngaged || hostileEngaged)
+        && this.phaseElapsed >= contactSetupDuration) this.setPhase(MISSION_PHASE.ENGAGEMENT);
     } else if (this.phase === MISSION_PHASE.ENGAGEMENT && targetDestroyed) {
       this.setPhase(MISSION_PHASE.OBJECTIVE);
     }

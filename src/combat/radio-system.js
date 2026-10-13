@@ -38,6 +38,7 @@ export const RADIO_EVENTS = Object.freeze({
   'encounter.reinforcementExpected': { messageKey: 'radio.encounter.reinforcementExpected', crew: 'flightLead', priority: 4, duration: 3.8 },
   'threat.newContact': { messageKey: 'radio.threat.newContact', crew: 'flightLead', priority: 4, duration: 4 },
   'threat.contactIdentified': { messageKey: 'radio.threat.contactIdentified', crew: 'flightLead', priority: 4, duration: 3.5 },
+  'threat.contactCommit': { messageKey: 'radio.threat.contactCommit', crew: 'groundControl', priority: 3, duration: 3.6, cooldown: 12 },
   'support.contactAwaitingOrders': { messageKey: 'radio.support.contactAwaitingOrders', crew: 'flightLead', priority: 4, duration: 5 },
   'support.fightersIdentified': { messageKey: 'radio.support.fightersIdentified', crew: 'flightLead', priority: 4, duration: 4 },
   'wingman.formation': { messageKey: 'radio.wingman.formation', crew: 'wingman', priority: 1, duration: 2.2 },

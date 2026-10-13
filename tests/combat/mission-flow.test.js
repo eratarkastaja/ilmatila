@@ -90,6 +90,25 @@ describe('MissionFlowSystem', () => {
     expect(onIngress).toHaveBeenCalledOnce();
   });
 
+  it('keeps the contact phase visible briefly before entering engagement', () => {
+    const { flow, player } = createFlow({
+      hostiles: 2,
+      contactSetupDuration: .5,
+      departureDuration: 0,
+      navigationDistance: 100,
+      navigationRadius: 20,
+    });
+    flow.update(0);
+    player.position.copy(flow.ingress);
+    flow.update(0, { detectedHostiles: 2 });
+    expect(flow.phase).toBe(MISSION_PHASE.CONTACT);
+
+    flow.update(.4, { detectedHostiles: 2, playerEngaged: true });
+    expect(flow.phase).toBe(MISSION_PHASE.CONTACT);
+    flow.update(.1, { detectedHostiles: 2, playerEngaged: true });
+    expect(flow.phase).toBe(MISSION_PHASE.ENGAGEMENT);
+  });
+
   it('ends a destroyed aircraft sortie as failed', () => {
     const { flow, onEnd } = createFlow();
 

@@ -161,6 +161,66 @@ describe('WingmanController air combat', () => {
     expect(fireAlly).toHaveBeenCalledWith(battle, ally, target);
   });
 
+  it('fires at most one air missile at the same target and preserves the reserve', () => {
+    const player = { position: new THREE.Vector3(0, 300, -10000), userData: {} };
+    const targetMesh = new THREE.Object3D();
+    targetMesh.position.set(0, 300, 4200);
+    const target = { mesh: targetMesh, velocity: new THREE.Vector3(), dead: false };
+    const allyMesh = new THREE.Object3D();
+    allyMesh.position.set(0, 300, 0);
+    const ally = {
+      mesh: allyMesh,
+      wing: -1,
+      target,
+      groundTarget: null,
+      targetRefresh: 10,
+      fireCooldown: 100,
+      burstClock: 0,
+      burstShots: 0,
+      airMissiles: 2,
+      airMissileCooldown: 0,
+      groundMissiles: 0,
+      groundMissileCooldown: 100,
+      threatTarget: null,
+      threatTimer: 0,
+      defensiveTimer: 0,
+      evasiveDirection: -1,
+      evasiveTimer: 0,
+      disengageTimer: 0,
+      phase: 'extend',
+      speed: 235,
+      heading: 0,
+      pitch: 0,
+      velocity: new THREE.Vector3(0, 0, 235),
+      waypoint: new THREE.Vector3(),
+      steeringOffset: new THREE.Vector3(),
+      direction: new THREE.Vector3(),
+      away: new THREE.Vector3(),
+      separation: new THREE.Vector3(),
+      lead: new THREE.Vector3(),
+      leadOffset: new THREE.Vector3(),
+    };
+    const fireAllyAirMissile = vi.fn();
+    const battle = {
+      player,
+      playerVelocity: new THREE.Vector3(0, 0, 235),
+      allies: [ally],
+      enemies: [target],
+      wingmanOrder: 'attack',
+      difficulty: DIFFICULTY_PRESETS.standard,
+      terrain: { sampleHeight: () => 0 },
+      weaponAI: { fireAllyAirMissile },
+    };
+    const controller = new WingmanController(() => 0);
+
+    controller.updateAllies(battle, .1, new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0));
+    controller.updateAllies(battle, 6.5, new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0));
+
+    expect(fireAllyAirMissile).toHaveBeenCalledOnce();
+    expect(ally.airMissiles).toBe(1);
+    expect(ally.airMissileTargets).toContain(targetMesh.id);
+  });
+
   it('breaks a close wingman merge after the firing window instead of orbiting', () => {
     const player = { position: new THREE.Vector3(0, 300, -10000), userData: {} };
     const targetMesh = new THREE.Object3D();

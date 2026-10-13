@@ -10,6 +10,14 @@ import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
 const isHoldingFormation = order => order === 'regroup' || order === 'disengage' || order === 'rtb';
 const WINGMAN_RESCUE_WINDOW_SECONDS = 14;
 
+const missileTargetKey = (target) => target?.mesh?.id ?? target;
+
+const getMissileTargetHistory = (ally, domain) => {
+  const key = domain === 'ground' ? 'groundMissileTargets' : 'airMissileTargets';
+  if (!(ally[key] instanceof Set)) ally[key] = new Set();
+  return ally[key];
+};
+
 /** Owns wingman orders, target selection, formation flight, and damage reactions. */
 export class WingmanController {
   constructor(random = createSeededRandom(DEFAULT_RANDOM_SEED)) {
@@ -314,20 +322,28 @@ export class WingmanController {
       const aligned = alignment > (groundTarget ? .92 : .86);
       const gunSolution = targetRange > (groundTarget ? 380 : 520) && targetRange < (groundTarget ? 1800 : 2550) && aligned;
 
+      const airMissileTargets = getMissileTargetHistory(ally, 'air');
+      const groundMissileTargets = getMissileTargetHistory(ally, 'ground');
+      const airTargetKey = missileTargetKey(target);
+      const groundTargetKey = missileTargetKey(target);
       if (!groundTarget && ally.airMissiles > 0 && ally.airMissileCooldown <= 0
+        && !airMissileTargets.has(airTargetKey)
         && targetRange > (battle.difficulty?.wingman?.airMissile?.minRange ?? 2300)
         && targetRange < (battle.difficulty?.wingman?.airMissile?.maxRange ?? 7800)
         && alignment > .84) {
         battle.weaponAI.fireAllyAirMissile(battle, ally, target);
         ally.airMissiles--;
+        airMissileTargets.add(airTargetKey);
         ally.airMissileCooldown = (battle.difficulty?.wingman?.airMissile?.cooldown ?? 5.2)
           + this.random() * 2.4;
       }
 
       if (groundTarget && ally.groundMissiles > 0 && ally.groundMissileCooldown <= 0
+        && !groundMissileTargets.has(groundTargetKey)
         && targetRange > 1550 && targetRange < 4400 && nose.dot(aim) > .955) {
         battle.weaponAI.fireAllyMaverick(battle, ally, target);
         ally.groundMissiles--;
+        groundMissileTargets.add(groundTargetKey);
         ally.groundMissileCooldown = 5.5 + this.random() * 3.5;
       }
 

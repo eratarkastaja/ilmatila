@@ -145,6 +145,13 @@ export class HostileFighterAI {
         enemy.phaseClock = 0;
         enemy.attackForward.copy(playerForward);
         enemy.attackRight.copy(playerRight);
+        // The first committed fighter gives control a readable cue before the
+        // merge.  The group-level guard keeps a formation from spamming radio
+        // as each aircraft leaves its staging orbit.
+        if (!enemy.approachReported) {
+          enemy.approachReported = true;
+          battle.onOperationalEvent?.('hostileApproach', enemy);
+        }
       }
 
       const canEngage = enemy.phase !== 'staging';

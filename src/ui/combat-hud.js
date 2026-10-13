@@ -40,6 +40,8 @@ export class CombatHud {
     this.protectedAssetValue = document.querySelector('#protected-asset-value');
     this.protectedAssetFill = document.querySelector('#protected-asset-fill');
     this.protectedAssetDistance = document.querySelector('#protected-asset-distance');
+    this.contactApproach = document.querySelector('#contact-approach-readout');
+    this.contactApproachText = document.querySelector('#contact-approach-text');
     this.radarWarning = document.querySelector('#radar-warning');
     this.radarWarningLabel = document.querySelector('#radar-warning-label');
     this.threatWarning = document.querySelector('#threat-warning');
@@ -119,6 +121,18 @@ export class CombatHud {
       if(this.protectedAsset?.getAttribute?.('aria-valuenow')!==ariaValue){
         this.protectedAsset.setAttribute?.('aria-valuenow',ariaValue);
       }
+    }
+    const contactApproach=state.threats.contactApproach;
+    setHiddenIfChanged(this.contactApproach,state.session.destroyed||!contactApproach?.active);
+    if(contactApproach?.active){
+      const distance=Number.isFinite(contactApproach.distance)
+        ? `${formatNumber(contactApproach.distance/1000,{minimumFractionDigits:1,maximumFractionDigits:1})} KM`
+        : '—';
+      const key=contactApproach.phase==='committing'
+        ? 'hud.contactApproach.committing'
+        : 'hud.contactApproach.approach';
+      setTextIfChanged(this.contactApproachText,t(key,{count:contactApproach.count,distance}));
+      setClassIfChanged(this.contactApproach,'committing',contactApproach.phase==='committing');
     }
     setHiddenIfChanged(this.fuelGauge, state.fuel.unlimited);
     if (!state.fuel.unlimited && this.fuelGauge) {

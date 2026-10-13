@@ -12,6 +12,7 @@ const wrapHeading = degrees => THREE.MathUtils.euclideanModulo(degrees, 360);
 const stationaryVelocity = new THREE.Vector3();
 const MISSILE_CUE_FADE_SECONDS = 0.7;
 const HUD_DETAIL_INTERVAL = 1 / 15;
+const WORLD_MARKER_MARGIN = 24;
 const setTextIfChanged = (node, value) => {
   if (node && node.textContent !== value) node.textContent = value;
 };
@@ -26,6 +27,13 @@ const setClassIfChanged = (node, className, enabled) => {
 const setStylePropertyIfChanged = (node, property, value) => {
   if (node && node.style.getPropertyValue(property) !== value) node.style.setProperty(property, value);
 };
+
+export function isWorldMarkerOnScreen(projected, behind, width, height, margin = WORLD_MARKER_MARGIN) {
+  const maxX = 1 - margin * 2 / width;
+  const maxY = 1 - margin * 2 / height;
+  return !behind && projected.z >= -1 && projected.z <= 1
+    && Math.abs(projected.x) <= maxX && Math.abs(projected.y) <= maxY;
+}
 
 export class TacticalHud {
   constructor() {
@@ -105,7 +113,8 @@ export class TacticalHud {
     this.updateGunAimCue(player, camera, state, dt);
     const waypoint = state.mission.waypoint;
     if (this.missionWaypointCue && waypoint) {
-      this.placeWorldMarker(this.missionWaypointCue, waypoint, camera);
+      const onScreen = this.placeWorldMarker(this.missionWaypointCue, waypoint, camera);
+      setHiddenIfChanged(this.missionWaypointCue, !onScreen);
     } else if (this.missionWaypointCue) {
       setHiddenIfChanged(this.missionWaypointCue, true);
     }
@@ -152,7 +161,11 @@ export class TacticalHud {
       lastKnownBearing ? radar.targetLastKnownPosition : target.mesh.position,
     );
     if (radar.targetDomain === 'ground') targetPosition.y += (target.mesh.userData.vehicleSpec?.totalHeight ?? 2.5) * 0.5;
-    this.placeWorldMarker(this.targetDesignator, targetPosition, camera);
+    const targetOnScreen = this.placeWorldMarker(this.targetDesignator, targetPosition, camera);
+    // Direction-only edge arrows are noisy for selected targets. Keep the
+    // designator tied to its square: it appears when the target is actually
+    // in the HUD view and disappears while the target is outside it.
+    setHiddenIfChanged(this.targetDesignator, !targetOnScreen);
     const groundTarget = radar.targetDomain === 'ground';
     const trackState = !radar.targetInSensorRange
       ? 'hud.trackBearingOnly'
@@ -271,11 +284,14 @@ export class TacticalHud {
     const projected = this.markerProjected.copy(position).project(camera);
     camera.getWorldDirection(this.cameraForward);
     const behind = this.markerOffset.subVectors(position, camera.position).dot(this.cameraForward) <= 0;
-    const marginX = Math.min(72, innerWidth * 0.18);
-    const marginY = Math.min(80, innerHeight * 0.16);
+    // Keep the marker on the projected world position until it is genuinely
+    // outside the viewport.  A wide safety margin made distant locked targets
+    // look like off-screen contacts even when the player could see their cue.
+    const marginX = WORLD_MARKER_MARGIN;
+    const marginY = WORLD_MARKER_MARGIN;
     const maxX = 1 - marginX * 2 / innerWidth;
     const maxY = 1 - marginY * 2 / innerHeight;
-    const onScreen = !behind && projected.z >= -1 && projected.z <= 1 && Math.abs(projected.x) <= maxX && Math.abs(projected.y) <= maxY;
+    const onScreen = isWorldMarkerOnScreen(projected, behind, innerWidth, innerHeight, WORLD_MARKER_MARGIN);
     let x = behind ? -projected.x : projected.x;
     let y = behind ? -projected.y : projected.y;
 

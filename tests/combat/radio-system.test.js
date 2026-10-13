@@ -189,6 +189,16 @@ describe('RadioSystem', () => {
     );
   });
 
+  it('warns when a hostile group commits from its staging line', () => {
+    const params = { bearing: '045', range: '25.0' };
+    expect(radio.radio.emit('threat.contactCommit', { scope: 'screen-alpha', params })).toBe(true);
+    expect(radio.callsign.textContent).toBe('CONTROL');
+    expect(radio.message.textContent).toBe(
+      'Control: hostile group is committing, bearing 045, 25.0 kilometres. Prepare to merge.',
+    );
+    expect(radio.radio.emit('threat.contactCommit', { scope: 'screen-alpha', params })).toBe(false);
+  });
+
   it('preserves uncertain contact timing while adding CAS tasking context', () => {
     const params = { bearing: '270', range: '12.0' };
     expect(radio.radio.emit('support.contactAwaitingOrders', { params, scope: 'support-reinforcement' })).toBe(true);

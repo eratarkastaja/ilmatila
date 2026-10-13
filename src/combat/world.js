@@ -384,6 +384,7 @@ export class CombatWorld {
       threats:{
         radarWarningState:null,missile:null,missileEta:Infinity,missileDistance:Infinity,
         launchVisible:false,launchSourcePosition:null,launchSeeker:null,
+        contactApproach:{active:false,phase:'approach',count:0,distance:Infinity},
       },
     };
     this.refreshHudState();
@@ -534,6 +535,22 @@ export class CombatWorld {
     );
     state.threats.launchSourcePosition=this.missileLaunchSource?.mesh?.position??null;
     state.threats.launchSeeker=this.missileLaunchSeeker;
+    const contactApproach=state.threats.contactApproach;
+    let approachingCount=0;
+    let nearestApproachDistance=Infinity;
+    let committing=false;
+    for(const enemy of this.enemies){
+      if(enemy.dead||enemy.identified===false||(enemy.phase!=='staging'&&enemy.phase!=='inbound'))continue;
+      approachingCount++;
+      if(enemy.phase==='inbound')committing=true;
+      nearestApproachDistance=Math.min(nearestApproachDistance,enemy.mesh.position.distanceTo(this.player.position));
+    }
+    contactApproach.active=!this.destroyed
+      &&this.missionFlow.phase===MISSION_PHASE.CONTACT
+      &&approachingCount>0;
+    contactApproach.phase=committing?'committing':'approach';
+    contactApproach.count=approachingCount;
+    contactApproach.distance=nearestApproachDistance;
   }
   update(dt){
     this.frameDelta=dt;
@@ -763,11 +780,29 @@ export class CombatWorld {
   }
 
   reportOperationalEvent(event,unit){
-    if(event!=='airPolicing.identified'||!unit)return;
-    this.radio.emit('mission.airPolicingIdentified',{
-      scope:String(unit.mesh.id),
-      params:{aircraft:unit.label??'aircraft'},
-    });
+    if(!unit)return;
+    if(event==='airPolicing.identified'){
+      this.radio.emit('mission.airPolicingIdentified',{
+        scope:String(unit.mesh.id),
+        params:{aircraft:unit.label??'aircraft'},
+      });
+      return;
+    }
+    if(event==='hostileApproach'){
+      const position=unit.mesh?.position;
+      if(!position)return;
+      const dx=position.x-this.player.position.x;
+      const dz=position.z-this.player.position.z;
+      const bearing=THREE.MathUtils.euclideanModulo(THREE.MathUtils.radToDeg(Math.atan2(dx,dz)),360);
+      const range=Math.hypot(dx,position.y-this.player.position.y,dz);
+      this.radio.emit('threat.contactCommit',{
+        scope:String(unit.encounterGroupId??'primary'),
+        params:{
+          bearing:String(Math.round(bearing)%360).padStart(3,'0'),
+          range:formatNumber(range/1000,{minimumFractionDigits:1,maximumFractionDigits:1}),
+        },
+      });
+    }
   }
 
   reportMissionPhase(phase){

@@ -460,6 +460,27 @@ describe('HostileFighterAI radar tracking', () => {
     expect(enemy.waypoint.z).toBeGreaterThan(13000);
   });
 
+  it('reports the first fighter committing from staging before the merge', () => {
+    const enemy = makeHostile(new THREE.Vector3(0, 300, 4000), 'staging');
+    enemy.encounterGroupId = 'screen-alpha';
+    enemy.detectedPlayerTimer = 6.4;
+    const onOperationalEvent = vi.fn();
+    const battle = makeBattle(enemy, vi.fn());
+    battle.onOperationalEvent = onOperationalEvent;
+
+    new HostileFighterAI(() => .99).updateJets(
+      battle,
+      .2,
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(1, 0, 0),
+      { lockedTarget: null, incomingMissiles: [] },
+    );
+
+    expect(enemy.phase).toBe('inbound');
+    expect(onOperationalEvent).toHaveBeenCalledOnce();
+    expect(onOperationalEvent).toHaveBeenCalledWith('hostileApproach', enemy);
+  });
+
   it('fires cannon bursts at air targets after hostile missile stores are empty', () => {
     const enemy = makeHostile(new THREE.Vector3(0, 300, -2000));
     const fireEnemy = vi.fn();

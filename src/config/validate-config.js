@@ -126,6 +126,7 @@ const missionSchema = object({
   navigationRadius: number(1, 10000),
   ingressAltitudeAgl: optional(number(1, 10000)),
   departureDuration: number(0, 120),
+  contactSetupDuration: optional(number(0, 30)),
   hostiles: number(0, 100, true),
   hostileSpawnDistance: optional(number(1, 100000)),
   hostileMinimumSpawnDistance: optional(number(1, 100000)),
@@ -159,7 +160,7 @@ const missionSchema = object({
 const MISSION_VARIANT_CHANGE_FIELDS = new Set([
   'navigationDistance', 'navigationRadius', 'ingressAltitudeAgl', 'departureDuration',
   'hostiles', 'hostileSpawnDistance', 'hostileMinimumSpawnDistance', 'hostileLateralSpacing',
-  'hostileStagingDistance', 'openingDelay', 'hostileComposition', 'hostileRoles', 'hostileEntry',
+  'hostileStagingDistance', 'openingDelay', 'contactSetupDuration', 'hostileComposition', 'hostileRoles', 'hostileEntry',
   'wingmanInitialOrder',
   'groundPairs', 'groundTrucks', 'groundFriendlyTrucks', 'groundFrontSpan', 'convoyArea',
   'hostileHelicopters', 'hostileHelicopterSpawnDistance', 'hostileHelicopterMinimumSpawnDistance',

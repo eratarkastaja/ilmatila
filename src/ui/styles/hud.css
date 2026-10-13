@@ -1883,6 +1883,36 @@
   text-transform: uppercase;
 }
 
+.contact-approach-readout {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 5px;
+  padding: 4px 6px;
+  border-left: 2px solid #e4c475;
+  background: #201b0e9c;
+  color: #f0d995;
+  font: 700 9px Rajdhani,sans-serif;
+  letter-spacing: .1em;
+}
+
+.contact-approach-readout[hidden] {
+  display: none;
+}
+
+.contact-approach-readout i {
+  width: 6px;
+  height: 6px;
+  border: 1px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.contact-approach-readout.committing {
+  border-left-color: #ff9b62;
+  background: #32180fbd;
+  color: #ffd0b1;
+}
+
 .mission-route-readout {
   display: grid;
   grid-template-columns: 1fr auto;

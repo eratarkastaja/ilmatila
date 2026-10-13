@@ -37,6 +37,7 @@ function makeState() {
     threats: {
       radarWarningState: null, missile: null, missileEta: Infinity, missileDistance: Infinity,
       launchVisible: false, launchSourcePosition: null, launchSeeker: null,
+      contactApproach: { active: false, phase: 'approach', count: 0, distance: Infinity },
     },
     mission: {
       boundaryApproach: null,
@@ -101,5 +102,23 @@ describe('CombatHud Support force status', () => {
     expect(hud.protectedAsset.dataset.level).toBe('red');
     expect(hud.protectedAssetFill.style.transform).toBe('scaleX(0.72)');
     expect(hud.protectedAsset.getAttribute('aria-valuenow')).toBe('72');
+  });
+
+  it('shows the approaching hostile group before the engagement phase', () => {
+    const nodes = new Map();
+    vi.stubGlobal('document', {
+      querySelector(selector) {
+        if (!nodes.has(selector)) nodes.set(selector, makeElement());
+        return nodes.get(selector);
+      },
+    });
+    const hud = new CombatHud();
+    const state = makeState();
+    state.threats.contactApproach = { active: true, phase: 'committing', count: 3, distance: 25800 };
+
+    hud.update(state);
+
+    expect(hud.contactApproach.hidden).toBe(false);
+    expect(hud.contactApproachText.textContent).toBe('3 HOSTILE TRACKS COMMITTING · 25.8 KM');
   });
 });
