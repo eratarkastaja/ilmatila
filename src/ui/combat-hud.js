@@ -28,6 +28,7 @@ export class CombatHud {
     this.fuelValue = document.querySelector('#fuel-value');
     this.fuelFill = document.querySelector('#fuel-fill');
     this.wingmanOrder = document.querySelector('#wingman-order');
+    this.wingmanOrderDetail = document.querySelector('#wingman-order-detail');
     this.wingmanRescue = document.querySelector('#wingman-rescue-warning');
     this.wingmanRescueTitle = document.querySelector('#wingman-rescue-title');
     this.wingmanRescueDetail = document.querySelector('#wingman-rescue-detail');
@@ -35,6 +36,10 @@ export class CombatHud {
     this.supportForceValue = document.querySelector('#support-force-value');
     this.supportForceFill = document.querySelector('#support-force-fill');
     this.supportForceUnits = document.querySelector('#support-force-units');
+    this.protectedAsset = document.querySelector('#protected-asset-status');
+    this.protectedAssetValue = document.querySelector('#protected-asset-value');
+    this.protectedAssetFill = document.querySelector('#protected-asset-fill');
+    this.protectedAssetDistance = document.querySelector('#protected-asset-distance');
     this.radarWarning = document.querySelector('#radar-warning');
     this.radarWarningLabel = document.querySelector('#radar-warning-label');
     this.threatWarning = document.querySelector('#threat-warning');
@@ -56,6 +61,9 @@ export class CombatHud {
     setTextIfChanged(this.flareCount, String(state.countermeasures.flares).padStart(2, '0'));
     setTextIfChanged(this.chaffCount, String(state.countermeasures.chaff).padStart(2, '0'));
     setTextIfChanged(this.wingmanOrder, t(`combat.wingmanStatus.${state.wingmanOrder}`));
+    if(state.wingmanStatus){
+      setTextIfChanged(this.wingmanOrderDetail,t('combat.wingmanStatusDetail',state.wingmanStatus));
+    }
     const rescue=state.wingmanRescue;
     setHiddenIfChanged(this.wingmanRescue, state.session.destroyed || !rescue?.wingman);
     if(rescue?.wingman){
@@ -89,6 +97,27 @@ export class CombatHud {
       const ariaValue=String(percent);
       if(this.supportForce?.getAttribute?.('aria-valuenow')!==ariaValue){
         this.supportForce.setAttribute?.('aria-valuenow',ariaValue);
+      }
+    }
+    const protectedAsset=state.mission?.protectedAsset;
+    setHiddenIfChanged(this.protectedAsset,!protectedAsset?.active);
+    if(protectedAsset?.active){
+      const threatPercent=Math.max(0,Math.min(100,Math.round(protectedAsset.fraction*100)));
+      const level=threatPercent>=70?'red':threatPercent>=35?'yellow':'green';
+      setTextIfChanged(this.protectedAssetValue,`${threatPercent}%`);
+      const distance=protectedAsset.distance;
+      const distanceText=Number.isFinite(distance)
+        ? `${formatNumber(distance/1000,{minimumFractionDigits:1,maximumFractionDigits:1})} KM`
+        : t('hud.protectedAsset.standby');
+      setTextIfChanged(this.protectedAssetDistance,distanceText);
+      if(this.protectedAsset?.dataset&&this.protectedAsset.dataset.level!==level)this.protectedAsset.dataset.level=level;
+      const scale=`scaleX(${threatPercent/100})`;
+      if(this.protectedAssetFill?.style&&this.protectedAssetFill.style.transform!==scale){
+        this.protectedAssetFill.style.transform=scale;
+      }
+      const ariaValue=String(threatPercent);
+      if(this.protectedAsset?.getAttribute?.('aria-valuenow')!==ariaValue){
+        this.protectedAsset.setAttribute?.('aria-valuenow',ariaValue);
       }
     }
     setHiddenIfChanged(this.fuelGauge, state.fuel.unlimited);

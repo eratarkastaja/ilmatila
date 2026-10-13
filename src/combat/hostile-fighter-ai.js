@@ -190,6 +190,8 @@ export class HostileFighterAI {
         battle.mission.hostileStagingDistance ?? 6500,
         battle.mission.hostileMinimumSpawnDistance ?? 0,
       );
+      const isFlank = enemy.missionRole === 'flank';
+      const flankOffset = isFlank ? (enemy.flankSide ?? (enemy.lane >= 0 ? 1 : -1)) * 3200 : 0;
 
       if (enemy.missionRole === 'strike') {
         waypoint.copy(targetPosition ?? strikeTargetPosition ?? playerPosition);
@@ -198,13 +200,13 @@ export class HostileFighterAI {
         waypoint.copy(playerPosition)
           .addScaledVector(battle.playerVelocity, .7)
           .addScaledVector(enemy.attackForward, stagingDistance)
-          .addScaledVector(enemy.attackRight, enemy.stagingLateral * .32 + laneDrift);
+          .addScaledVector(enemy.attackRight, enemy.stagingLateral * .32 + laneDrift + flankOffset);
       } else if (enemy.phase === 'inbound') {
         const attackRun = ENEMY_ATTACK_RUNS[enemy.attackPattern];
         waypoint.copy(playerPosition)
           .addScaledVector(battle.playerVelocity, .6)
           .addScaledVector(enemy.attackForward, attackRun.trail)
-          .addScaledVector(enemy.attackRight, enemy.lane * attackRun.lateral);
+          .addScaledVector(enemy.attackRight, enemy.lane * attackRun.lateral + flankOffset);
         // Hold the attack line through cannon range, then extend after the pass.
         if (range < attackRun.passRange * (battle.difficulty?.fighter?.passRangeScale ?? 1)) {
           enemy.phase = 'extend';
@@ -489,6 +491,23 @@ export class HostileFighterAI {
     const priorityRange = targeting?.airPriorityRange ?? 13000;
     const playerTrackAvailable = playerRange <= priorityRange
       && (enemy.radarTrackDisruptionRemaining ?? 0) <= 0;
+    if (enemy.missionRole === 'flank') {
+      let nearestWingman = null;
+      let nearestWingmanRange = priorityRange;
+      for (const ally of battle.allies) {
+        if (ally.dead) continue;
+        const range = enemy.mesh.position.distanceTo(ally.mesh.position);
+        if (range < nearestWingmanRange) {
+          nearestWingmanRange = range;
+          nearestWingman = ally;
+        }
+      }
+      if (nearestWingman) {
+        selection.target = nearestWingman;
+        selection.domain = 'air';
+        return selection;
+      }
+    }
     if (playerTrackAvailable) {
       const focusLimit = targeting?.focusFireLimit;
       if (!focusLimit) {

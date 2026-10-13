@@ -90,7 +90,7 @@ describe('game configuration validation', () => {
     expect(errors).toContain(
       'missions.intercept.variants[0].changes.hostileRoles must contain one role for each hostile aircraft (4)',
     );
-    expect(errors).toContain('missions.intercept.variants[1].changes.hostileRoles[4] must be sweep or strike');
+    expect(errors).toContain('missions.intercept.variants[1].changes.hostileRoles[4] must be sweep, flank or strike');
   });
 
   it('validates the support reinforcement logistics trigger', () => {

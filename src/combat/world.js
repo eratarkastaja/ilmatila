@@ -227,6 +227,8 @@ export class CombatWorld {
         state.escortElapsed=0;
         state.priorityTargetsRemaining=0;
         state.protectedAssetLost=false;
+      state.protectedAssetThreat=0;
+      state.protectedAssetDistance=Infinity;
         state.friendlyStrengthFraction=1;
         if(missionConfig.objective?.type==='airPolicing'){
           this.airBattle.getOperationalState(state);
@@ -239,6 +241,13 @@ export class CombatWorld {
             const dz=target.mesh.position.z-this.objectiveAnchor.z;
             const radius=missionConfig.objective.zoneRadius??7200;
             state.protectedAssetLost=dx*dx+dz*dz<=radius*radius;
+            state.protectedAssetDistance=Math.hypot(dx,dz);
+            const warningRange=Math.max(radius*3,18000);
+            state.protectedAssetThreat=THREE.MathUtils.clamp(
+              (warningRange-state.protectedAssetDistance) / Math.max(1,warningRange-radius),
+              0,
+              1,
+            );
           }
         }else if(missionConfig.objective?.type==='forceDefense'){
           let health=0;
@@ -367,10 +376,11 @@ export class CombatWorld {
       fuel:{unlimited:this.fuelSystem.unlimited,fraction:this.fuelSystem.fraction},
       countermeasures:{flares:0,chaff:0},
       wingmanOrder:this.airBattle.wingmanOrder,
+      wingmanStatus:{alive:0,total:this.allies.length},
       wingmanRescue:{wingman:null,attacker:null,remaining:0,missileInbound:false},
       supportForce:{active:false,fraction:1,unitsAlive:0,unitsTotal:0},
       score:0,
-      mission:{waypoint:null,boundaryApproach:null,boundaryCritical:false},
+      mission:{waypoint:null,boundaryApproach:null,boundaryCritical:false,protectedAsset:{active:false,fraction:0,distance:Infinity}},
       threats:{
         radarWarningState:null,missile:null,missileEta:Infinity,missileDistance:Infinity,
         launchVisible:false,launchSourcePosition:null,launchSeeker:null,
@@ -472,6 +482,8 @@ export class CombatWorld {
     state.countermeasures.flares=this.countermeasureSystem.flares;
     state.countermeasures.chaff=this.countermeasureSystem.chaff;
     state.wingmanOrder=this.airBattle.wingmanOrder;
+    state.wingmanStatus.alive=this.allies.reduce((count,ally)=>count+(!ally.dead?1:0),0);
+    state.wingmanStatus.total=this.allies.length;
     const rescue=state.wingmanRescue;
     rescue.wingman=null;
     rescue.attacker=null;
@@ -508,6 +520,11 @@ export class CombatWorld {
     state.mission.waypoint=this.missionFlow.waypoint;
     state.mission.boundaryApproach=this.boundaryApproach;
     state.mission.boundaryCritical=this.boundaryCritical;
+    const protectedAsset=state.mission.protectedAsset;
+    const protectedAssetState=this.missionSystem?.remaining??{};
+    protectedAsset.active=this.missionSystem?.mission?.objective?.type==='assetDefense';
+    protectedAsset.fraction=protectedAssetState.protectedAssetThreat??0;
+    protectedAsset.distance=protectedAssetState.protectedAssetDistance??Infinity;
     state.threats.radarWarningState=this.getPlayerRadarWarningState();
     state.threats.missile=this.projectileSystem.missileThreat;
     state.threats.missileEta=this.projectileSystem.missileThreatEta;

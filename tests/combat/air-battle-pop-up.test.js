@@ -112,7 +112,7 @@ describe('AirBattle hostile contacts', () => {
       aircraftAsset: createAircraftAsset(),
       mission: {
         hostiles: 4,
-        hostileRoles: ['sweep', 'sweep', 'strike', 'strike'],
+        hostileRoles: ['sweep', 'flank', 'strike', 'strike'],
         hostileComposition: ['mig29', 'mig29', 'su27', 'su27'],
         hostileEntry: 'scramble',
         wingmanInitialOrder: 'regroup',
@@ -137,11 +137,12 @@ describe('AirBattle hostile contacts', () => {
 
     expect(battle.enemies.map(enemy => [enemy.mesh.userData.aircraftVariant, enemy.missionRole])).toEqual([
       ['mig29', 'sweep'],
-      ['mig29', 'sweep'],
+      ['mig29', 'flank'],
       ['su27', 'strike'],
       ['su27', 'strike'],
     ]);
     expect(battle.wingmanOrder).toBe('regroup');
+    expect(battle.enemies[1].targetPreference).toBe('wingmen');
     expect(battle.wingmanController.selectAllyTarget(battle, battle.allies[0])).toBeNull();
 
     const firstSweep = battle.enemies[0];

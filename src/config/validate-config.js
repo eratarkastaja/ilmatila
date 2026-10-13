@@ -396,7 +396,7 @@ function validateHostileRoles(roles, hostileCount, path, errors) {
     errors.push(`${path} must contain one role for each hostile aircraft (${hostileCount})`);
   }
   roles.forEach((role, index) => {
-    if (!['sweep', 'strike'].includes(role)) errors.push(`${path}[${index}] must be sweep or strike`);
+    if (!['sweep', 'flank', 'strike'].includes(role)) errors.push(`${path}[${index}] must be sweep, flank or strike`);
   });
 }
 

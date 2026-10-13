@@ -38,7 +38,11 @@ function makeState() {
       radarWarningState: null, missile: null, missileEta: Infinity, missileDistance: Infinity,
       launchVisible: false, launchSourcePosition: null, launchSeeker: null,
     },
-    mission: { boundaryApproach: null, boundaryCritical: false },
+    mission: {
+      boundaryApproach: null,
+      boundaryCritical: false,
+      protectedAsset: { active: false, fraction: 0, distance: Infinity },
+    },
   };
 }
 
@@ -75,5 +79,27 @@ describe('CombatHud Support force status', () => {
     state.supportForce.active = false;
     hud.update(state);
     expect(hud.supportForce.hidden).toBe(true);
+  });
+
+  it('shows protected site threat as it closes on the objective', () => {
+    const nodes = new Map();
+    vi.stubGlobal('document', {
+      querySelector(selector) {
+        if (!nodes.has(selector)) nodes.set(selector, makeElement());
+        return nodes.get(selector);
+      },
+    });
+    const hud = new CombatHud();
+    const state = makeState();
+    state.mission.protectedAsset = { active: true, fraction: .72, distance: 8400 };
+
+    hud.update(state);
+
+    expect(hud.protectedAsset.hidden).toBe(false);
+    expect(hud.protectedAssetValue.textContent).toBe('72%');
+    expect(hud.protectedAssetDistance.textContent).toBe('8.4 KM');
+    expect(hud.protectedAsset.dataset.level).toBe('red');
+    expect(hud.protectedAssetFill.style.transform).toBe('scaleX(0.72)');
+    expect(hud.protectedAsset.getAttribute('aria-valuenow')).toBe('72');
   });
 });

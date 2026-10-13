@@ -70,7 +70,7 @@ export const MISSIONS = {
         id: 'long-range-screen', labelKey: 'mission.variant.intercept.longRange', weight: 3,
         changes: {
           hostileComposition: ['mig29', 'mig29', 'su27', 'su27'],
-          hostileRoles: ['sweep', 'sweep', 'strike', 'strike'],
+          hostileRoles: ['sweep', 'flank', 'strike', 'strike'],
           optionalObjectives: [
             { id: 'wingmen-home', type: 'allWingmenSurvive' },
             { id: 'lead-intercept', type: 'interceptBeforeZone', target: {
@@ -86,7 +86,7 @@ export const MISSIONS = {
         changes: {
           hostiles: 5,
           hostileComposition: ['mig29', 'mig29', 'su27', 'su27', 'mig29'],
-          hostileRoles: ['sweep', 'sweep', 'strike', 'strike', 'sweep'],
+          hostileRoles: ['sweep', 'flank', 'strike', 'strike', 'sweep'],
           hostileSpawnDistance: 13200,
           hostileMinimumSpawnDistance: 11800,
           hostileLateralSpacing: 1500,
