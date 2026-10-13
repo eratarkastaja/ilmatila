@@ -28,6 +28,8 @@ describe('CampaignSession', () => {
     expect(first.preview.variant).toBeNull();
     expect(first.mission.objective.type).toBe('airPolicing');
     expect(first.mission.rulesOfEngagement).toBe('weaponsHold');
+    expect(first.mission.weather.timeOfDay).toBe(5.5);
+    expect(first.preview.mission.weather.timeOfDay).toBe(5.5);
 
     expect(session.retryCurrent()).toBe(true);
     const retry = session.resolveCurrentMission();
@@ -35,6 +37,7 @@ describe('CampaignSession', () => {
     expect(retry.preview.variant).toEqual(first.preview.variant);
     expect(retry.preview.encounters).toEqual(first.preview.encounters);
     expect(retry.preview.mission.hostiles).toBe(first.preview.mission.hostiles);
+    expect(retry.preview.mission.weather.timeOfDay).toBe(first.preview.mission.weather.timeOfDay);
     expect(retry.attemptId).not.toBe(first.attemptId);
   });
 
@@ -105,6 +108,44 @@ describe('CampaignSession', () => {
     expect(session.state.defenseIntegrity).toBe(before.defenseIntegrity - 5);
   });
 
+  it('applies authored optional objective effects to the next campaign state', () => {
+    const session = new CampaignSession({
+      progress: new CampaignProgress(memoryStorage()),
+      difficulty: 'standard',
+      seedFactory: () => 27,
+    });
+    session.state.chapterIndex = 1;
+    const attemptId = session.state.currentAttemptId;
+    const result = {
+      campaignAttemptId: attemptId,
+      optionalObjectives: [
+        { id: 'lead-intercept', status: 'failed' },
+        { id: 'wingmen-home', status: 'completed' },
+      ],
+    };
+
+    const preview = session.previewResult('complete', result);
+
+    expect(preview.classification).toBe('success');
+    expect(preview.changes).toMatchObject({
+      airControl: 3,
+      defenseIntegrity: -4,
+      sortieReadiness: 5,
+    });
+    expect(preview.optionalObjectiveChanges).toEqual([
+      { id: 'lead-intercept', status: 'failed', changes: {
+        airControl: -2, defenseIntegrity: -5, sortieReadiness: 0,
+      } },
+      { id: 'wingmen-home', status: 'completed', changes: {
+        airControl: 0, defenseIntegrity: 0, sortieReadiness: 3,
+      } },
+    ]);
+
+    expect(session.acceptResult('complete', result).applied).toBe(true);
+    expect(session.state.history[0].optionalObjectives).toEqual(result.optionalObjectives);
+    expect(session.state.flags).toContain('relay-saved');
+  });
+
   it('applies state pressure to later mission resolution without removing minimum support', () => {
     const session = new CampaignSession({
       progress: new CampaignProgress(memoryStorage()),
@@ -119,6 +160,49 @@ describe('CampaignSession', () => {
 
     expect(resolved.mission.hostiles).toBeGreaterThan(2);
     expect(resolved.mission.wingmen).toBeGreaterThanOrEqual(1);
+  });
+
+  it('offers rare partial sustainment and carries the sortie remainder forward', () => {
+    const session = new CampaignSession({
+      progress: new CampaignProgress(memoryStorage()),
+      difficulty: 'standard',
+      seedFactory: () => 91,
+    });
+    session.state.chapterIndex = 2;
+    session.state.stores = {
+      airMissiles: 1,
+      groundMissiles: 0,
+      gunRounds: 120,
+      flares: 2,
+      chaff: 3,
+    };
+
+    expect(session.currentSustainmentDecision.choices).toHaveLength(2);
+    expect(session.selectSustainmentChoice('partial-rearm')).toBe(true);
+    const resolved = session.resolveCurrentMission();
+    expect(resolved.mission.campaignStores).toMatchObject({
+      airMissiles: 3,
+      groundMissiles: 2,
+      gunRounds: 470,
+      flares: 2,
+      chaff: 3,
+    });
+
+    const accepted = session.acceptResult('complete', {
+      campaignAttemptId: session.state.currentAttemptId,
+      remainingStores: { airMissiles: 2, groundMissiles: 1, gunRounds: 80, flares: 1, chaff: 2 },
+      optionalObjectives: [],
+    });
+    expect(accepted.applied).toBe(true);
+    expect(session.state.stores).toEqual({
+      airMissiles: 2,
+      groundMissiles: 1,
+      gunRounds: 80,
+      flares: 1,
+      chaff: 2,
+    });
+    expect(session.state.sortieReadiness).toBe(72);
+    expect(session.state.sustainmentChoice).toBeNull();
   });
 
   it('can jump to a campaign chapter for development testing without saving the jump', () => {

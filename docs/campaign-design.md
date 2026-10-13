@@ -1,13 +1,17 @@
 # Campaign design: Shadow at the Border / Rajan varjo
 
-Status: campaign foundation and the sorties 1, 2, and 6 vertical slice are implemented; remaining operational objectives and final balance remain planned.
+Status: the ten-chapter campaign foundation and the sorties 1, 2, and 6
+vertical slice are implemented; the remaining chapters use authored campaign
+effects on existing combat templates while their bespoke operational objectives
+and final balance remain follow-up work.
 
 This document defines the first Ilmatila campaign layer. The ten-chapter
 sequence, persistent state, deterministic mission resolution, menu view, and
 accept/retry loop are implemented. Unknown Track, Broken Silence, and The Border
 Breaks use their campaign-specific objective rules; the other playable chapters
-reuse Patrol, Intercept, and Support rules. Later sections describe the remaining
-campaign-specific objectives, content, and tuning.
+use Patrol, Intercept, and Support as combat templates with authored strategic
+effects. Later sections describe the remaining campaign-specific objectives,
+content, and tuning.
 
 ## Design goals
 
@@ -101,6 +105,28 @@ support, enemy composition, optional objectives, radio lines, and some target
 locations. This gives choices consequences without multiplying the amount of
 required mission content.
 
+Aircraft stores persist between accepted sorties. The next launch receives the
+previous sortie's remaining air-to-air and air-to-ground missiles, cannon
+rounds, flares, and chaff, capped at the selected difficulty's normal loadout.
+At three logistics windows (Disperse, Hold the E18, and Counterstroke), the
+player may spend a small amount of sortie readiness on either a limited partial
+rearm or limited field maintenance. These are rare, additive top-ups rather
+than complete rearming, and the choice is committed only when the sortie result
+is accepted so retries do not consume campaign resources.
+
+Optional objectives also have authored campaign effects. Intercepting a strike
+aircraft before the defended zone, bringing every wingman home, protecting a
+friendly formation, or destroying a logistics relay can add air control, defense
+integrity, or sortie readiness; failing those objectives can apply a smaller
+penalty. The result is recorded with the sortie and applied before the next
+chapter is resolved, so a side objective changes the following mission's
+pressure and support without replacing the primary mission outcome.
+
+Campaign times are authored for mood and pacing: 05:30, 23:30, 08:00, 16:30,
+05:30, 08:00, 16:30, 20:30, 20:30, and 12:00 for chapters one through ten.
+Production campaign play keeps these times fixed; development mode can override
+them from the menu while testing a chapter.
+
 | # | Sortie | Area | Operational purpose | Primary play |
 | --- | --- | --- | --- | --- |
 | 1 | **Unknown Track / Tuntematon maali** | Virolahti | Establish identity and intent under peacetime rules of engagement | Intercept, identify, signal, and escort two intruders out |
@@ -175,7 +201,7 @@ and air-defense targets have explicit battlefield roles.
 reserve movement. Destroying lead vehicles, bridges represented by authored
 choke-point triggers, or the logistics relay slows the assault. The objective is
 fulfilled when the timer expires with at least the required friendly force and
-convoy strength. The player may then disengage and extract even if enemies remain.
+convoy strength. The player may then break contact and extract even if enemies remain.
 This is important to the campaign tone: operational success does not require
 annihilating every unit on the map.
 
@@ -473,30 +499,27 @@ continue** or **Retry sortie**. Lost-aircraft and aborted results do not offer
 acceptance. Completing the campaign preserves the final state and best campaign
 score per difficulty.
 
-## Implementation sequence
+## Implementation status and follow-up scope
 
-### 1. Campaign foundation
+### Completed: campaign foundation
 
-- Add validated campaign definitions, pure state transitions, versioned storage,
-  deterministic mission resolution, and focused unit tests.
-- Change `SortieController.prepare()` to accept a resolved mission while
-  preserving standalone mission lookup at the caller.
-- Add the campaign menu shell, state view, debrief preview, accept/retry flow,
-  and lifecycle integration tests.
-- Use current `patrol`, `intercept`, and `support` rules for temporary chapters so
-  the full save/launch/debrief loop is testable before new objectives arrive.
+- Validated campaign definitions, pure state transitions, versioned storage,
+  deterministic mission resolution, and focused unit tests are in place.
+- `SortieController.prepare()` accepts a resolved mission while standalone
+  mission lookup remains at the caller.
+- The campaign menu, state view, debrief preview, accept/retry flow, and
+  lifecycle integration are implemented.
 
-### 2. Vertical slice: sorties 1, 2, and 6
+### Completed: vertical slice for sorties 1, 2, and 6
 
-- Implement contact disposition, identification, weapons hold, escort, and
-  asset-defense objectives for Unknown Track and Broken Silence.
-- Adapt Support into The Border Breaks with a strength threshold instead of a
-  kill-everything condition.
-- Implement campaign effects across these three sorties and test Easy, Standard,
-  and Hard end to end. This slice proves the escalation, air-only gameplay,
-  ground battle, and persistent consequences.
+- Unknown Track and Broken Silence implement contact disposition,
+  identification, weapons hold, escort, and asset-defense behavior.
+- The Border Breaks adapts Support with a friendly-strength threshold instead of
+  a kill-everything condition.
+- Authored campaign effects, Easy/Standard/Hard resolution, deterministic
+  retries, and persistent consequences are covered by the campaign tests.
 
-### 3. Reusable operational objectives
+### Follow-up: reusable operational objectives
 
 - Add prevent-action zones, delay, convoy survival, friendly advance, and phased
   objectives.
@@ -505,7 +528,7 @@ score per difficulty.
 - Add campaign-state modifiers to mission resolution, keeping combat systems
   independent of persistence.
 
-### 4. Complete the ten-sortie content
+### Follow-up: complete the ten-sortie content
 
 - Author the remaining chapters, variants, soft-branch changes, localized
   briefing/radio/debrief text, and menu radar previews.
@@ -513,7 +536,7 @@ score per difficulty.
   abstract site marker cannot communicate the role.
 - Keep each sortie's expected active play time around 8-15 minutes.
 
-### 5. Difficulty and campaign tuning
+### Ongoing: difficulty and campaign tuning
 
 - Move the threat-pacing concurrency limit into difficulty data.
 - Give Easy its weapon-hit grace, generous objective thresholds, and campaign
@@ -523,10 +546,10 @@ score per difficulty.
   and resource limits before increasing health or damage.
 - Run repeatable seeded playtests and adjust against the balance targets above.
 
-### 6. Polish and release validation
+### Ongoing: polish and release validation
 
 - Add ending scenes, campaign records, accessibility review, diagnostics context,
-  and recovery from corrupt or old saves.
+  and recovery from corrupt or migrated saves.
 - Run lifecycle, deterministic resolution, storage, objective, configuration,
   integration, browser, performance, and localization checks.
 - Update the current architecture, game design, testing guide, and README only

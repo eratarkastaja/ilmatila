@@ -15,13 +15,15 @@ export const MISSILE_PROFILES = {
   hostile: { speed: 305, burnTime: 10, life: 15, coastDrag: 0.1 },
 };
 
+const MISSILE_MIN_COAST_SPEED_RATIO = .58;
+const missileForward = new THREE.Vector3();
 const missileMaterial = (color, roughness = 0.85) => new THREE.MeshStandardMaterial({ color, roughness, flatShading: true });
 const missilePool=[];
 const missilePoolLimit=64;
 
 export function updateMissileMotor(missile, dt) {
   if (missile.motorBurning) {
-    missile.burnRemaining = Math.max(0, missile.burnRemaining - dt);
+    missile.burnRemaining = Math.max(0, missile.burnRemaining - Math.max(0, Number.isFinite(dt) ? dt : 0));
     if (missile.burnRemaining > 0) return;
     missile.motorBurning = false;
     // Active-radar/IR missiles can still steer on stored energy after motor
@@ -30,7 +32,24 @@ export function updateMissileMotor(missile, dt) {
     if (!missile.guidanceAfterBurnout) missile.guidanceActive = false;
     if (missile.mesh?.userData.engineFlame) missile.mesh.userData.engineFlame.visible = false;
   }
-  missile.velocity.multiplyScalar(Math.exp(-missile.coastDrag * dt));
+  if (!missile.velocity) return;
+  const delta = Math.max(0, Number.isFinite(dt) ? dt : 0);
+  const drag = Math.max(0, Number.isFinite(missile.coastDrag) ? missile.coastDrag : 0);
+  const currentSpeed = missile.velocity.length();
+  const configuredSpeed = Number.isFinite(missile.speed) ? Math.max(0, missile.speed) : 0;
+  const minimumCoastSpeed = Number.isFinite(missile.minCoastSpeed)
+    ? Math.max(0, missile.minCoastSpeed)
+    : configuredSpeed * MISSILE_MIN_COAST_SPEED_RATIO;
+  if (currentSpeed > 1e-6 && Number.isFinite(currentSpeed)) {
+    const coastSpeed = Math.max(minimumCoastSpeed, currentSpeed * Math.exp(-drag * delta));
+    missile.velocity.multiplyScalar(coastSpeed / currentSpeed);
+  } else if (minimumCoastSpeed > 0) {
+    // A malformed or interrupted launch must not leave a visible missile
+    // suspended in place. Recover its flight direction from the model.
+    missileForward.set(0, 0, 1);
+    if (missile.mesh?.quaternion) missileForward.applyQuaternion(missile.mesh.quaternion).normalize();
+    missile.velocity.copy(missileForward).multiplyScalar(minimumCoastSpeed);
+  }
 }
 
 export function createMissile(color) {

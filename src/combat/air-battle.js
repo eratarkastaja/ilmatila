@@ -14,7 +14,7 @@ const POP_UP_IDENTIFICATION_DELAY = 5;
 
 /** Coordinates air units and advances their behavior in simulation order. */
 export class AirBattle {
-  constructor({ scene, player, aircraftAsset, mission, terrain, audio, fx, playerVelocity, getPlayerHeading, deployHostileCountermeasures, addHostileProjectile, addPlayerProjectile, onMissileLaunch, onWingmanRadio, onPopUpThreat, onOperationalEvent, canStartHostileMissileAttack, difficulty = {}, random = createSeededRandom(DEFAULT_RANDOM_SEED), spawnRandom = random }) {
+  constructor({ scene, player, aircraftAsset, mission, terrain, audio, fx, playerVelocity, getPlayerHeading, deployHostileCountermeasures, addHostileProjectile, addPlayerProjectile, onMissileLaunch, onWingmanRadio, onPopUpThreat, onOperationalEvent, canStartHostileMissileAttack, weather = null, difficulty = {}, random = createSeededRandom(DEFAULT_RANDOM_SEED), spawnRandom = random }) {
     this.scene = scene;
     this.player = player;
     this.aircraftAssets = aircraftAsset;
@@ -32,6 +32,7 @@ export class AirBattle {
     this.onPopUpThreat = onPopUpThreat;
     this.onOperationalEvent = onOperationalEvent;
     this.canStartHostileMissileAttack = canStartHostileMissileAttack;
+    this.weather = weather;
     this.difficulty = difficulty;
     this.random = random;
     // Formation placement has its own deterministic stream so terrain-clamped
@@ -54,6 +55,7 @@ export class AirBattle {
     // Strike aircraft keep a stable aim point even if ownship later moves away.
     this.strikeTarget = player.position.clone();
     this.wingmanOrder = mission.wingmanInitialOrder ?? 'attack';
+    this.wingmanReturnPoint = null;
     this.hostilesSpawned = false;
     this.hostileProjectiles = [];
     this.spawnSystem = new AirSpawnSystem();
@@ -116,7 +118,8 @@ export class AirBattle {
     let contactCount = 0;
     let identifiedCount = 0;
     let escortedCount = 0;
-    const identifyRange = objective.identifyRange ?? 3200;
+    const identifyRange = (objective.identifyRange ?? 3200)
+      * (this.weather?.visualIdentificationRangeScale ?? 1);
     const identifyDuration = objective.identifyDuration ?? 3;
     const escortRange = objective.escortRange ?? 4200;
 
@@ -179,6 +182,10 @@ export class AirBattle {
     }
     if (targetCount > 0) this.strikeTarget.multiplyScalar(1 / targetCount);
     else this.strikeTarget.copy(this.player.position);
+  }
+
+  setWingmanReturnPoint(point) {
+    this.wingmanReturnPoint = point ?? null;
   }
 
   getWingmanController() {

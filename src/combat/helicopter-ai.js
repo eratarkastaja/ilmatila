@@ -60,7 +60,8 @@ export class HelicopterAI {
       const nose = enemy.direction.set(0, 0, 1).applyQuaternion(enemy.mesh.quaternion).normalize();
       if (nose.dot(playerLead) > .68) {
         if (enemy.airMissileLockRemaining == null) {
-          enemy.airMissileLockRemaining = AIR_MISSILE_LOCK_WARNING_SECONDS;
+          enemy.airMissileLockRemaining = battle.difficulty?.fighter?.missile?.lockWarningSeconds
+            ?? AIR_MISSILE_LOCK_WARNING_SECONDS;
         } else {
           enemy.airMissileLockRemaining = Math.max(0, enemy.airMissileLockRemaining - dt);
           if (enemy.airMissileLockRemaining <= 0) {

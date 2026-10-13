@@ -67,7 +67,40 @@ describe('WingmanController air combat', () => {
     expect(ally.dead).toBe(false);
   });
 
-  it('uses the disengage order for a wider break while a missile lock is active', () => {
+  it('keeps defending against an incoming missile whose source unit is unavailable', () => {
+    const controller = new WingmanController();
+    const ally = {
+      mesh: new THREE.Object3D(),
+      wing: 1,
+      heading: 0,
+      evasiveDirection: 1,
+      defensiveTimer: 0,
+      rescueTimer: 0,
+      rescueLockActive: false,
+      rescueMissile: null,
+      rescueAttacker: null,
+      rescueHighlight: false,
+      dead: false,
+    };
+    const missile = {
+      missile: true,
+      life: 4,
+      target: ally,
+      mesh: new THREE.Object3D(),
+    };
+    missile.mesh.position.set(100, 0, 0);
+
+    expect(() => controller.updateMissileDefense(
+      { hostileProjectiles: [missile] },
+      ally,
+      .1,
+    )).not.toThrow();
+    expect(ally.rescueMissile).toBe(missile);
+    expect(ally.defensiveTimer).toBeGreaterThan(0);
+    expect(ally.rescueHighlight).toBe(false);
+  });
+
+  it('uses a wider break while a missile lock is active', () => {
     const controller = new WingmanController();
     const player = new THREE.Group();
     player.position.set(0, 300, -10000);
@@ -79,7 +112,7 @@ describe('WingmanController air combat', () => {
       target: null, groundTarget: null, targetRefresh: 0, fireCooldown: 0, burstClock: 0, burstShots: 0,
       airMissiles: 0, airMissileCooldown: 0, groundMissiles: 0, groundMissileCooldown: 0,
       threatTarget: null, threatTimer: 0, defensiveTimer: 0, evasiveDirection: -1,
-      disengageTimer: 0, rescueLockActive: true, rescueMissile: null, rescueTimer: 14,
+      rescueLockActive: true, rescueMissile: null, rescueTimer: 14,
       rescueAttacker: { dead: false, mesh: new THREE.Group() }, rescueHighlight: true,
       phase: 'formation', dead: false,
     };
@@ -89,7 +122,7 @@ describe('WingmanController air combat', () => {
       allies: [ally],
       enemies: [],
       hostileProjectiles: [],
-      wingmanOrder: 'disengage',
+      wingmanOrder: 'attack',
       terrain: { worldSize: 32000, sampleHeight: () => 0 },
       difficulty: DIFFICULTY_PRESETS.standard,
       weaponAI: {},
@@ -126,7 +159,6 @@ describe('WingmanController air combat', () => {
       defensiveTimer: 0,
       evasiveDirection: -1,
       evasiveTimer: 0,
-      disengageTimer: 0,
       phase: 'extend',
       speed: 235,
       heading: 0,
@@ -186,7 +218,6 @@ describe('WingmanController air combat', () => {
       defensiveTimer: 0,
       evasiveDirection: -1,
       evasiveTimer: 0,
-      disengageTimer: 0,
       phase: 'extend',
       speed: 235,
       heading: 0,
@@ -245,7 +276,6 @@ describe('WingmanController air combat', () => {
       threatTimer: 0,
       defensiveTimer: 0,
       evasiveDirection: -1,
-      disengageTimer: 0,
       phase: 'extend',
       extendClock: 3.1,
       speed: 235,
@@ -281,5 +311,45 @@ describe('WingmanController air combat', () => {
 
     expect(ally.phase).toBe('breakout');
     expect(ally.waypoint.z).toBeLessThan(-1000);
+  });
+
+  it('sends an RTB order to the home point and suppresses offensive tasking', () => {
+    const player = { position: new THREE.Vector3(0, 300, -10000), userData: {} };
+    const returnPoint = new THREE.Vector3(0, 300, 5000);
+    const ally = {
+      wing: -1, target: null, groundTarget: null,
+      targetRefresh: 0, fireCooldown: 0, burstClock: 0, burstShots: 0,
+      airMissiles: 2, airMissileCooldown: 0, groundMissiles: 2, groundMissileCooldown: 0,
+      threatTarget: null, threatTimer: 0, defensiveTimer: 0, evasiveDirection: -1,
+      rescueLockActive: false, rescueMissile: null, rescueTimer: 0,
+      phase: 'formation', speed: 235, heading: 0, pitch: 0,
+      velocity: new THREE.Vector3(0, 0, 235), waypoint: new THREE.Vector3(),
+      steeringOffset: new THREE.Vector3(), direction: new THREE.Vector3(0, 0, 1),
+      away: new THREE.Vector3(), separation: new THREE.Vector3(),
+      lead: new THREE.Vector3(), leadOffset: new THREE.Vector3(), dead: false,
+      mesh: new THREE.Object3D(),
+    };
+    ally.mesh.position.set(0, 300, 0);
+    const fireAllyAirMissile = vi.fn();
+    const battle = {
+      player,
+      playerVelocity: new THREE.Vector3(0, 0, 235),
+      wingmanReturnPoint: returnPoint,
+      allies: [ally], enemies: [], groundUnits: [], wingmanOrder: 'attack',
+      difficulty: DIFFICULTY_PRESETS.standard,
+      terrain: { worldSize: 32000, sampleHeight: () => 0 },
+      weaponAI: { fireAllyAirMissile },
+    };
+    const controller = new WingmanController();
+
+    expect(controller.issueWingmanOrder(battle, 'rtb')).toBe(true);
+    controller.updateAllies(battle, .1, new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0));
+
+    expect(battle.wingmanOrder).toBe('rtb');
+    expect(ally.phase).toBe('rtb');
+    expect(ally.target).toBeNull();
+    expect(ally.groundTarget).toBeNull();
+    expect(ally.waypoint.z).toBeGreaterThan(4500);
+    expect(fireAllyAirMissile).not.toHaveBeenCalled();
   });
 });

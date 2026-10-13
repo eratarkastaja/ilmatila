@@ -130,11 +130,11 @@ describe('RadioSystem', () => {
     expect(radio.radio.acknowledgeWingmanCommand('fly-to-the-moon', wingmen, rejected)).toBe(false);
     expect(radio.node.hidden).toBe(true);
 
-    const accepted = airBattle.issueWingmanOrder('disengage');
+    const accepted = airBattle.issueWingmanOrder('regroup');
     expect(accepted).toBe(true);
-    expect(radio.radio.acknowledgeWingmanCommand('disengage', wingmen, accepted)).toBe(true);
+    expect(radio.radio.acknowledgeWingmanCommand('regroup', wingmen, accepted)).toBe(true);
     expect(radio.callsign.textContent).toBe('GROUSE');
-    expect(radio.message.textContent).toBe('Disengaging.');
+    expect(radio.message.textContent).toBe('Rejoining formation.');
     expect(wingmen.every(wingman => wingman.target === null)).toBe(true);
   });
 
@@ -175,47 +175,47 @@ describe('RadioSystem', () => {
   });
 
   it('reports the pop-up contact bearing and range before the identification call', () => {
-    const params = { bearing: '310', range: '18.0' };
+    const params = { bearing: '310', range: '18.0', intent: { key: 'radio.intent.intercept' } };
     expect(radio.radio.emit('threat.newContact', { scope: 'reinforcement', params })).toBe(true);
     expect(radio.message.textContent).toBe(
-      'New contact, bearing 310, 18.0 kilometres, fast mover. Radar return uncertain.',
+      'New contact, bearing 310, 18.0 kilometres. Estimated intent: an intercept group. Radar return uncertain.',
     );
 
     radio.radio.update(4.1);
     setLanguage('fi');
     expect(radio.radio.emit('threat.contactIdentified', { scope: 'reinforcement', params })).toBe(true);
     expect(radio.message.textContent).toBe(
-      'Viholliskontakti tunnistettu, suuntima 310, 18.0 kilometriä. Kohde lähestyy.',
+      'Viholliskontakti tunnistettu, suuntima 310, 18.0 kilometriä. Arvio: torjuntaosasto. Kohde lähestyy.',
     );
   });
 
   it('warns when a hostile group commits from its staging line', () => {
-    const params = { bearing: '045', range: '25.0' };
+    const params = { bearing: '045', range: '25.0', intent: { key: 'radio.intent.intercept' } };
     expect(radio.radio.emit('threat.contactCommit', { scope: 'screen-alpha', params })).toBe(true);
     expect(radio.callsign.textContent).toBe('CONTROL');
     expect(radio.message.textContent).toBe(
-      'Control: hostile group is committing, bearing 045, 25.0 kilometres. Prepare to merge.',
+      'Control: hostile group is committing, bearing 045, 25.0 kilometres. Intent: an intercept group. Prepare to merge.',
     );
     expect(radio.radio.emit('threat.contactCommit', { scope: 'screen-alpha', params })).toBe(false);
   });
 
   it('preserves uncertain contact timing while adding CAS tasking context', () => {
-    const params = { bearing: '270', range: '12.0' };
+    const params = { bearing: '270', range: '12.0', intent: { key: 'radio.intent.strike' } };
     expect(radio.radio.emit('support.contactAwaitingOrders', { params, scope: 'support-reinforcement' })).toBe(true);
     expect(radio.message.textContent).toBe(
-      'Uncertain contact, bearing 270, 12.0 kilometres, closing fast. Ground forces still need CAS; wingman tasking is yours.',
+      'Uncertain contact, bearing 270, 12.0 kilometres, intent assessed as a strike package. Ground forces still need CAS; wingman tasking is yours.',
     );
 
     radio.radio.update(5.1);
     expect(radio.radio.emit('support.fightersIdentified', { params, scope: 'support-reinforcement' })).toBe(true);
     expect(radio.message.textContent).toBe(
-      'Two hostile fighters identified, bearing 270, 12.0 kilometres. CAS continues.',
+      'Two hostile fighters identified, bearing 270, 12.0 kilometres. Assessment: a strike package. CAS continues.',
     );
 
     setLanguage('fi');
     radio.radio.refreshLanguage();
     expect(radio.message.textContent).toBe(
-      'Kaksi vihollishävittäjää tunnistettu, suuntima 270, 12.0 kilometriä. CAS-tuki jatkuu.',
+      'Kaksi vihollishävittäjää tunnistettu, suuntima 270, 12.0 kilometriä. Arvio: iskuosasto. CAS-tuki jatkuu.',
     );
   });
 });

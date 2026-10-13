@@ -67,6 +67,30 @@ describe('CampaignProgress', () => {
     expect(loaded.flags).toEqual(['intruders-profiled']);
   });
 
+  it('keeps migrated saves valid and clamps carried stores to the difficulty caps', () => {
+    const storage = createStorage(JSON.stringify({
+      version: 1,
+      saves: {
+        standard: save({
+          stores: { airMissiles: 99, groundMissiles: -2, gunRounds: 9999, flares: 8, chaff: 4 },
+          sustainmentChoice: 'unknown-choice',
+        }),
+      },
+    }));
+
+    const loaded = new CampaignProgress(storage).getSave('standard');
+
+    expect(loaded.stores).toEqual({
+      airMissiles: 10,
+      groundMissiles: 0,
+      gunRounds: 3500,
+      flares: 8,
+      chaff: 4,
+    });
+    expect(loaded.sustainmentChoice).toBeNull();
+    expect(new CampaignProgress(createStorage()).getSave('standard')).toBeNull();
+  });
+
   it('recovers from corrupt or unavailable storage', () => {
     const brokenStorage = {
       getItem() { throw new Error('unavailable'); },

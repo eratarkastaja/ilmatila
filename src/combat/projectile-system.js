@@ -17,7 +17,8 @@ const _up=new THREE.Vector3(0,1,0);
 const _right=new THREE.Vector3(1,0,0);
 
 function turnDirection(current, desired, maxAngle, direction, axis) {
-  if (desired.lengthSq() < 1e-9) {
+  const desiredLengthSq = desired.lengthSq();
+  if (!Number.isFinite(desiredLengthSq) || desiredLengthSq < 1e-9) {
     return current.lengthSq() > 1e-9 ? direction.copy(current).normalize() : direction.copy(forward);
   }
   if(current.lengthSq()>1e-9)direction.copy(current).normalize();
@@ -37,7 +38,7 @@ function turnDirection(current, desired, maxAngle, direction, axis) {
 export class ProjectileSystem {
   constructor({
     scene, player, playerShots = [], hostiles = [], decoys = [], collision, audio,
-    playerVelocity = stationaryVelocity, onPlayerDestroyed, onPlayerDamaged, onPlayerHit, onPlayerMissileHit, onJetDestroyed,
+    playerVelocity = stationaryVelocity, weather = null, onPlayerDestroyed, onPlayerDamaged, onPlayerHit, onPlayerMissileHit, onJetDestroyed,
     onUnitDestroyed, onFriendlyAircraftHit, addSpark, addWaterImpact, addExplosion, incomingDamageMultiplier = 1,
     hostileMissileTurnRate = HOSTILE_MISSILE_TURN_RATE, hostileMissileDamage = 62,
     hostileMissileProximityRadius = 20, random = createSeededRandom(DEFAULT_RANDOM_SEED), visualRandom = randomVisual,
@@ -45,6 +46,7 @@ export class ProjectileSystem {
     this.scene = scene;
     this.player = player;
     this.playerVelocity = playerVelocity;
+    this.weather = weather;
     this.playerShots = playerShots;
     this.hostiles = hostiles;
     this.decoys = decoys;
@@ -128,7 +130,10 @@ export class ProjectileSystem {
       this._steeringDirection,
       this._steeringAxis,
     );
-    shot.velocity.copy(direction).multiplyScalar(speed);
+    const safeSpeed = Number.isFinite(speed) && speed > 0
+      ? speed
+      : Math.max(1, Number.isFinite(shot.speed) ? shot.speed : 1);
+    shot.velocity.copy(direction).multiplyScalar(safeSpeed);
     if (hasVelocity) {
       // Rotate from the missile's current attitude. Rebuilding a quaternion
       // from world-forward each frame can roll-flip when the flight path
@@ -227,7 +232,14 @@ export class ProjectileSystem {
       }
       if (shot.homing) audio?.updateMissileFlight(shot.mesh.id, shot.mesh.position.distanceTo(player.position), dt);
       const previous = this._previousPosition.copy(shot.mesh.position);
-      if (shot.ballistic) shot.velocity.y -= shot.gravity * dt;
+      if (shot.ballistic) {
+        shot.velocity.y -= shot.gravity * dt;
+        const wind = shot.wind ?? this.weather?.wind;
+        const windScale = shot.windScale ?? this.weather?.ballisticWindScale ?? 1;
+        // Wind is a gentle drift force for arcade-friendly cannon rounds. It
+        // must not teleport a tracer to the ambient air velocity in one frame.
+        if (wind && windScale) shot.velocity.addScaledVector(wind, windScale * .12 * dt);
+      }
       shot.mesh.position.addScaledVector(shot.velocity, dt);
       if (shot.tracer) shot.mesh.quaternion.setFromUnitVectors(localBulletAxis, this._tracerDirection.copy(shot.velocity).normalize());
       if (shot.decoyTarget && this.collision.sweptDistanceSquared(previous, shot.mesh.position, shot.decoyTarget.previousPosition, shot.decoyTarget.position) < 12 ** 2) {

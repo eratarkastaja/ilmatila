@@ -45,7 +45,7 @@ function makeContact(x, y, z) {
   return { mesh, dead: false };
 }
 
-function setupRadar() {
+function setupRadar(weather = null) {
   const screen = makeElement();
   const indicator = { textContent: '' };
   const crosshair = makeElement();
@@ -65,7 +65,7 @@ function setupRadar() {
     playLockLost: vi.fn(),
     playLockReady: vi.fn(),
   };
-  return { radar: new CombatRadar(player, audio), player, screen, indicator, crosshair, audio };
+  return { radar: new CombatRadar(player, audio, weather), player, screen, indicator, crosshair, audio };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -81,6 +81,35 @@ describe('combat radar target and lock logic', () => {
     expect(radar.tracks.has(hostile.mesh)).toBe(true);
     expect(radar.target).toBeNull();
     expect(radar.lockCueConfirmed).toBe(false);
+  });
+
+  it('shortens the effective search range in low cloud without changing the base radar profile', () => {
+    const { radar } = setupRadar({ radarRangeScale: .5 });
+    const near = makeContact(0, 0, 13000);
+    const far = makeContact(0, 0, 16000);
+    radar.updateContacts(.016, 0, {
+      airFriendly: [], airHostile: [near, far], groundFriendly: [], groundHostile: [],
+    });
+    expect(radar.tracks.has(near.mesh)).toBe(true);
+    expect(radar.tracks.has(far.mesh)).toBe(false);
+    expect(radar.airRange).toBe(27000);
+  });
+
+  it('shows a first hostile return as uncertain before classifying it', () => {
+    const { radar } = setupRadar();
+    const hostile = makeContact(0, 0, 2000);
+    hostile.combatant = true;
+    hostile.identified = true;
+    hostile.radarTeam = 'hostile';
+    const contacts = { airFriendly: [], airHostile: [hostile], groundFriendly: [], groundHostile: [] };
+
+    radar.updateContacts(.016, 0, contacts);
+    expect(radar.tracks.get(hostile.mesh).node.className).toContain('unknown');
+    expect(radar.cycleTarget([hostile], [])).toBe(true);
+
+    for (let step = 0; step < 36; step++) radar.updateContacts(.1, 0, contacts);
+    expect(radar.tracks.get(hostile.mesh).node.className).toContain('hostile');
+    expect(radar.tracks.get(hostile.mesh).node.className).not.toContain('unknown');
   });
 
   it('keeps an uncertain pop-up return visible in ground mode and unselectable until identification', () => {

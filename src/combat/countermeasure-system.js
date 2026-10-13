@@ -66,6 +66,7 @@ export class CountermeasureSystem {
   constructor({
     scene, player, playerVelocity, fx, audio, decoys = [], playerShots = [], hostileShots = [],
     hostileAircraft = [], addTransientGlow, onInventoryChange = () => {}, initialCount = 12,
+    initialChaff = null,
     chaffConfig = DIFFICULTY_PRESETS.standard.player.chaff,
     random = createSeededRandom(DEFAULT_RANDOM_SEED), visualRandom = randomVisual,
   }) {
@@ -94,7 +95,7 @@ export class CountermeasureSystem {
     this.chaffConfig = chaffConfig;
     this.telemetry = null;
     this.flares = initialCount;
-    this.chaff = chaffConfig.count;
+    this.chaff = initialChaff ?? chaffConfig.count;
     this.cooldown = 0;
     this.chaffCooldown = 0;
     this.chaffDeploymentCount = 0;

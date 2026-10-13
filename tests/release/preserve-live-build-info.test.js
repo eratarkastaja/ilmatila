@@ -38,7 +38,7 @@ describe('preserveLiveBuildInfo', () => {
       .resolves.toBe('{"version":"0.2.0-beta.1","commit":"abc123"}');
   });
 
-  it('allows a legacy live site without build identity metadata', async () => {
+  it('allows a live site without build identity metadata', async () => {
     outputDirectory = await mkdtemp(join(tmpdir(), 'ilmatila-release-'));
     const fetchImpl = vi.fn(async () => new Response('not found', { status: 404 }));
 

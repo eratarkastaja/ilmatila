@@ -269,6 +269,95 @@
   box-shadow: 0 0 7px #9cdbb277;
 }
 
+.campaign-sustainment {
+  margin-top: 13px;
+  padding-top: 11px;
+  border-top: 1px solid var(--menu-line);
+}
+
+.campaign-sustainment[hidden] {
+  display: none;
+}
+
+.campaign-sustainment header {
+  align-items: flex-start;
+}
+
+.campaign-sustainment h3 {
+  margin: 3px 0 0;
+  color: #dce9df;
+  font: 700 16px Barlow Condensed,sans-serif;
+  letter-spacing: .06em;
+}
+
+.campaign-sustainment header>b {
+  color: var(--menu-accent);
+  font-size: 10px;
+}
+
+.campaign-sustainment>p {
+  margin: 8px 0 9px;
+  font-size: 12px;
+}
+
+.campaign-sustainment-choices {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 8px;
+}
+
+.campaign-sustainment-choice {
+  display: grid;
+  gap: 4px;
+  min-height: 82px;
+  padding: 9px 10px;
+  border: 1px solid rgba(161,193,179,.26);
+  color: #bfcfc5;
+  background: rgba(5,16,20,.68);
+  text-align: left;
+  cursor: pointer;
+}
+
+.campaign-sustainment-choice:hover,
+.campaign-sustainment-choice.selected {
+  border-color: #a9e1bd9c;
+  background: #18302be0;
+}
+
+.campaign-sustainment-choice:disabled {
+  border-color: rgba(161,193,179,.14);
+  color: #6f8077;
+  background: rgba(5,16,20,.42);
+  cursor: not-allowed;
+  opacity: .65;
+}
+
+.campaign-sustainment-choice:disabled strong,
+.campaign-sustainment-choice:disabled small {
+  color: #809187;
+}
+
+.campaign-sustainment-choice:focus-visible {
+  outline: 2px solid #a9e1bd;
+  outline-offset: 2px;
+}
+
+.campaign-sustainment-choice strong {
+  color: #e3ece5;
+  font: 700 13px Barlow Condensed,sans-serif;
+  letter-spacing: .06em;
+}
+
+.campaign-sustainment-choice span {
+  font: 500 11px/1.25 Rajdhani,sans-serif;
+}
+
+.campaign-sustainment-choice small {
+  color: #9cdbb2;
+  font: 700 10px Rajdhani,sans-serif;
+  letter-spacing: .08em;
+}
+
 .campaign-overview .campaign-ending {
   margin-bottom: 0;
   padding-top: 10px;
@@ -1998,6 +2087,33 @@
   letter-spacing: .1em;
 }
 
+.debrief-situation {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 1px;
+  margin: 0 0 15px;
+  border: 1px solid #95b6a32b;
+  background: #95b6a31f;
+}
+
+.debrief-situation>div {
+  min-width: 0;
+  padding: 10px 12px;
+  background: #0b171bf5;
+}
+
+.debrief-situation small {
+  color: #a9e1bd;
+  font: 700 9px Rajdhani,sans-serif;
+  letter-spacing: .14em;
+}
+
+.debrief-situation p {
+  margin: 6px 0 0;
+  color: #d2e1d6;
+  font: 500 12px/1.35 Rajdhani,sans-serif;
+}
+
 .campaign-debrief-actions {
   margin-top: 18px;
   padding: 16px;
@@ -2026,6 +2142,23 @@
   margin: 9px 0 13px;
   color: #bfd0c6;
   font: 500 14px/1.4 Rajdhani,sans-serif;
+}
+
+.campaign-debrief-objective-effects {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.campaign-debrief-objective-effects li {
+  padding: 7px 9px;
+  border-left: 2px solid #9ccfb0;
+  color: #c9dacf;
+  background: #091713;
+  font: 600 11px/1.3 Rajdhani,sans-serif;
+  letter-spacing: .04em;
 }
 
 .campaign-debrief-actions>div:last-child {
@@ -2250,6 +2383,9 @@
   }
   .debrief-stats {
     grid-template-columns: repeat(2,minmax(0,1fr));
+  }
+  .debrief-situation {
+    grid-template-columns: 1fr;
   }
   .debrief-grade-breakdown {
     grid-template-columns: 1fr;

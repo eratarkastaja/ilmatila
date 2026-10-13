@@ -523,7 +523,7 @@ describe('main game session lifecycle', () => {
       chapterIndex: 1,
       airControl: 68,
       defenseIntegrity: 71,
-      sortieReadiness: 72,
+      sortieReadiness: 75,
     });
     expect(new CareerProgress(globalThis.localStorage).getBest('patrol')).toBeNull();
     expect(document.querySelector('#mission-debrief').open).toBe(false);
@@ -549,7 +549,7 @@ describe('main game session lifecycle', () => {
       chapterIndex: 2,
       airControl: 59,
       defenseIntegrity: 66,
-      sortieReadiness: 69,
+      sortieReadiness: 72,
     });
   });
 

@@ -132,7 +132,17 @@ export class HostileFighterAI {
 
       const waypoint=enemy.waypoint;
 
-      const detectionRange = battle.difficulty?.fighter?.detection?.range ?? Infinity;
+      const stagingDistance = Math.max(
+        enemy.stagingDistance ?? 0,
+        battle.mission.hostileStagingDistance ?? 6500,
+      );
+      // A fighter that has reached its tactical line must be able to see the
+      // player there; otherwise long-range formations wait forever outside
+      // their authored detection radius and never reach a firing solution.
+      const detectionRange = Math.max(
+        battle.difficulty?.fighter?.detection?.range ?? Infinity,
+        stagingDistance + 1800,
+      );
       if (enemy.phase === 'staging') {
         enemy.detectedPlayerTimer = range <= detectionRange
           ? enemy.detectedPlayerTimer + dt
@@ -159,7 +169,12 @@ export class HostileFighterAI {
         const selected = this.selectEnemyEngagementTarget(battle, enemy, range, this._engagementSelection);
         enemy.engagementTarget = selected?.target ?? null;
         enemy.engagementTargetDomain = selected?.domain ?? 'air';
-        enemy.targetRefreshTimer = 1.15 + this.random() * .8;
+        const decisionMin = battle.difficulty?.fighter?.targeting?.decisionIntervalMin ?? 1.15;
+        const decisionMax = Math.max(
+          decisionMin,
+          battle.difficulty?.fighter?.targeting?.decisionIntervalMax ?? decisionMin + .8,
+        );
+        enemy.targetRefreshTimer = decisionMin + this.random() * (decisionMax - decisionMin);
       }
       const engagementTarget = enemy.burstShots > 0 && enemy.burstTarget && !enemy.burstTarget.dead
         ? enemy.burstTarget
@@ -192,13 +207,11 @@ export class HostileFighterAI {
       const gunLeadTime = battle.difficulty?.fighter?.gun?.leadTime ?? 4.5;
       const gunMaxRange = battle.difficulty?.fighter?.gun?.maxRange ?? 2200;
       const missileMaxRange = battle.difficulty?.fighter?.missile?.maxRange ?? 6400;
-      const stagingDistance = Math.max(
-        enemy.stagingDistance ?? 0,
-        battle.mission.hostileStagingDistance ?? 6500,
-        battle.mission.hostileMinimumSpawnDistance ?? 0,
-      );
       const isFlank = enemy.missionRole === 'flank';
-      const flankOffset = isFlank ? (enemy.flankSide ?? (enemy.lane >= 0 ? 1 : -1)) * 3200 : 0;
+      const flankOffset = isFlank
+        ? (enemy.flankSide ?? (enemy.lane >= 0 ? 1 : -1))
+          * (battle.difficulty?.fighter?.targeting?.sideAttackOffset ?? 3200)
+        : 0;
 
       if (enemy.missionRole === 'strike') {
         waypoint.copy(targetPosition ?? strikeTargetPosition ?? playerPosition);
@@ -242,7 +255,11 @@ export class HostileFighterAI {
         if (waypoint.distanceTo(enemy.mesh.position) < 1000) {
           enemy.phase = 'inbound';
           enemy.phaseClock = 0;
-          enemy.attackPattern = (enemy.attackPattern + 1 + Math.floor(this.random() * 2)) % ENEMY_ATTACK_RUNS.length;
+          const patternCount = Math.max(1, Math.min(
+            ENEMY_ATTACK_RUNS.length,
+            battle.difficulty?.fighter?.targeting?.attackPatternCount ?? ENEMY_ATTACK_RUNS.length,
+          ));
+          enemy.attackPattern = (enemy.attackPattern + 1 + Math.floor(this.random() * 2)) % patternCount;
           enemy.attackForward.copy(playerForward);
           enemy.attackRight.copy(playerRight);
         }
@@ -267,6 +284,7 @@ export class HostileFighterAI {
         );
         enemy.separation.subVectors(gunLead, enemy.mesh.position).normalize();
         waypoint.copy(gunLead).addScaledVector(enemy.separation, 1300);
+        if (isFlank) waypoint.addScaledVector(enemy.attackRight, flankOffset * .35);
       }
       if (enemy.evasiveTimer > 0) {
         const urgency = THREE.MathUtils.clamp(enemy.evasiveTimer / Math.max(2.4, enemy.evasiveDuration), 0, 1);
@@ -409,7 +427,8 @@ export class HostileFighterAI {
           enemy.missileLockRemaining = null;
           enemy.missileLockTarget = null;
         } else if (enemy.missileLockRemaining == null) {
-          enemy.missileLockRemaining = MISSILE_LOCK_WARNING_SECONDS;
+          enemy.missileLockRemaining = battle.difficulty?.fighter?.missile?.lockWarningSeconds
+            ?? MISSILE_LOCK_WARNING_SECONDS;
           enemy.missileLockTarget = missileTarget;
           if (missileTarget !== battle.player) {
             battle.reportWingmanMissileLock?.(enemy, missileTarget, enemy.missileLockSeeker);

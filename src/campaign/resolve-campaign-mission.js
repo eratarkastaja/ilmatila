@@ -123,6 +123,12 @@ export function resolveCampaignMission(definition, state, { seed = state.current
     return tuned;
   });
   mission = applyMissionOverrides(mission, chapter.missionOverrides, state.difficulty);
+  if (Number.isFinite(chapter.timeOfDay)) {
+    const weather = typeof mission.weather === 'string'
+      ? { preset: mission.weather }
+      : { ...(mission.weather ?? {}) };
+    mission.weather = { ...weather, timeOfDay: chapter.timeOfDay };
+  }
   if (state.sortieReadiness < 35) mission.wingmen = Math.max(1, mission.wingmen - 1);
   else if (state.sortieReadiness >= 80) mission.wingmen = Math.min(3, mission.wingmen + 1);
 
@@ -133,6 +139,14 @@ export function resolveCampaignMission(definition, state, { seed = state.current
     displayTitleKey: chapter.titleKey,
   });
 
+  const preview = resolveMissionVariant(mission, seed);
+  if (Number.isFinite(chapter.timeOfDay)) {
+    const weather = typeof preview.mission.weather === 'string'
+      ? { preset: preview.mission.weather }
+      : { ...(preview.mission.weather ?? {}) };
+    preview.mission.weather = { ...weather, timeOfDay: chapter.timeOfDay };
+  }
+
   return {
     campaignId: definition.id,
     chapter,
@@ -140,7 +154,7 @@ export function resolveCampaignMission(definition, state, { seed = state.current
     attemptId: state.currentAttemptId,
     seed: Number(seed) >>> 0,
     mission,
-    preview: resolveMissionVariant(mission, seed),
+    preview,
   };
 }
 

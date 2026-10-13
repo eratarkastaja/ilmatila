@@ -19,13 +19,14 @@ const tracerDirection=new THREE.Vector3();
 
 /** Owns trigger cadence, weapon selection gates, ammunition and launch feedback. */
 export class WeaponSystem {
-  constructor({ player, scene, fx, audio, radar, playerVelocity, addProjectile, loadout = {}, canFireWeapons = () => true, onWeaponsHoldViolation = () => {}, random = createSeededRandom(DEFAULT_RANDOM_SEED) }) {
+  constructor({ player, scene, fx, audio, radar, playerVelocity, weather = null, addProjectile, loadout = {}, canFireWeapons = () => true, onWeaponsHoldViolation = () => {}, random = createSeededRandom(DEFAULT_RANDOM_SEED) }) {
     this.player = player;
     this.scene = scene;
     this.fx = fx;
     this.audio = audio;
     this.radar = radar;
     this.playerVelocity = playerVelocity;
+    this.weather = weather;
     this.addProjectile = addProjectile;
     this.canFireWeapons = canFireWeapons;
     this.onWeaponsHoldViolation = onWeaponsHoldViolation;
@@ -117,9 +118,10 @@ export class WeaponSystem {
     const direction = this._direction.copy(forward).applyQuaternion(attitude).normalize();
     const right = this._right.copy(localRight).applyQuaternion(attitude).normalize();
     const up = this._up.copy(localUp).applyQuaternion(attitude).normalize();
+    const dispersion = this.weather?.gunDispersionScale ?? 1;
     direction
-      .addScaledVector(right, (this.random() - .5) * .0009)
-      .addScaledVector(up, (this.random() - .5) * .0009)
+      .addScaledVector(right, (this.random() - .5) * .0009 * dispersion)
+      .addScaledVector(up, (this.random() - .5) * .0009 * dispersion)
       .normalize();
     const muzzleOffset = this._muzzleOffset.set(
       F35_GUN_MUZZLE_OFFSET.x,
@@ -136,6 +138,8 @@ export class WeaponSystem {
     shot.tracer=tracer;
     shot.ballistic=true;
     shot.gravity=GUN_PROJECTILE_GRAVITY;
+    shot.wind = this.weather?.wind ?? null;
+    shot.windScale = this.weather?.ballisticWindScale ?? 1;
     shot.life=GUN_PROJECTILE_LIFETIME;
     shot.damage=.34;
     shot.ally=false;

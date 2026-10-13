@@ -21,6 +21,16 @@ import { disposeMissilePool } from './combat/projectiles.js';
 import { createSortieSeed } from './combat/random.js';
 import { getDifficultyPreset } from './combat/difficulty.js';
 import { planAirIngressStart } from './combat/air-combat-utils.js';
+import {
+  daylightFactor,
+  formatTimeOfDay,
+  getWeatherTimeOfDay,
+  isNightTime,
+  normalizeTimeOfDay,
+  resolveWeather,
+  TIME_OF_DAY_OPTIONS,
+  weatherLabelKey,
+} from './combat/weather.js';
 import { renderOptionalObjectives } from './ui/optional-objectives.js';
 import { CampaignView } from './ui/campaign-view.js';
 import { formatPercent, getLanguage, t } from './ui/i18n.js';
@@ -41,6 +51,8 @@ const menuDifficulty = document.querySelector('#menu-difficulty');
 const devMissionPicker = document.querySelector('#dev-mission-picker');
 const devMissionSelect = document.querySelector('#dev-mission-select');
 const launchButton = document.querySelector('#launch-mission');
+const menuWeather = document.querySelector('[data-i18n="menu.weather"]');
+const menuTimeOfDay = document.querySelector('#menu-time-of-day');
 const launchErrorDialog = document.querySelector('#launch-error-dialog');
 const launchErrorTitle = document.querySelector('#launch-error-title');
 const launchErrorMessage = document.querySelector('#launch-error-message');
@@ -89,6 +101,8 @@ let selectedMissionResolution = null;
 let playMode = 'standalone';
 let campaignSession = null;
 let pendingCampaignResult = null;
+let standaloneTimeOfDay = null;
+let campaignTimeOfDayOverride = null;
 let menuRadar = null;
 const theaterAreas = TERRAIN_AREAS;
 if (!menuTheater.options.length) {
@@ -113,8 +127,12 @@ menuTheater.value = initialAreaId;
 let selectedAreaId = initialAreaId;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(ATMOSPHERE.hazeColor);
-scene.fog = new THREE.FogExp2(ATMOSPHERE.hazeColor, ATMOSPHERE.sceneFogDensity);
+const dayHazeColor = new THREE.Color(ATMOSPHERE.hazeColor);
+const nightHazeColor = new THREE.Color('#091421');
+const nightVisionHazeColor = new THREE.Color('#15352d');
+const sceneHazeColor = dayHazeColor.clone();
+scene.background = sceneHazeColor;
+scene.fog = new THREE.FogExp2(sceneHazeColor, ATMOSPHERE.sceneFogDensity);
 
 const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 22000);
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -125,8 +143,11 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 root.appendChild(renderer.domElement);
 
-scene.add(new THREE.HemisphereLight(0xc5e0eb, 0x343b36, 2.2));
+const hemisphereLight = new THREE.HemisphereLight(0xc5e0eb, 0x343b36, 2.2);
+scene.add(hemisphereLight);
 const sun = new THREE.DirectionalLight(0xffedcf, 3.7);
+const daySunColor = new THREE.Color('#ffedcf');
+const nightSunColor = new THREE.Color('#7691b0');
 sun.position.copy(SUN_DIRECTION).multiplyScalar(1200);
 scene.add(sun);
 const sunEffects = new SunEffects(scene, camera);
@@ -141,15 +162,10 @@ scene.add(player);
 const controls = new FlightControls(player, camera, renderer.domElement);
 controls.setEnabled(false);
 const fx = new FlightFX(scene);
-const weather = {
-  // Moist, cloudy air makes long contrails visible once aircraft climb above 5.2 km AGL.
-  humidity: 0.78,
-  cloudCoverage: 0.62,
-  contrailBaseAltitude: 5200,
-  contrailFullAltitude: 6800,
-  wind: new THREE.Vector3(5, 0.15, -3),
-};
+const weather = resolveWeather('clear');
+let menuPreviewWeather = weather;
 let sortie = null;
+let needsMenuRender = true;
 const frameProfiler = import.meta.env.DEV ? new FrameProfiler() : null;
 let startMenuHideTimer = null;
 let launchErrorKind = null;
@@ -162,6 +178,59 @@ function getSelectedDifficulty() {
     : careerProgress.difficulty;
 }
 
+function authoredTimeOfDay(mission = selectedMissionResolution?.mission ?? selectedMissionDefinition) {
+  return resolveWeather(mission?.weather).timeOfDay;
+}
+
+function selectedTimeOfDay(mission = selectedMissionResolution?.mission ?? selectedMissionDefinition) {
+  const authored = authoredTimeOfDay(mission);
+  if (playMode === 'campaign') {
+    return developmentMode && campaignTimeOfDayOverride !== null
+      ? campaignTimeOfDayOverride
+      : authored;
+  }
+  return standaloneTimeOfDay ?? authored;
+}
+
+function setTimeOfDaySelector(mission = selectedMissionResolution?.mission ?? selectedMissionDefinition) {
+  if (!menuTimeOfDay) return;
+  const value = selectedTimeOfDay(mission);
+  const authoredWeather = typeof mission?.weather === 'string'
+    ? { preset: mission.weather }
+    : { ...(mission?.weather ?? {}) };
+  menuPreviewWeather = resolveWeather({ ...authoredWeather, timeOfDay: value });
+  const options = TIME_OF_DAY_OPTIONS.map(option => ({
+    value: option.hours,
+    label: `${formatTimeOfDay(option.hours)} · ${t(option.labelKey)}`,
+  }));
+  if (!options.some(option => option.value === value)) {
+    options.push({ value, label: `${formatTimeOfDay(value)} · ${t('menu.authoredTime')}` });
+  }
+  menuTimeOfDay.replaceChildren(...options.map(option => {
+    const element = document.createElement('option');
+    element.value = String(option.value);
+    element.textContent = option.label;
+    return element;
+  }));
+  menuTimeOfDay.value = String(value);
+  menuTimeOfDay.disabled = Boolean(sortie?.launchInProgress)
+    || (playMode === 'campaign' && !developmentMode);
+  needsMenuRender = true;
+}
+
+function missionWithSelectedTimeOfDay(mission) {
+  if (!mission) return mission;
+  const timeOfDay = selectedTimeOfDay(mission);
+  if (timeOfDay === authoredTimeOfDay(mission)) return mission;
+  const weather = typeof mission.weather === 'string'
+    ? { preset: mission.weather }
+    : { ...(mission.weather ?? {}) };
+  return {
+    ...mission,
+    weather: { ...weather, timeOfDay },
+  };
+}
+
 function updateMenuControlLocks() {
   const campaignLocked = playMode === 'campaign';
   // Difficulty can be changed while the campaign is at the menu.  The
@@ -172,6 +241,7 @@ function updateMenuControlLocks() {
   if (devMissionSelect) {
     devMissionSelect.disabled = !developmentMode || Boolean(sortie?.launchInProgress || sortie?.started);
   }
+  setTimeOfDaySelector();
 }
 
 function restoreMenuControls() {
@@ -313,7 +383,7 @@ if (frameProfiler) {
       const selectedArea = theaterAreas.find(area => area.id === selectedAreaId) ?? theaterAreas[0];
       const prepared = await sortie.prepare({
         missionId: selectedMissionId,
-        mission: selectedMissionDefinition,
+        mission: missionWithSelectedTimeOfDay(selectedMissionDefinition),
         areaId: selectedArea.id,
         area: selectedArea,
         difficulty: getSelectedDifficulty(),
@@ -437,6 +507,7 @@ function renderMissionProgress() {
 function selectMission(id) {
   if (!Object.hasOwn(MISSIONS, id)
     || (!developmentMode && !careerProgress.isUnlocked(id))) return false;
+  if (playMode === 'standalone' && selectedMissionId !== id) standaloneTimeOfDay = null;
   if (selectedMissionId !== id || plannedSortieSeed === null) plannedSortieSeed = createSortieSeed();
   selectedMissionId = id;
   const baseMission = stressMode ? { ...MISSIONS[id], variants: [] } : MISSIONS[id];
@@ -457,6 +528,11 @@ function selectMission(id) {
   document.querySelector('#briefing-code').textContent = t(`mission.${id}.code`);
   document.querySelector('#briefing-copy').textContent = t(`mission.${id}.briefing`);
   document.querySelector('#theater-mission-name').textContent = t(`mission.${id}.title`).toUpperCase();
+  setMenuWeather(missionResolution.mission.weather);
+  if (standaloneTimeOfDay === null && playMode === 'standalone') {
+    standaloneTimeOfDay = authoredTimeOfDay(missionResolution.mission);
+  }
+  setTimeOfDaySelector(missionResolution.mission);
   const standardWeapons = getDifficultyPreset('standard').player.weapons;
   const selectedWeapons = getDifficultyPreset(careerProgress.difficulty).player.weapons;
   const optionalObjectives = scaleMissileReserveObjectives(
@@ -472,6 +548,13 @@ function selectMission(id) {
       : '';
   }
   return true;
+}
+
+function setMenuWeather(weatherConfig) {
+  if (!menuWeather) return;
+  const key = weatherLabelKey(weatherConfig);
+  menuWeather.dataset.i18n = key;
+  menuWeather.textContent = t(key).toUpperCase();
 }
 
 function renderCampaignChapter() {
@@ -491,6 +574,8 @@ function renderCampaignChapter() {
       ? t(`campaign.ending.${campaignSession.state.ending}`)
       : '';
     document.querySelector('#theater-mission-name').textContent = t(campaignSession.definition.titleKey).toUpperCase();
+    setMenuWeather('clear');
+    setTimeOfDaySelector(null);
     renderOptionalObjectives(briefingOptionalObjectiveList, []);
     if (briefingVariant) briefingVariant.hidden = true;
     return false;
@@ -511,6 +596,8 @@ function renderCampaignChapter() {
   document.querySelector('#briefing-code').textContent = t(`mission.${selectedMissionId}.code`);
   document.querySelector('#briefing-copy').textContent = t(resolved.chapter.briefingKey);
   document.querySelector('#theater-mission-name').textContent = t(resolved.chapter.titleKey).toUpperCase();
+  setMenuWeather(resolved.preview.mission.weather);
+  setTimeOfDaySelector(resolved.preview.mission);
   const standardWeapons = getDifficultyPreset('standard').player.weapons;
   const selectedWeapons = getDifficultyPreset(campaignSession.difficulty).player.weapons;
   const optionalObjectives = scaleMissileReserveObjectives(
@@ -534,6 +621,7 @@ function selectDevelopmentCampaignChapter(chapterId) {
   if (!developmentMode || playMode !== 'campaign' || !campaignSession) return false;
   const chapterIndex = campaignSession.definition.chapters.findIndex(chapter => chapter.id === chapterId);
   if (!campaignSession.selectDevelopmentChapter(chapterIndex)) return false;
+  campaignTimeOfDayOverride = null;
   pendingCampaignResult = null;
   campaignView.hideDebrief();
   renderCampaignChapter();
@@ -544,6 +632,7 @@ function selectDevelopmentCampaignChapter(chapterId) {
 function activateCampaignMode() {
   if (sortie?.started || sortie?.launchInProgress) return;
   playMode = 'campaign';
+  campaignTimeOfDayOverride = null;
   const difficulty = ['easy', 'standard', 'hard'].includes(menuDifficulty.value)
     ? menuDifficulty.value
     : careerProgress.difficulty;
@@ -567,6 +656,7 @@ function activateCampaignMode() {
 function activateStandaloneMode() {
   if (sortie?.started || sortie?.launchInProgress) return;
   playMode = 'standalone';
+  campaignTimeOfDayOverride = null;
   campaignSession = null;
   pendingCampaignResult = null;
   menuDifficulty.value = careerProgress.difficulty;
@@ -693,6 +783,7 @@ menuDifficulty.addEventListener('change', () => {
       difficulty,
     });
     pendingCampaignResult = null;
+    campaignTimeOfDayOverride = null;
     campaignView.hideDebrief();
     renderCampaignChapter();
     updateMenuControlLocks();
@@ -708,10 +799,30 @@ menuDifficulty.addEventListener('change', () => {
   selectMission(selectedMissionId);
 });
 
+menuTimeOfDay?.addEventListener('change', () => {
+  const value = Number(menuTimeOfDay.value);
+  if (!Number.isFinite(value)) return;
+  const normalized = normalizeTimeOfDay(value);
+  if (playMode === 'campaign') {
+    if (!developmentMode) {
+      setTimeOfDaySelector();
+      return;
+    }
+    campaignTimeOfDayOverride = normalized;
+  } else {
+    standaloneTimeOfDay = normalized;
+  }
+  setTimeOfDaySelector();
+});
+
 for (const card of missionCards) card.addEventListener('click', () => selectMission(card.dataset.mission));
 devMissionSelect?.addEventListener('change', () => {
   selectDevelopmentCampaignChapter(devMissionSelect.value);
 });
+campaignView.onSustainmentChoice = choiceId => {
+  if (playMode !== 'campaign' || !campaignSession) return;
+  if (campaignSession.selectSustainmentChoice(choiceId)) renderCampaignChapter();
+};
 campaignView.standaloneModeButton.addEventListener('click', activateStandaloneMode);
 campaignView.campaignModeButton.addEventListener('click', activateCampaignMode);
 
@@ -1030,7 +1141,7 @@ async function launchMissionFromGesture({ allowDuringMenuTerrainLoad = false } =
   const selectedArea = theaterAreas.find(area => area.id === selectedAreaId) ?? theaterAreas[0];
   const prepared = await sortie.prepare({
     missionId: selectedMissionId,
-    mission: selectedMissionDefinition,
+    mission: missionWithSelectedTimeOfDay(selectedMissionDefinition),
     areaId: selectedArea.id,
     area: selectedArea,
     difficulty: getSelectedDifficulty(),
@@ -1093,7 +1204,6 @@ const HUD_READOUT_INTERVAL = 1 / 15;
 let hasGunReticleShift = false;
 let hudReadoutElapsed = HUD_READOUT_INTERVAL;
 let previousAltitude = player.position.y;
-let needsMenuRender = true;
 const assets = new AssetRepository({
   terrainAnisotropy: Math.min(renderer.capabilities.getMaxAnisotropy(), 12),
   onAircraftLoaded: aircraftAssets => {
@@ -1250,6 +1360,35 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.04);
   if (!startMenu.hidden) menuRadar.update(dt);
   const combat = sortie.combat;
+  const activeWeather = combat?.weather ?? menuPreviewWeather;
+  const timeOfDay = getWeatherTimeOfDay(activeWeather, combat?.missionFlow?.elapsed ?? 0);
+  const daylight = daylightFactor(timeOfDay);
+  const night = isNightTime(timeOfDay);
+  const nightVision = Boolean(combat?.hudState?.environment?.nightVision && night);
+  sunEffects.setTimeOfDay?.(timeOfDay);
+  if (scene.fog) {
+    const visibility = THREE.MathUtils.clamp(activeWeather?.visibility ?? 1, .05, 1);
+    // Night vision raises usable contrast and lets the player read terrain
+    // through the low-light haze without changing the authored weather.
+    const nightVisionGain = nightVision ? .58 : 1;
+    scene.fog.density = ATMOSPHERE.sceneFogDensity
+      * (1 + (1 - visibility) * 1.15)
+      * nightVisionGain;
+    sceneHazeColor.copy(nightHazeColor).lerp(dayHazeColor, daylight);
+    if (nightVision) sceneHazeColor.lerp(nightVisionHazeColor, .52);
+    scene.fog.color.copy(sceneHazeColor);
+    hemisphereLight.intensity = THREE.MathUtils.lerp(.28, 2.2, daylight) + (nightVision ? .66 : 0);
+    sun.intensity = THREE.MathUtils.lerp(.08, 3.7, daylight) + (nightVision ? .2 : 0);
+    sun.color.copy(nightSunColor).lerp(daySunColor, daylight);
+    if (sunEffects.sunDirection && sun.position?.copy) {
+      sun.position.copy(sunEffects.sunDirection).multiplyScalar(1200);
+    }
+    scene.environmentIntensity = THREE.MathUtils.lerp(.16, 1, daylight) + (nightVision ? .25 : 0);
+    renderer.toneMappingExposure = THREE.MathUtils.lerp(.78, 1.0, daylight) + (nightVision ? .2 : 0);
+  }
+  clouds.userData.setAtmosphere?.(daylight, sceneHazeColor);
+  flightHud.classList.toggle('night-vision', nightVision);
+  renderer.domElement.classList.toggle('night-vision-scene', nightVision);
   if (sortie.started && !sortie.paused && combat) {
     const stressScenario = sortie.stressScenario;
     const frameTimestamp = performance.now();
@@ -1276,7 +1415,7 @@ function animate() {
       for (const shot of combat.playerShots) if (shot.homing) activeMissiles.push(shot);
       for (const shot of combat.hostiles) if (shot.missile) activeMissiles.push(shot);
     }
-    fx.update(dt, activeAircraft, activeMissiles, terrain, weather, camera);
+    fx.update(dt, activeAircraft, activeMissiles, terrain, activeWeather, camera);
     const verticalSpeed = dt > 0 ? (player.position.y - previousAltitude) / dt : 0;
     previousAltitude = player.position.y;
     hudReadoutElapsed += dt;
@@ -1319,9 +1458,19 @@ function animate() {
         gunReticle.style.setProperty('--aim-shift-y', aimShiftY);
       }
     }
-    // Let the cloud field drift across the camera slowly with the wind instead of locking it in place.
-    clouds.position.x = player.position.x * 0.98 + weather.wind.x * clock.elapsedTime;
-    clouds.position.z = player.position.z * 0.98 + weather.wind.z * clock.elapsedTime;
+  }
+  if (!sortie.started) {
+    // The menu is a live world preview too. Keep its cloud deck aligned with
+    // the selected weather/time while retaining the lightweight menu render.
+    clouds.position.x = activeWeather.wind.x * clock.elapsedTime;
+    clouds.position.y = (activeWeather.cloudBaseAltitude ?? 3500) - 3500;
+    clouds.position.z = activeWeather.wind.z * clock.elapsedTime;
+  } else if (!sortie.paused && combat) {
+    // Let the cloud field drift across the camera slowly with the wind instead
+    // of locking it in place during flight.
+    clouds.position.x = player.position.x * 0.98 + activeWeather.wind.x * clock.elapsedTime;
+    clouds.position.y = (activeWeather.cloudBaseAltitude ?? 3500) - 3500;
+    clouds.position.z = player.position.z * 0.98 + activeWeather.wind.z * clock.elapsedTime;
   }
   if (sortie.started || needsMenuRender) {
     sunEffects.update(camera);

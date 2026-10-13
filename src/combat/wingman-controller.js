@@ -7,7 +7,8 @@ import {
 } from './air-combat-utils.js';
 import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
 
-const isHoldingFormation = order => order === 'regroup' || order === 'disengage' || order === 'rtb';
+const isHoldingFormation = order => order === 'regroup' || order === 'rtb';
+const isReturningToBase = order => order === 'rtb';
 const WINGMAN_RESCUE_WINDOW_SECONDS = 14;
 
 const missileTargetKey = (target) => target?.mesh?.id ?? target;
@@ -49,18 +50,21 @@ export class WingmanController {
 
   reportMissileInbound(battle, ally, attacker, missile) {
     if (!ally || ally.dead || !attacker || !missile) return;
+    const missileMesh = missile.mesh ?? missile;
+    if (!missileMesh?.id) return;
     this.setRescueFocus(ally, attacker, WINGMAN_RESCUE_WINDOW_SECONDS);
     ally.rescueLockActive = false;
     ally.rescueMissile = missile;
     ally.lastEvadedMissile = null;
     ally.defensiveTimer = Math.max(ally.defensiveTimer, .7);
     battle.onWingmanRadio?.('rescueMissileInbound', ally, {
-      scope: String(missile.mesh.id),
+      scope: String(missileMesh.id),
       params: { attacker: attacker.label ?? 'hostile fighter' },
     });
   }
 
   setRescueFocus(ally, attacker, seconds) {
+    if (!ally || ally.dead || !attacker || attacker.dead) return false;
     const previousAttacker = ally.rescueAttacker;
     if (previousAttacker && previousAttacker !== attacker
       && previousAttacker.rescueFocusWingman === ally) {
@@ -75,6 +79,7 @@ export class WingmanController {
     attacker.rescueFocusWingman = ally;
     attacker.rescueHighlight = true;
     attacker.rescueFocusKind = 'rescue-attacker';
+    return true;
   }
 
   clearRescueFocus(ally) {
@@ -119,7 +124,10 @@ export class WingmanController {
 
     if (incoming) {
       if (ally.rescueMissile !== incoming) {
-        this.setRescueFocus(ally, incoming.sourceUnit, WINGMAN_RESCUE_WINDOW_SECONDS);
+        if (!this.setRescueFocus(ally, incoming.sourceUnit, WINGMAN_RESCUE_WINDOW_SECONDS)) {
+          this.clearRescueFocus(ally);
+          ally.rescueTimer = 0;
+        }
         ally.rescueMissile = incoming;
         ally.rescueLockActive = false;
         ally.lastEvadedMissile = null;
@@ -143,7 +151,7 @@ export class WingmanController {
   }
 
   issueWingmanOrder(battle, order) {
-    if (!['attack', 'defend', 'regroup', 'disengage', 'rtb'].includes(order)) return false;
+    if (!['attack', 'defend', 'regroup', 'rtb'].includes(order)) return false;
     if (!battle.allies.some(ally => !ally.dead)) return false;
     if (battle.wingmanOrder === order) return true;
     battle.wingmanOrder = order;
@@ -155,10 +163,10 @@ export class WingmanController {
         ally.threatTimer = 0;
       }
       ally.targetRefresh = 0;
-      ally.disengageTimer = order === 'disengage' ? 2.4 : 0;
       ally.extendClock = 0;
       ally.breakoutTimer = 0;
-      ally.phase = order === 'disengage' ? 'extend' : 'formation';
+      ally.returnedToBase = false;
+      ally.phase = isReturningToBase(order) ? 'rtb' : 'formation';
     }
     return true;
   }
@@ -182,7 +190,6 @@ export class WingmanController {
       ally.targetRefresh -= dt;
       ally.fireCooldown -= dt;
 
-      ally.disengageTimer = Math.max(0, ally.disengageTimer - dt);
       const holdFormation = isHoldingFormation(battle.wingmanOrder);
       if (holdFormation) {
         ally.target = null;
@@ -223,8 +230,7 @@ export class WingmanController {
       const targetVelocity = target?.velocity ?? zeroVelocity;
       const targetRange = target ? target.mesh.position.distanceTo(ally.mesh.position) : Infinity;
       const waypoint=ally.waypoint;
-      const missileBreakout = Boolean(ally.rescueLockActive || ally.rescueMissile)
-        && battle.wingmanOrder === 'disengage';
+      const missileBreakout = Boolean(ally.rescueLockActive || ally.rescueMissile);
 
       // Start the pass/extend state before the nose-to-nose merge. A 1.1 km
       // threshold lets two aircraft orbit around each other's lead point at
@@ -259,9 +265,12 @@ export class WingmanController {
         waypoint.copy(ally.mesh.position).addScaledVector(ally.direction, missileBreakout ? 2500 : 1450);
         waypoint.addScaledVector(playerRight, ally.evasiveDirection * (missileBreakout ? 1120 : 620));
         waypoint.y += missileBreakout ? 420 : 200;
-      } else if (battle.wingmanOrder === 'disengage' && ally.disengageTimer > 0) {
-        waypoint.copy(ally.mesh.position).addScaledVector(ally.direction, 1500);
-        waypoint.y += 220;
+      } else if (isReturningToBase(battle.wingmanOrder) && battle.wingmanReturnPoint) {
+        ally.phase = 'rtb';
+        waypoint.copy(battle.wingmanReturnPoint)
+          .addScaledVector(playerRight, ally.wing * 230);
+        waypoint.y += 24 + ally.wing * 28;
+        ally.returnedToBase = ally.mesh.position.distanceTo(battle.wingmanReturnPoint) <= 1250;
       } else if (target && targetRange < 10500 && !holdFormation) {
         if (ally.phase === 'extend') {
           const radial = ally.separation.subVectors(ally.mesh.position,target.mesh.position);
@@ -326,21 +335,31 @@ export class WingmanController {
       const groundMissileTargets = getMissileTargetHistory(ally, 'ground');
       const airTargetKey = missileTargetKey(target);
       const groundTargetKey = missileTargetKey(target);
-      if (!groundTarget && ally.airMissiles > 0 && ally.airMissileCooldown <= 0
+      const protectiveAirTarget = !groundTarget && this.isProtectiveAirTarget(battle, target);
+      const protectiveGroundTarget = groundTarget && this.isProtectiveGroundTarget(battle, target);
+      const canUseAirMissile = battle.wingmanOrder === 'attack'
+        || (battle.wingmanOrder === 'defend' && protectiveAirTarget);
+      const canUseGroundMissile = battle.wingmanOrder === 'attack'
+        || (battle.wingmanOrder === 'defend' && protectiveGroundTarget);
+      const attackOrder = battle.wingmanOrder === 'attack';
+      const airMissileAlignment = attackOrder ? .78 : .84;
+      const groundMissileAlignment = attackOrder ? .91 : .955;
+      if (canUseAirMissile && !groundTarget && ally.airMissiles > 0 && ally.airMissileCooldown <= 0
         && !airMissileTargets.has(airTargetKey)
         && targetRange > (battle.difficulty?.wingman?.airMissile?.minRange ?? 2300)
         && targetRange < (battle.difficulty?.wingman?.airMissile?.maxRange ?? 7800)
-        && alignment > .84) {
+        && alignment > airMissileAlignment) {
         battle.weaponAI.fireAllyAirMissile(battle, ally, target);
         ally.airMissiles--;
         airMissileTargets.add(airTargetKey);
-        ally.airMissileCooldown = (battle.difficulty?.wingman?.airMissile?.cooldown ?? 5.2)
-          + this.random() * 2.4;
+        const cadence = attackOrder ? .82 : 1;
+        ally.airMissileCooldown = ((battle.difficulty?.wingman?.airMissile?.cooldown ?? 5.2)
+          + this.random() * 2.4) * cadence;
       }
 
-      if (groundTarget && ally.groundMissiles > 0 && ally.groundMissileCooldown <= 0
+      if (canUseGroundMissile && groundTarget && ally.groundMissiles > 0 && ally.groundMissileCooldown <= 0
         && !groundMissileTargets.has(groundTargetKey)
-        && targetRange > 1550 && targetRange < 4400 && nose.dot(aim) > .955) {
+        && targetRange > 1550 && targetRange < 4400 && nose.dot(aim) > groundMissileAlignment) {
         battle.weaponAI.fireAllyMaverick(battle, ally, target);
         ally.groundMissiles--;
         groundMissileTargets.add(groundTargetKey);
@@ -406,12 +425,21 @@ export class WingmanController {
     for (const enemy of battle.enemies) {
       if (enemy.dead || enemy.identified === false || enemy.combatant === false
         || enemy.phase === 'staging' || enemy.mesh.position.distanceTo(battle.player.position) > 9400) continue;
-      if (battle.wingmanOrder === 'defend' && enemy.mesh.position.distanceTo(battle.player.position) > 5200) continue;
+      const threatensPlayer = this.isProtectiveAirTarget(battle, enemy);
+      const threatensWingman = enemy.engagementTarget && battle.allies.some(other => (
+        other !== ally && enemy.engagementTarget === other
+      ));
+      if (battle.wingmanOrder === 'defend'
+        && !threatensPlayer && !threatensWingman
+        && enemy.mesh.position.distanceTo(battle.player.position) > 3600) continue;
       const range = enemy.mesh.position.distanceTo(ally.mesh.position);
       if (range > 10200) continue;
       let otherAttackers=0;
       for(const other of battle.allies)if(other!==ally&&other.target===enemy)otherAttackers++;
-      const score = range + otherAttackers * 2300;
+      const threatPriority = battle.wingmanOrder === 'defend'
+        ? threatensPlayer ? -5200 : threatensWingman ? -2800 : 0
+        : 0;
+      const score = range + otherAttackers * 2300 + threatPriority;
       if (score < bestScore) {
         bestScore = score;
         selected = enemy;
@@ -451,6 +479,27 @@ export class WingmanController {
       }
     }
     return selected;
+  }
+
+  isProtectiveAirTarget(battle, target) {
+    if (!target || target.dead || target.combatant === false) return false;
+    const threatensWingman = battle.allies?.some(ally => (
+      target.engagementTarget === ally
+      || target.burstTarget === ally
+      || target.target === ally
+    ));
+    return target.engagementTarget === battle.player
+      || target.burstTarget === battle.player
+      || target.target === battle.player
+      || threatensWingman
+      || target.mesh.position.distanceTo(battle.player.position) <= 2600;
+  }
+
+  isProtectiveGroundTarget(battle, target) {
+    if (!target || target.dead) return false;
+    return target.aaTarget === battle.player
+      || target.aaTarget?.mesh === battle.player
+      || target.aaThreatTimer > 0;
   }
 
   closestWingmanTo(battle, position) {

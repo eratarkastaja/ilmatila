@@ -17,6 +17,7 @@ function makeElement() {
 function makeState() {
   return {
     session: { destroyed: false, gunFiring: false },
+    environment: { timeOfDay: 23.1, night: true, nightVision: true },
     weapons: {
       gunAmmoRemaining: 100,
       missiles: { air: 4, ground: 2 },
@@ -69,6 +70,8 @@ describe('CombatHud Support force status', () => {
     expect(hud.supportForce.getAttribute('aria-valuenow')).toBe('73');
     expect(hud.supportForce.dataset.level).toBe('green');
     expect(hud.supportForceFill.style.transform).toBe('scaleX(0.73)');
+    expect(hud.radarTime.textContent).toBe('23:06');
+    expect(hud.nightVisionStatus.hidden).toBe(false);
 
     state.supportForce.fraction = 0.51;
     state.supportForce.unitsAlive = 4;

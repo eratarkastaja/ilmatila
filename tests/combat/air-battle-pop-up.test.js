@@ -150,4 +150,40 @@ describe('AirBattle hostile contacts', () => {
     expect(battle.issueWingmanOrder('attack')).toBe(true);
     expect(battle.wingmanController.selectAllyTarget(battle, battle.allies[0])).toBe(firstSweep);
   });
+
+  it('adds a hard side attack and a wingman decoy target to a plain sweep group', () => {
+    const player = new THREE.Group();
+    player.position.set(0, 300, 0);
+    battle = new AirBattle({
+      scene: new THREE.Scene(),
+      player,
+      aircraftAsset: createAircraftAsset(),
+      mission: {
+        hostiles: 2,
+        hostileRoles: ['sweep', 'sweep'],
+        hostileComposition: ['mig29'],
+        hostileEntry: 'scramble',
+        hostileSpawnDistance: 12000,
+        hostileMinimumSpawnDistance: 11000,
+        wingmen: 2,
+        deferredHostiles: false,
+      },
+      terrain: createTerrain(),
+      audio: null,
+      fx: null,
+      playerVelocity: new THREE.Vector3(),
+      getPlayerHeading: () => 0,
+      deployHostileCountermeasures: vi.fn(),
+      addHostileProjectile: vi.fn(),
+      addPlayerProjectile: vi.fn(),
+      onMissileLaunch: vi.fn(),
+      onWingmanRadio: vi.fn(),
+      difficulty: DIFFICULTY_PRESETS.hard,
+      random: () => .1,
+    });
+
+    expect(battle.enemies.every(enemy => enemy.missionRole === 'flank')).toBe(true);
+    expect(battle.enemies.every(enemy => enemy.sideAttack)).toBe(true);
+    expect(battle.enemies.every(enemy => enemy.targetPreference === 'wingmen')).toBe(true);
+  });
 });

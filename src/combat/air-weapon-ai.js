@@ -287,7 +287,7 @@ export class AirWeaponAI {
     mesh.quaternion.setFromUnitVectors(forward, aim);
     battle.scene.add(mesh);
     if (mesh.userData.engineFlame) mesh.userData.engineFlame.visible = true;
-    battle.addHostileProjectile({
+    const projectile = {
       projectile: true,
       missile: true,
       homing: true,
@@ -309,8 +309,12 @@ export class AirWeaponAI {
       warningClock: 0,
       decoyTarget: null,
       target,
-    });
-    battle.onMissileLaunch?.(enemy, mesh, seeker, target);
+      sourceUnit: enemy,
+    };
+    battle.addHostileProjectile(projectile);
+    // Rescue tracking needs the projectile wrapper and its source unit, not
+    // only the render mesh passed to the scene.
+    battle.onMissileLaunch?.(enemy, projectile, seeker, target);
     battle.audio?.playMissileLaunch();
     battle.audio?.startMissileFlight(mesh.id);
   }

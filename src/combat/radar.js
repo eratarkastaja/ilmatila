@@ -8,11 +8,14 @@ const setClassIfChanged = (node, className, enabled) => {
   }
 };
 
+const INITIAL_CONTACT_IDENTIFICATION_DELAY = 3.5;
+
 /** Owns radar contacts, search mode and the arcade-friendly weapon lock cue. */
 export class CombatRadar {
-  constructor(player, audio) {
+  constructor(player, audio, weather = null) {
     this.player = player;
     this.audio = audio;
+    this.weather = weather;
     this.mode = 'air';
     // Search sensors reach beyond the weapon envelopes, while launch ranges
     // stay in sync with the missile profiles.
@@ -55,6 +58,11 @@ export class CombatRadar {
     if (this.modeIndicator && this.modeIndicator.textContent !== modeText) this.modeIndicator.textContent = modeText;
   }
 
+  getSensorRange(domain = this.mode) {
+    const base = domain === 'air' ? this.airRange : this.groundRange;
+    return base * (this.weather?.radarRangeScale ?? 1);
+  }
+
   updateContacts(dt, playerHeading, { airFriendly, airHostile, groundFriendly, groundHostile }) {
     this.playerHeading=playerHeading;
     for (const [key, track] of this.tracks) {
@@ -65,6 +73,9 @@ export class CombatRadar {
       } else if (track.node) {
         // Let a lost return decay instead of lingering at full strength.
         track.node.style.opacity = String(1 - track.age / 1.4);
+      }
+      if (track.identificationElapsed < INITIAL_CONTACT_IDENTIFICATION_DELAY) {
+        track.identificationElapsed += dt;
       }
     }
 
@@ -87,26 +98,39 @@ export class CombatRadar {
       const mesh=unit.mesh;
       const delta = this._delta.copy(mesh.position).sub(this.player.position);
       const distance = delta.length();
-      const sensorRange=domain==='air'?this.airRange:this.groundRange;
+      const sensorRange=this.getSensorRange(domain);
       if (distance > sensorRange) continue;
       // Keep the aircraft nose fixed at the top of the scope. Contacts rotate
       // around ownship with heading so the display reads as a heading-up radar.
       const bearing = Math.atan2(delta.x, delta.z) - this.playerHeading;
       let track = this.tracks.get(mesh);
       if (!track) {
-        track = { age: 0, node: document.createElement('span') };
+        const hostileReturn = unit.combatant !== false
+          && (unit.radarTeam ?? team) === 'hostile'
+          && unit.identified !== false;
+        track = {
+          age: 0,
+          identificationElapsed: 0,
+          initialUncertainty: hostileReturn,
+          node: document.createElement('span'),
+        };
         this.screen?.append(track.node);
         this.tracks.set(mesh, track);
       }
       track.age = 0;
       track.domain = domain;
       track.team = unit.identified === false ? 'unknown' : unit.radarTeam ?? team;
+      const uncertain = track.team === 'unknown'
+        || (track.initialUncertainty
+          && track.identificationElapsed < INITIAL_CONTACT_IDENTIFICATION_DELAY);
+      track.uncertain = uncertain;
+      const displayTeam = uncertain ? 'unknown' : track.team;
       if (this.target?.mesh === mesh) {
         this.targetLastKnownPosition.copy(mesh.position);
         this.hasLastKnownPosition = true;
       }
       const selected = this.target?.mesh === mesh;
-      const trackTeam = track.team;
+      const trackTeam = displayTeam;
       const rescueClass = unit.rescueHighlight
         ? ` rescue-focus ${unit.rescueFocusKind ?? (team === 'friendly' ? 'rescue-wingman' : 'rescue-attacker')}`
         : '';
@@ -130,8 +154,11 @@ export class CombatRadar {
       const selectableNeutral = !groundMode
         && contact.combatant === false
         && (trackTeam === 'neutral' || trackTeam === 'unknown');
-      if (trackTeam !== 'hostile' && !selectableNeutral) return false;
-      return contact.mesh.position.distanceTo(this.player.position) <= this.range;
+      const selectableUncertainHostile = trackTeam === 'unknown'
+        && contact.combatant !== false
+        && contact.identified !== false;
+      if (trackTeam !== 'hostile' && !selectableNeutral && !selectableUncertainHostile) return false;
+      return contact.mesh.position.distanceTo(this.player.position) <= this.getSensorRange(groundMode ? 'ground' : 'air');
     });
     if (!candidates.length) return false;
 
@@ -178,7 +205,7 @@ export class CombatRadar {
     if (!candidate) this.hasLastKnownPosition = false;
     const offset = candidate ? this._lockOffset.copy(candidate.mesh.position).sub(this.player.position) : null;
     const distance = offset?.length() ?? Infinity;
-    this.targetInSensorRange = Boolean(candidate && distance <= this.range);
+    this.targetInSensorRange = Boolean(candidate && distance <= this.getSensorRange(groundMode ? 'ground' : 'air'));
     const identificationReady = candidate?.combatant === false && candidate.identified === false
       ? false
       : true;

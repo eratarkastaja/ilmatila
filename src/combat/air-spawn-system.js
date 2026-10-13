@@ -57,7 +57,7 @@ export class AirSpawnSystem {
         speed: 235,
         hp: 3.6,
         maxHp: 3.6,
-        disengageTimer: 0,
+        returnedToBase: false,
         defensiveTimer: 0,
         evasiveDirection: wing,
         evasiveTimer: 0,
@@ -142,7 +142,16 @@ export class AirSpawnSystem {
       const lane = i - (hostileCount - 1) * .5;
       const laneCoordinate = lane / Math.max(.5, (hostileCount - 1) * .5);
       jet.position.copy(formation.positions[i]);
-      const missionRole = mission.hostileRoles?.[i] ?? 'sweep';
+      const authoredMissionRole = mission.hostileRoles?.[i] ?? 'sweep';
+      const tactics = battle.difficulty?.fighter?.targeting ?? {};
+      const hardTactics = battle.difficulty?.id === 'hard';
+      const sideAttack = hardTactics && authoredMissionRole === 'sweep'
+        && (tactics.sideAttackChance ?? 0) > 0
+        && battle.random() < tactics.sideAttackChance;
+      const tacticalDecoy = hardTactics && authoredMissionRole === 'sweep' && !sideAttack
+        && (tactics.decoyTargetChance ?? 0) > 0
+        && battle.random() < tactics.decoyTargetChance;
+      const missionRole = sideAttack ? 'flank' : authoredMissionRole;
       const nonCombatant = mission.hostileDisposition === 'noncombatant';
 
       const ground = battle.terrain?.sampleHeight(jet.position.x, jet.position.z) ?? -Infinity;
@@ -186,8 +195,13 @@ export class AirSpawnSystem {
         chaffTrackReevaluationRemaining: 0,
         stagingLane: lane,
         stagingLateral: stagingOffset.dot(playerRight),
-        stagingDistance: formation.distance,
-        attackPattern: Math.floor(battle.random() * ENEMY_ATTACK_RUNS.length),
+        // The formation can spawn 25 km out, but it must advance to the
+        // authored tactical staging line before detection and weapon logic.
+        stagingDistance: mission.hostileStagingDistance ?? 6500,
+        attackPattern: Math.floor(battle.random() * Math.max(1, Math.min(
+          ENEMY_ATTACK_RUNS.length,
+          tactics.attackPatternCount ?? ENEMY_ATTACK_RUNS.length,
+        ))),
         gunCooldown: (battle.difficulty?.fighter?.gun?.cooldown ?? 2.2) + i * .45,
         burstClock: 0,
         burstShots: 0,
@@ -222,7 +236,10 @@ export class AirSpawnSystem {
         boosting: false,
         dead: false,
         encounterGroupId: mission.hostileGroupId ?? 'primary',
-        targetPreference: mission.hostileTargetPreference ?? (missionRole === 'flank' ? 'wingmen' : undefined),
+        targetPreference: mission.hostileTargetPreference
+          ?? (missionRole === 'flank' || tacticalDecoy ? 'wingmen' : undefined),
+        tacticalDecoy,
+        sideAttack,
         flankSide: lane >= 0 ? 1 : -1,
         attackForward: playerForward.clone(),
         attackRight: playerRight.clone(),

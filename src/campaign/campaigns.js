@@ -8,6 +8,7 @@ function deepFreeze(value) {
 const chapter = ({
   id,
   day,
+  timeOfDay,
   areaId,
   baseMissionId,
   decisiveObjectiveId,
@@ -15,9 +16,12 @@ const chapter = ({
   decisive,
   success,
   setback,
+  sustainmentDecision,
+  optionalObjectiveEffects,
 }) => ({
   id,
   day,
+  timeOfDay,
   areaId,
   baseMissionId,
   titleKey: `campaign.shadowBorder.chapter.${id}.title`,
@@ -25,7 +29,30 @@ const chapter = ({
   decisiveObjectiveId,
   effects: { decisive, success, setback },
   ...(missionOverrides ? { missionOverrides } : {}),
+  ...(sustainmentDecision ? { sustainmentDecision } : {}),
+  ...(optionalObjectiveEffects ? { optionalObjectiveEffects } : {}),
 });
+
+const LIMITED_SUSTAINMENT = {
+  id: 'limited-sustainment',
+  descriptionKey: 'campaign.sustainment.description',
+  choices: [
+    {
+      id: 'partial-rearm',
+      titleKey: 'campaign.sustainment.choice.partialRearm.title',
+      descriptionKey: 'campaign.sustainment.choice.partialRearm.description',
+      restore: { airMissiles: 2, groundMissiles: 2, gunRounds: 350 },
+      readinessCost: 4,
+    },
+    {
+      id: 'field-maintenance',
+      titleKey: 'campaign.sustainment.choice.fieldMaintenance.title',
+      descriptionKey: 'campaign.sustainment.choice.fieldMaintenance.description',
+      restore: { flares: 4, chaff: 4 },
+      readinessCost: 3,
+    },
+  ],
+};
 
 const airSuccess = (flag, airControl = 5) => ({
   airControl,
@@ -54,7 +81,7 @@ export const CAMPAIGNS = deepFreeze({
     },
     chapters: [
       chapter({
-        id: 'unknown-track', day: 1, areaId: 'virolahti', baseMissionId: 'patrol',
+        id: 'unknown-track', day: 1, timeOfDay: 5.5, areaId: 'virolahti', baseMissionId: 'patrol',
         decisiveObjectiveId: 'no-damage',
         missionOverrides: {
           disableVariants: true,
@@ -73,9 +100,15 @@ export const CAMPAIGNS = deepFreeze({
         decisive: airSuccess('intruders-profiled', 8),
         success: airSuccess('intruders-profiled', 5),
         setback: { airControl: -8, sortieReadiness: -2 },
+        optionalObjectiveEffects: {
+          'no-damage': {
+            completed: { sortieReadiness: 3 },
+            failed: { sortieReadiness: -1 },
+          },
+        },
       }),
       chapter({
-        id: 'broken-silence', day: 1, areaId: 'virolahti', baseMissionId: 'intercept',
+        id: 'broken-silence', day: 1, timeOfDay: 23.5, areaId: 'virolahti', baseMissionId: 'intercept',
         decisiveObjectiveId: 'lead-intercept',
         missionOverrides: {
           // Keep the strike package at the far theater edge when the flight
@@ -97,30 +130,59 @@ export const CAMPAIGNS = deepFreeze({
         decisive: airSuccess('relay-saved', 9),
         success: airSuccess('relay-saved', 5),
         setback: { airControl: -9, defenseIntegrity: -5, sortieReadiness: -3 },
+        optionalObjectiveEffects: {
+          'lead-intercept': {
+            completed: { airControl: 3, defenseIntegrity: 5, addFlags: ['relay-protected'] },
+            failed: { airControl: -2, defenseIntegrity: -5 },
+          },
+          'wingmen-home': {
+            completed: { sortieReadiness: 3 },
+            failed: { sortieReadiness: -3 },
+          },
+        },
       }),
       chapter({
-        id: 'disperse', day: 2, areaId: 'paijanne', baseMissionId: 'patrol',
+        id: 'disperse', day: 2, timeOfDay: 8, areaId: 'paijanne', baseMissionId: 'patrol',
         decisiveObjectiveId: 'wingmen-home',
+        sustainmentDecision: LIMITED_SUSTAINMENT,
         decisive: { airControl: 4, defenseIntegrity: 2, sortieReadiness: 10, addFlags: ['road-base-supplied'] },
         success: { airControl: 2, defenseIntegrity: 1, sortieReadiness: 6, addFlags: ['road-base-supplied'] },
         setback: { airControl: -4, sortieReadiness: -10 },
+        optionalObjectiveEffects: {
+          'wingmen-home': {
+            completed: { sortieReadiness: 4 },
+            failed: { sortieReadiness: -4 },
+          },
+        },
       }),
       chapter({
-        id: 'northern-feint', day: 3, areaId: 'ilomantsi', baseMissionId: 'intercept',
+        id: 'northern-feint', day: 3, timeOfDay: 16.5, areaId: 'ilomantsi', baseMissionId: 'intercept',
         decisiveObjectiveId: 'time-limit',
         decisive: airSuccess('main-axis-confirmed', 8),
         success: airSuccess('main-axis-confirmed', 4),
         setback: { airControl: -6, defenseIntegrity: -4 },
+        optionalObjectiveEffects: {
+          'time-limit': {
+            completed: { airControl: 3 },
+            failed: { airControl: -3 },
+          },
+        },
       }),
       chapter({
-        id: 'first-wave', day: 4, areaId: 'kuusamo', baseMissionId: 'intercept',
+        id: 'first-wave', day: 4, timeOfDay: 5.5, areaId: 'kuusamo', baseMissionId: 'intercept',
         decisiveObjectiveId: 'wingmen-home',
         decisive: airSuccess('northern-axis-held', 10),
         success: airSuccess('northern-axis-held', 6),
         setback: { airControl: -10, defenseIntegrity: -6, sortieReadiness: -3 },
+        optionalObjectiveEffects: {
+          'wingmen-home': {
+            completed: { defenseIntegrity: 3 },
+            failed: { defenseIntegrity: -5 },
+          },
+        },
       }),
       chapter({
-        id: 'border-breaks', day: 5, areaId: 'virolahti', baseMissionId: 'support',
+        id: 'border-breaks', day: 5, timeOfDay: 8, areaId: 'virolahti', baseMissionId: 'support',
         decisiveObjectiveId: 'protect-friendly',
         missionOverrides: {
           objective: {
@@ -132,34 +194,70 @@ export const CAMPAIGNS = deepFreeze({
         decisive: groundSuccess('border-line-stabilized', 10),
         success: groundSuccess('border-line-stabilized', 6),
         setback: { airControl: -3, defenseIntegrity: -12, sortieReadiness: -3 },
+        optionalObjectiveEffects: {
+          'protect-friendly': {
+            completed: { defenseIntegrity: 5 },
+            failed: { defenseIntegrity: -6 },
+          },
+          'wingmen-home': {
+            completed: { sortieReadiness: 2 },
+            failed: { sortieReadiness: -2 },
+          },
+        },
       }),
       chapter({
-        id: 'hold-e18', day: 6, areaId: 'virolahti', baseMissionId: 'support',
+        id: 'hold-e18', day: 6, timeOfDay: 16.5, areaId: 'virolahti', baseMissionId: 'support',
         decisiveObjectiveId: 'protect-friendly',
+        sustainmentDecision: LIMITED_SUSTAINMENT,
         decisive: groundSuccess('e18-held', 10),
         success: groundSuccess('e18-held', 6),
         setback: { defenseIntegrity: -12, sortieReadiness: -6 },
+        optionalObjectiveEffects: {
+          'protect-friendly': {
+            completed: { defenseIntegrity: 5, sortieReadiness: 2 },
+            failed: { defenseIntegrity: -8 },
+          },
+        },
       }),
       chapter({
-        id: 'blind-spear', day: 7, areaId: 'virolahti', baseMissionId: 'support',
+        id: 'blind-spear', day: 7, timeOfDay: 20.5, areaId: 'virolahti', baseMissionId: 'support',
         decisiveObjectiveId: 'destroy-logistics',
         decisive: { airControl: 7, defenseIntegrity: 4, sortieReadiness: 4, addFlags: ['local-air-defense-breached'] },
         success: { airControl: 4, defenseIntegrity: 2, sortieReadiness: 2, addFlags: ['counterattack-window-open'] },
         setback: { airControl: -8, defenseIntegrity: -5 },
+        optionalObjectiveEffects: {
+          'destroy-logistics': {
+            completed: { defenseIntegrity: 4, addFlags: ['relay-logistics-broken'] },
+            failed: { defenseIntegrity: -4 },
+          },
+        },
       }),
       chapter({
-        id: 'counterstroke', day: 9, areaId: 'virolahti', baseMissionId: 'support',
+        id: 'counterstroke', day: 9, timeOfDay: 20.5, areaId: 'virolahti', baseMissionId: 'support',
         decisiveObjectiveId: 'wingmen-home',
+        sustainmentDecision: LIMITED_SUSTAINMENT,
         decisive: groundSuccess('spearhead-isolated', 12),
         success: groundSuccess('spearhead-isolated', 7),
         setback: { airControl: -5, defenseIntegrity: -10, sortieReadiness: -4 },
+        optionalObjectiveEffects: {
+          'wingmen-home': {
+            completed: { airControl: 3, sortieReadiness: 2 },
+            failed: { airControl: -4, sortieReadiness: -2 },
+          },
+        },
       }),
       chapter({
-        id: 'border-holds', day: 10, areaId: 'virolahti', baseMissionId: 'support',
+        id: 'border-holds', day: 10, timeOfDay: 12, areaId: 'virolahti', baseMissionId: 'support',
         decisiveObjectiveId: 'protect-friendly',
         decisive: groundSuccess('border-restored', 15),
         success: groundSuccess('border-restored', 8),
         setback: { airControl: -5, defenseIntegrity: -12, sortieReadiness: -5 },
+        optionalObjectiveEffects: {
+          'protect-friendly': {
+            completed: { defenseIntegrity: 4 },
+            failed: { defenseIntegrity: -4 },
+          },
+        },
       }),
     ],
   },

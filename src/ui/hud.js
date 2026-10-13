@@ -35,6 +35,14 @@ export function isWorldMarkerOnScreen(projected, behind, width, height, margin =
     && Math.abs(projected.x) <= maxX && Math.abs(projected.y) <= maxY;
 }
 
+export function shouldShowTargetMarker(targetOnScreen, markerArmed) {
+  return Boolean(targetOnScreen || markerArmed);
+}
+
+export function shouldShowWaypointMarker(onScreen, phase) {
+  return Boolean(onScreen || phase === 'rtb');
+}
+
 export class TacticalHud {
   constructor() {
     this.headingTicks = document.querySelector('#heading-ticks');
@@ -67,6 +75,8 @@ export class TacticalHud {
     this.markerProjected = new THREE.Vector3();
     this.markerOffset = new THREE.Vector3();
     this.missileMarkerPosition = new THREE.Vector3();
+    this.targetMarkerTarget = null;
+    this.targetMarkerArmed = false;
     this.gunAimTarget = null;
     this.hasGunAimPoint = false;
 
@@ -114,7 +124,7 @@ export class TacticalHud {
     const waypoint = state.mission.waypoint;
     if (this.missionWaypointCue && waypoint) {
       const onScreen = this.placeWorldMarker(this.missionWaypointCue, waypoint, camera);
-      setHiddenIfChanged(this.missionWaypointCue, !onScreen);
+      setHiddenIfChanged(this.missionWaypointCue, !shouldShowWaypointMarker(onScreen, state.mission.phase));
     } else if (this.missionWaypointCue) {
       setHiddenIfChanged(this.missionWaypointCue, true);
     }
@@ -150,6 +160,8 @@ export class TacticalHud {
     const target = radar.target;
     if (!target || target.dead) {
       setHiddenIfChanged(this.targetDesignator, true);
+      this.targetMarkerTarget = null;
+      this.targetMarkerArmed = false;
       setHiddenIfChanged(this.selectedTrackPanel, true);
       this.lastDetailsTarget = null;
       return;
@@ -162,10 +174,18 @@ export class TacticalHud {
     );
     if (radar.targetDomain === 'ground') targetPosition.y += (target.mesh.userData.vehicleSpec?.totalHeight ?? 2.5) * 0.5;
     const targetOnScreen = this.placeWorldMarker(this.targetDesignator, targetPosition, camera);
-    // Direction-only edge arrows are noisy for selected targets. Keep the
-    // designator tied to its square: it appears when the target is actually
-    // in the HUD view and disappears while the target is outside it.
-    setHiddenIfChanged(this.targetDesignator, !targetOnScreen);
+    if (this.targetMarkerTarget !== target) {
+      this.targetMarkerTarget = target;
+      this.targetMarkerArmed = false;
+    }
+    // Arm the off-screen arrow only after this selected target has been shown
+    // as a square once. This keeps a distant radar selection quiet until the
+    // player has actually acquired the target in the HUD.
+    this.targetMarkerArmed ||= targetOnScreen;
+    setHiddenIfChanged(
+      this.targetDesignator,
+      !shouldShowTargetMarker(targetOnScreen, this.targetMarkerArmed),
+    );
     const groundTarget = radar.targetDomain === 'ground';
     const trackState = !radar.targetInSensorRange
       ? 'hud.trackBearingOnly'

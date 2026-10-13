@@ -15,6 +15,7 @@ export function makeClouds() {
       cloudTexture: { value: texture },
       fogColor: { value: new THREE.Color(ATMOSPHERE.hazeColor) },
       fogDensity: { value: ATMOSPHERE.cloudFogDensity },
+      daylight: { value: 1 },
     },
     vertexShader: `
       #include <common>
@@ -39,6 +40,7 @@ export function makeClouds() {
       uniform sampler2D cloudTexture;
       uniform vec3 fogColor;
       uniform float fogDensity;
+      uniform float daylight;
       varying vec2 vUv;
       varying float vDistance;
       void main() {
@@ -47,10 +49,16 @@ export function makeClouds() {
         float horizonFade = 1.0 - smoothstep(18000.0, 27000.0, vDistance);
         float topLight = smoothstep(0.06, 0.92, vUv.y);
         float illumination = clamp(0.42 + topLight * 0.24 + cloud.r * 0.42, 0.3, 1.0);
+        float dayBlend = smoothstep(0.06, 0.38, daylight);
         vec3 shadowColor = vec3(0.40, 0.47, 0.50);
         vec3 sunlitColor = vec3(0.96, 0.97, 0.96);
-        vec3 cloudColor = mix(shadowColor, sunlitColor, illumination);
-        float alpha = cloud.a * 0.86 * fog * horizonFade;
+        vec3 dayCloudColor = mix(shadowColor, sunlitColor, illumination);
+        // At night the deck should merge into the same blue-green atmospheric
+        // layer as the sky; retaining only a soft edge prevents a bright cloud
+        // silhouette from dominating the low-light scene.
+        vec3 nightCloudColor = fogColor * 1.04 + vec3(0.004, 0.006, 0.01);
+        vec3 cloudColor = mix(nightCloudColor, dayCloudColor, dayBlend);
+        float alpha = cloud.a * 0.86 * fog * horizonFade * mix(0.2, 1.0, dayBlend);
         vec3 color = mix(fogColor, cloudColor, clamp(fog * 1.4, 0.0, 1.0));
         gl_FragColor = vec4(color, alpha);
         #include <tonemapping_fragment>
@@ -97,6 +105,10 @@ export function makeClouds() {
   cloudMesh.instanceMatrix.needsUpdate = true;
   cloudMesh.frustumCulled = false;
   group.add(cloudMesh);
+  group.userData.setAtmosphere = (daylight, fogColor) => {
+    cloudMesh.material.uniforms.daylight.value = THREE.MathUtils.clamp(daylight, 0, 1);
+    if (fogColor) cloudMesh.material.uniforms.fogColor.value.copy(fogColor);
+  };
   return group;
 }
 

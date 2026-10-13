@@ -283,6 +283,35 @@ describe('HostileFighterAI radar tracking', () => {
     expect(enemy.missileLockRemaining).toBeNull();
   });
 
+  it('gives Easy more lock warning time and Hard a faster fire-control decision', () => {
+    const prepare = difficulty => {
+      const enemy = makeHostile(new THREE.Vector3(0, 300, -4200));
+      enemy.engagementTarget = null;
+      enemy.targetRefreshTimer = 0;
+      enemy.missileClock = 0;
+      enemy.missilesFired = 0;
+      enemy.gunCooldown = 100;
+      enemy.tacticalManeuverCooldown = 100;
+      enemy.groundStrafeCooldown = 100;
+      const battle = makeBattle(enemy, vi.fn());
+      battle.difficulty = difficulty;
+      battle.weaponAI.chooseHostileMissileSeeker = () => 'radar';
+      battle.weaponAI.launchEnemyMissile = vi.fn();
+      const ai = new HostileFighterAI(() => .5);
+      ai.updateJets(battle, 0, new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0), {
+        lockedTarget: null,
+        incomingMissiles: [],
+      });
+      return { enemy, battle };
+    };
+
+    const easy = prepare(DIFFICULTY_PRESETS.easy);
+    const hard = prepare(DIFFICULTY_PRESETS.hard);
+    expect(easy.enemy.missileLockRemaining).toBe(4.5);
+    expect(hard.enemy.missileLockRemaining).toBe(1.65);
+    expect(easy.enemy.targetRefreshTimer).toBeGreaterThan(hard.enemy.targetRefreshTimer);
+  });
+
   it('gives a wingman-pressure fighter a warned missile solution on its assigned wingman', () => {
     const enemy = makeHostile(new THREE.Vector3(0, 300, -3000));
     const wingman = { dead: false, mesh: { position: new THREE.Vector3(0, 300, 0) }, velocity: new THREE.Vector3() };
@@ -440,7 +469,7 @@ describe('HostileFighterAI radar tracking', () => {
     expect(enemy.phase).toBe('extend');
   });
 
-  it('keeps staging aircraft at the configured spawn stand-off', () => {
+  it('advances long-range staging aircraft to the tactical staging line', () => {
     const enemy = makeHostile(new THREE.Vector3(0, 300, 14000), 'staging');
     const battle = makeBattle(enemy, vi.fn());
     battle.mission = {
@@ -457,7 +486,28 @@ describe('HostileFighterAI radar tracking', () => {
     );
 
     expect(battle.player.position.z).toBe(0);
-    expect(enemy.waypoint.z).toBeGreaterThan(13000);
+    expect(enemy.waypoint.z).toBeGreaterThan(5000);
+    expect(enemy.waypoint.z).toBeLessThan(8000);
+  });
+
+  it('lets a long-range fighter detect the player after reaching its staging line', () => {
+    const enemy = makeHostile(new THREE.Vector3(0, 300, 6500), 'staging');
+    enemy.detectedPlayerTimer = 6.4;
+    const battle = makeBattle(enemy, vi.fn());
+    battle.mission = {
+      hostileStagingDistance: 6500,
+      hostileMinimumSpawnDistance: 14000,
+    };
+
+    new HostileFighterAI(() => .99).updateJets(
+      battle,
+      .2,
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(1, 0, 0),
+      { lockedTarget: null, incomingMissiles: [] },
+    );
+
+    expect(enemy.phase).toBe('inbound');
   });
 
   it('reports the first fighter committing from staging before the merge', () => {

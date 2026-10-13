@@ -61,7 +61,7 @@ describe('game configuration validation', () => {
     expect(errors).toContain('missions.patrol.hostiles must be between 0 and 100');
     expect(errors).toContain('missions.intercept.hostileStagingDistance must be between 1 and 100000');
     expect(errors).toContain('missions.support.hostileHelicopterMinimumSpawnDistance must not exceed hostileHelicopterSpawnDistance');
-    expect(errors).toContain('missions.support.wingmanInitialOrder must be attack, defend, regroup, or disengage');
+    expect(errors).toContain('missions.support.wingmanInitialOrder must be attack, defend, regroup, or rtb');
     expect(errors).toContain('missions.support.unlocks contains unknown mission "missing"');
   });
 
@@ -109,6 +109,7 @@ describe('game configuration validation', () => {
     campaigns['shadow-border'].chapters[0].baseMissionId = 'missing';
     campaigns['shadow-border'].chapters[1].effects.success.airControl = 140;
     campaigns['shadow-border'].chapters[2].decisiveObjectiveId = 'missing-objective';
+    campaigns['shadow-border'].chapters[3].timeOfDay = 25;
     campaigns['shadow-border'].chapters[0].missionOverrides.rulesOfEngagement = 'freeFire';
 
     const errors = validateGameConfig({
@@ -128,6 +129,9 @@ describe('game configuration validation', () => {
     );
     expect(errors).toContain(
       'campaigns.shadow-border.chapters[0].missionOverrides.rulesOfEngagement must be weaponsHold',
+    );
+    expect(errors).toContain(
+      'campaigns.shadow-border.chapters[3].timeOfDay must be between 0 and 24',
     );
   });
 });

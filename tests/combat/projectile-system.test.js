@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { CollisionSystem } from '../../src/combat/collision-system.js';
 import { ProjectileSystem } from '../../src/combat/projectile-system.js';
+import { updateMissileMotor } from '../../src/combat/projectiles.js';
 import { CombatTelemetry } from '../../src/performance/combat-telemetry.js';
 
 function makeSystem(overrides = {}) {
@@ -309,6 +310,42 @@ describe('ProjectileSystem', () => {
     expect(missile.guidanceActive).toBe(false);
     expect(mesh.position.length()).toBeGreaterThan(12);
     expect(missile.velocity.length()).toBeGreaterThan(640);
+  });
+
+  it('keeps a missile moving at a readable coast speed after a long motor-off interval', () => {
+    const mesh = new THREE.Object3D();
+    const missile = {
+      mesh,
+      velocity: new THREE.Vector3(0, 0, 305),
+      speed: 305,
+      coastDrag: 1.8,
+      motorBurning: false,
+      guidanceActive: false,
+    };
+
+    updateMissileMotor(missile, 8);
+
+    expect(missile.velocity.length()).toBeCloseTo(305 * .58, 6);
+    expect(missile.velocity.z).toBeGreaterThan(0);
+  });
+
+  it('recovers a valid flight vector when a missile enters guidance with zero speed', () => {
+    const mesh = new THREE.Object3D();
+    mesh.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+    const missile = {
+      mesh,
+      velocity: new THREE.Vector3(),
+      speed: 305,
+      coastDrag: .1,
+      motorBurning: false,
+      guidanceActive: true,
+    };
+
+    updateMissileMotor(missile, .1);
+
+    expect(missile.velocity.length()).toBeCloseTo(305 * .58, 6);
+    expect(missile.velocity.x).toBeGreaterThan(0);
+    expect(missile.velocity.z).toBeCloseTo(0, 6);
   });
 
   it('resolves a hostile missile against its assigned wingman target', () => {

@@ -54,6 +54,17 @@ export function resolveMissionVariant(mission, seed) {
     variants,
   };
   if (variant.changes?.hostileRoles) resolvedMission.hostileRoles = [...variant.changes.hostileRoles];
+  if (variant.changes?.weather) {
+    resolvedMission.weather = {
+      ...variant.changes.weather,
+      ...(variant.changes.weather.wind ? { wind: { ...variant.changes.weather.wind } } : {}),
+    };
+  } else if (mission.weather) {
+    resolvedMission.weather = {
+      ...mission.weather,
+      ...(mission.weather.wind ? { wind: { ...mission.weather.wind } } : {}),
+    };
+  }
   if (variant.changes?.objective) resolvedMission.objective = { ...variant.changes.objective };
   if (variant.changes?.optionalObjectives) {
     resolvedMission.optionalObjectives = variant.changes.optionalObjectives.map(objective => ({

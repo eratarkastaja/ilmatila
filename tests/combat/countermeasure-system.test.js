@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { CountermeasureSystem } from '../../src/combat/countermeasure-system.js';
 import { CombatTelemetry } from '../../src/performance/combat-telemetry.js';
 
-function makeCountermeasures({ hostileAircraft = [], hostileShots: initialHostileShots = [], random, chaffConfig } = {}) {
+function makeCountermeasures({ hostileAircraft = [], hostileShots: initialHostileShots = [], random, chaffConfig, initialChaff } = {}) {
   const scene = new THREE.Scene();
   const player = { position: new THREE.Vector3(0, 100, 0), quaternion: new THREE.Quaternion() };
   const decoys = [];
@@ -38,11 +38,18 @@ function makeCountermeasures({ hostileAircraft = [], hostileShots: initialHostil
     onInventoryChange,
     random,
     chaffConfig,
+    initialChaff,
   });
   return { system, scene, player, decoys, playerShots, hostileShots, hostileAircraft, fx, audio, onInventoryChange };
 }
 
 describe('CountermeasureSystem', () => {
+  it('accepts a carried chaff inventory without changing the preset capacity', () => {
+    const { system } = makeCountermeasures({ initialChaff: 3 });
+    expect(system.chaff).toBe(3);
+    expect(system.chaffConfig.count).toBe(15);
+  });
+
   it('deploys one flare, spends one charge and applies cooldown', () => {
     const { system, scene, decoys, audio, onInventoryChange } = makeCountermeasures();
 

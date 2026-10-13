@@ -13,7 +13,6 @@ export const WINGMAN_COMMAND_EVENTS = Object.freeze({
   attack: 'wingman.command.attack',
   defend: 'wingman.command.defend',
   regroup: 'wingman.command.regroup',
-  disengage: 'wingman.command.disengage',
   rtb: 'wingman.command.rtb',
 });
 
@@ -55,7 +54,6 @@ export const RADIO_EVENTS = Object.freeze({
   'wingman.command.attack': { messageKey: 'radio.wingman.command.attack', crew: 'wingman', priority: 3, duration: 2.3, cooldown: 2.5 },
   'wingman.command.defend': { messageKey: 'radio.wingman.command.defend', crew: 'wingman', priority: 3, duration: 2.3, cooldown: 2.5 },
   'wingman.command.regroup': { messageKey: 'radio.wingman.command.regroup', crew: 'wingman', priority: 3, duration: 2.3, cooldown: 2.5 },
-  'wingman.command.disengage': { messageKey: 'radio.wingman.command.disengage', crew: 'wingman', priority: 3, duration: 2.3, cooldown: 2.5 },
   'wingman.command.rtb': { messageKey: 'radio.wingman.command.rtb', crew: 'wingman', priority: 3, duration: 2.3, cooldown: 2.5 },
 });
 

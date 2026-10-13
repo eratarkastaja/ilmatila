@@ -580,6 +580,32 @@
   color: #b7c9bd;
 }
 
+.radar-clock {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.radar-clock small {
+  color: #829b94;
+  font-size: 7px;
+  letter-spacing: .08em;
+}
+
+.radar-clock b {
+  color: #d2f3d6;
+  font: 700 12px Rajdhani, sans-serif;
+  letter-spacing: .08em;
+  text-shadow: 0 0 7px rgba(124, 255, 161, .34);
+}
+
+.radar-clock i {
+  color: #b7ffc6;
+  font: 700 8px Rajdhani, sans-serif;
+  font-style: normal;
+  letter-spacing: .08em;
+}
+
 .help {
   letter-spacing: .08em;
 }
@@ -728,6 +754,44 @@
 .hud {
   text-shadow: none;
   -webkit-text-stroke: .12px rgba(4,13,16,.75);
+}
+
+/* A restrained phosphor layer keeps night vision readable without hiding the
+   normal HUD; the scene canvas receives a matching green, low-light grade. */
+.hud:before {
+  content: "";
+  position: fixed;
+  z-index: 200;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(ellipse at center, transparent 42%, rgba(3, 24, 9, .34) 100%),
+    repeating-linear-gradient(0deg, rgba(168, 255, 184, .045) 0 1px, transparent 1px 4px);
+  mix-blend-mode: screen;
+  transition: opacity .18s ease;
+}
+
+.hud.night-vision:before {
+  opacity: 1;
+}
+
+.hud.night-vision .topline,
+.hud.night-vision .readout,
+.hud.night-vision .heading-tape,
+.hud.night-vision .radar,
+.hud.night-vision .weapons,
+.hud.night-vision .mission-objective,
+.hud.night-vision .selected-track-panel {
+  color: #c9ffd2;
+  text-shadow: 0 0 8px rgba(126, 255, 153, .56);
+}
+
+canvas.night-vision-scene {
+  /* Lift the dark terrain before applying the phosphor grade. The scene is
+     already rendered with NV ambient gain; a darkening filter would erase the
+     map and leave only the HUD readable. */
+  filter: saturate(.42) contrast(1.08) brightness(1.3) sepia(.14) hue-rotate(55deg);
 }
 
 .topline,.readout,.heading-tape,.radar,.weapons,.reticle-label {
@@ -1280,6 +1344,12 @@
   background: transparent;
   clip-path: none;
   filter: drop-shadow(0 0 2px currentColor);
+  animation: radar-uncertain-return 1.25s ease-in-out infinite;
+}
+
+@keyframes radar-uncertain-return {
+  0%,100% { opacity: .42; transform: scale(.82); }
+  50% { opacity: 1; transform: scale(1.16); }
 }
 
 .radar-contact.neutral {

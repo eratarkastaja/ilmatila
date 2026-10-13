@@ -1,10 +1,36 @@
 import { getCampaignDefinition } from './campaigns.js';
+import { getDifficultyPreset } from '../combat/difficulty.js';
 
 export const CAMPAIGN_STORAGE_KEY = 'ilmatila-campaign-v1';
 const SAVE_VERSION = 1;
 const DIFFICULTIES = new Set(['easy', 'standard', 'hard']);
 
 const clampState = value => Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+export const CAMPAIGN_STORE_KEYS = ['airMissiles', 'groundMissiles', 'gunRounds', 'flares', 'chaff'];
+
+export function getCampaignStoreCaps(difficulty = 'standard') {
+  const preset = getDifficultyPreset(difficulty);
+  return {
+    airMissiles: preset.player.weapons.airMissiles,
+    groundMissiles: preset.player.weapons.groundMissiles,
+    gunRounds: preset.player.weapons.gunRounds,
+    flares: preset.player.countermeasures,
+    chaff: preset.player.chaff.count,
+  };
+}
+
+export function normalizeCampaignStores(value, difficulty = 'standard') {
+  const caps = getCampaignStoreCaps(difficulty);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return Object.fromEntries(CAMPAIGN_STORE_KEYS.map(key => {
+    const cap = caps[key];
+    if (cap === null) return [key, null];
+    const amount = Number(value[key]);
+    return [key, Number.isFinite(amount)
+      ? Math.max(0, Math.min(cap, Math.round(amount)))
+      : cap];
+  }));
+}
 
 function clone(value) {
   if (Array.isArray(value)) return value.map(clone);
@@ -23,7 +49,11 @@ export function normalizeCampaignSave(value, expectedDifficulty = null) {
     Number.isInteger(value.chapterIndex) ? value.chapterIndex : 0,
   ));
   const knownFlags = new Set(definition.chapters.flatMap(chapter => (
-    Object.values(chapter.effects).flatMap(effect => effect.addFlags ?? [])
+    [
+      ...Object.values(chapter.effects).flatMap(effect => effect.addFlags ?? []),
+      ...Object.values(chapter.optionalObjectiveEffects ?? {})
+        .flatMap(outcomes => Object.values(outcomes).flatMap(effect => effect.addFlags ?? [])),
+    ]
   )));
   const flags = Array.isArray(value.flags)
     ? [...new Set(value.flags.filter(flag => knownFlags.has(flag)))]
@@ -38,6 +68,9 @@ export function normalizeCampaignSave(value, expectedDifficulty = null) {
     ? value.attemptSequence
     : 1;
   const completed = chapterIndex >= definition.chapters.length || Boolean(value.completed);
+  const currentChapter = definition.chapters[chapterIndex] ?? null;
+  const sustainmentIds = new Set(currentChapter?.sustainmentDecision?.choices?.map(choice => choice.id) ?? []);
+  const sustainmentChoice = sustainmentIds.has(value.sustainmentChoice) ? value.sustainmentChoice : null;
 
   return {
     version: SAVE_VERSION,
@@ -59,6 +92,8 @@ export function normalizeCampaignSave(value, expectedDifficulty = null) {
     chapterRetryCount: Number.isInteger(value.chapterRetryCount) ? Math.max(0, value.chapterRetryCount) : 0,
     completed,
     ending: completed && typeof value.ending === 'string' ? value.ending : null,
+    stores: normalizeCampaignStores(value.stores, value.difficulty),
+    sustainmentChoice,
   };
 }
 

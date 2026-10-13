@@ -1,6 +1,7 @@
 import { DIFFICULTY_PRESETS } from '../combat/difficulty.js';
 import { MISSIONS } from '../mission/missions.js';
 import { CAMPAIGNS } from '../campaign/campaigns.js';
+import { WEATHER_PRESETS } from '../combat/weather.js';
 
 const number = (min, max, integer = false) => ({ type: 'number', min, max, integer });
 const string = { type: 'string' };
@@ -10,6 +11,22 @@ const optional = schema => ({ ...schema, optional: true });
 const object = shape => ({ type: 'object', shape });
 const ammoCapacity = { type: 'ammoCapacity' };
 const nullableNumber = (min, max, integer = false) => ({ type: 'nullableNumber', min, max, integer });
+const weatherSchema = object({
+  preset: optional(string),
+  id: optional(string),
+  labelKey: optional(string),
+  visibility: optional(number(0.05, 1)),
+  radarRangeScale: optional(number(.2, 2)),
+  visualIdentificationRangeScale: optional(number(.1, 2)),
+  gunDispersionScale: optional(number(.5, 4)),
+  ballisticWindScale: optional(number(0, 4)),
+  humidity: optional(number(0, 1)),
+  cloudCoverage: optional(number(0, 1)),
+  cloudBaseAltitude: optional(number(0, 20000)),
+  timeOfDay: optional(number(0, 24)),
+  timeAdvanceHoursPerSecond: optional(number(0, 1)),
+  wind: optional(object({ x: number(-200, 200), y: number(-50, 50), z: number(-200, 200) })),
+});
 const REQUIRED_DIFFICULTY_IDS = ['easy', 'standard', 'hard'];
 const REQUIRED_MISSION_IDS = ['intercept', 'patrol', 'support', 'training'];
 const REQUIRED_CAMPAIGN_IDS = ['shadow-border'];
@@ -81,6 +98,12 @@ const difficultySchema = object({
     }),
     targeting: object({
       airPriorityRange: number(0, 100000),
+      decisionIntervalMin: optional(number(0, 120)),
+      decisionIntervalMax: optional(number(0, 120)),
+      sideAttackChance: optional(number(0, 1)),
+      sideAttackOffset: optional(number(0, 20000)),
+      decoyTargetChance: optional(number(0, 1)),
+      attackPatternCount: optional(number(1, 3, true)),
       focusFireLimit: optional(number(1, 12, true)),
       lowEnergyFocusFireLimit: optional(number(1, 12, true)),
       lowEnergySpeed: optional(number(0, 1000)),
@@ -90,7 +113,7 @@ const difficultySchema = object({
     missile: object({
       capacity: number(0, 100, true), initialDelay: number(0, 120), cooldown: number(.05, 120),
       cooldownJitter: number(0, 120), minRange: number(0, 50000), maxRange: number(0, 50000),
-      boresight: number(0, 1), leadTime: number(0, 60),
+      boresight: number(0, 1), leadTime: number(0, 60), lockWarningSeconds: optional(number(.2, 30)),
       projectile: object({
         speed: number(1, 3000), turnRate: number(.01, 10), burnTime: number(0, 60),
         life: number(.1, 120), coastDrag: number(0, 3), damage: number(0, 500),
@@ -133,6 +156,7 @@ const missionSchema = object({
   hostileLateralSpacing: optional(number(1, 20000)),
   hostileStagingDistance: optional(number(1, 100000)),
   openingDelay: optional(number(0, 300)),
+  weather: optional(weatherSchema),
   hostileComposition: optional(array(string)),
   hostileRoles: optional(array(string)),
   hostileEntry: optional(string),
@@ -165,7 +189,7 @@ const MISSION_VARIANT_CHANGE_FIELDS = new Set([
   'groundPairs', 'groundTrucks', 'groundFriendlyTrucks', 'groundFrontSpan', 'convoyArea',
   'hostileHelicopters', 'hostileHelicopterSpawnDistance', 'hostileHelicopterMinimumSpawnDistance',
   'hostileHelicopterLateralSpacing', 'hostileHelicopterSpawnAltitude', 'groundIto90Count',
-  'groundShilkaCount', 'battlefieldIngressOffset', 'objective', 'optionalObjectives',
+  'groundShilkaCount', 'battlefieldIngressOffset', 'objective', 'optionalObjectives', 'weather',
 ]);
 
 const encounterSchema = object({
@@ -402,8 +426,8 @@ function validateHostileRoles(roles, hostileCount, path, errors) {
 }
 
 function validateWingmanInitialOrder(order, path, errors) {
-  if (order !== undefined && !['attack', 'defend', 'regroup', 'disengage'].includes(order)) {
-    errors.push(`${path} must be attack, defend, regroup, or disengage`);
+  if (order !== undefined && !['attack', 'defend', 'regroup', 'rtb'].includes(order)) {
+    errors.push(`${path} must be attack, defend, regroup, or rtb`);
   }
 }
 
@@ -489,6 +513,9 @@ function validateMissionVariants(variants, path, mission, errors) {
       if (changes.optionalObjectives !== undefined) {
         validateOptionalObjectives(changes.optionalObjectives, `${variantPath}.changes.optionalObjectives`, errors);
       }
+      if (changes.weather !== undefined) {
+        validateWeatherPreset(changes.weather, `${variantPath}.changes.weather`, errors);
+      }
       if (changes.objective?.type === 'support'
         && (changes.groundBattle === false || (changes.groundPairs ?? mission.groundPairs) < 1)) {
         errors.push(`${variantPath}.changes support objective requires ground pairs`);
@@ -534,6 +561,11 @@ function validateDifficultyRelations(preset, path, errors) {
     && fighter.targeting.lowEnergyFocusFireLimit < fighter.targeting.focusFireLimit) {
     errors.push(`${path}.fighter.targeting.lowEnergyFocusFireLimit must not be less than focusFireLimit`);
   }
+  if (fighter?.targeting?.decisionIntervalMin !== undefined
+    && fighter.targeting.decisionIntervalMax !== undefined
+    && fighter.targeting.decisionIntervalMin > fighter.targeting.decisionIntervalMax) {
+    errors.push(`${path}.fighter.targeting.decisionIntervalMin must not exceed decisionIntervalMax`);
+  }
   if (preset?.wingman?.airMissile && preset.wingman.airMissile.minRange >= preset.wingman.airMissile.maxRange) {
     errors.push(`${path}.wingman.airMissile.minRange must be less than maxRange`);
   }
@@ -544,6 +576,7 @@ function validateMissionRelations(mission, key, validIds, errors) {
   if (!mission || typeof mission !== 'object' || Array.isArray(mission)) return;
   if (mission.id !== key) errors.push(`${path}.id must match its key`);
   validateObjective(mission.objective, `${path}.objective`, errors);
+  validateWeatherPreset(mission.weather, `${path}.weather`, errors);
   if (mission.optionalObjectives !== undefined) {
     validateOptionalObjectives(mission.optionalObjectives, `${path}.optionalObjectives`, errors);
   }
@@ -583,6 +616,13 @@ function validateMissionRelations(mission, key, validIds, errors) {
   }
   if (mission.objective?.type === 'training' && mission.hostiles !== 0) {
     errors.push(`${path} training objective must not spawn hostiles`);
+  }
+}
+
+function validateWeatherPreset(weather, path, errors) {
+  if (weather === undefined) return;
+  if (weather.preset !== undefined && !Object.hasOwn(WEATHER_PRESETS, weather.preset)) {
+    errors.push(`${path}.preset is not a recognized weather preset`);
   }
 }
 
@@ -686,10 +726,78 @@ function validateCampaignMissionOverrides(overrides, path, errors) {
     errors.push(`${path}.hostileMinimumSpawnDistance must not exceed hostileSpawnDistance`);
   }
   if (overrides.wingmanInitialOrder !== undefined
-    && !['attack', 'defend', 'regroup', 'disengage'].includes(overrides.wingmanInitialOrder)) {
-    errors.push(`${path}.wingmanInitialOrder must be attack, defend, regroup, or disengage`);
+    && !['attack', 'defend', 'regroup', 'rtb'].includes(overrides.wingmanInitialOrder)) {
+    errors.push(`${path}.wingmanInitialOrder must be attack, defend, regroup, or rtb`);
   }
   if (overrides.objective !== undefined) validateObjective(overrides.objective, `${path}.objective`, errors);
+}
+
+function validateCampaignSustainmentDecision(decision, path, errors) {
+  if (!decision || typeof decision !== 'object' || Array.isArray(decision)) {
+    errors.push(`${path} must be an object`);
+    return;
+  }
+  const allowed = new Set(['id', 'descriptionKey', 'choices']);
+  for (const key of Object.keys(decision)) {
+    if (!allowed.has(key)) errors.push(`${path}.${key} is not a recognized setting`);
+  }
+  validateNode(decision.id, string, `${path}.id`, errors);
+  validateNode(decision.descriptionKey, string, `${path}.descriptionKey`, errors);
+  if (!Array.isArray(decision.choices) || decision.choices.length === 0) {
+    errors.push(`${path}.choices must contain at least one choice`);
+    return;
+  }
+  const ids = new Set();
+  decision.choices.forEach((choice, index) => {
+    const choicePath = `${path}.choices[${index}]`;
+    if (!choice || typeof choice !== 'object' || Array.isArray(choice)) {
+      errors.push(`${choicePath} must be an object`);
+      return;
+    }
+    const choiceKeys = new Set(['id', 'titleKey', 'descriptionKey', 'restore', 'readinessCost']);
+    for (const key of Object.keys(choice)) {
+      if (!choiceKeys.has(key)) errors.push(`${choicePath}.${key} is not a recognized setting`);
+    }
+    validateNode(choice.id, string, `${choicePath}.id`, errors);
+    if (ids.has(choice.id)) errors.push(`${path}.choices contains duplicate id "${choice.id}"`);
+    ids.add(choice.id);
+    validateNode(choice.titleKey, string, `${choicePath}.titleKey`, errors);
+    validateNode(choice.descriptionKey, string, `${choicePath}.descriptionKey`, errors);
+    validateNode(choice.readinessCost, number(0, 100), `${choicePath}.readinessCost`, errors);
+    if (!choice.restore || typeof choice.restore !== 'object' || Array.isArray(choice.restore)) {
+      errors.push(`${choicePath}.restore must be an object`);
+    } else {
+      const restoreKeys = new Set(['airMissiles', 'groundMissiles', 'gunRounds', 'flares', 'chaff']);
+      for (const key of Object.keys(choice.restore)) {
+        if (!restoreKeys.has(key)) errors.push(`${choicePath}.restore.${key} is not a recognized store`);
+        else validateNode(choice.restore[key], number(0, 10000), `${choicePath}.restore.${key}`, errors);
+      }
+    }
+  });
+}
+
+function validateCampaignOptionalObjectiveEffects(effects, path, objectiveIds, errors) {
+  if (!effects || typeof effects !== 'object' || Array.isArray(effects)) {
+    errors.push(`${path} must be an object keyed by optional objective id`);
+    return;
+  }
+  for (const [objectiveId, outcomeEffects] of Object.entries(effects)) {
+    const objectivePath = `${path}.${objectiveId}`;
+    if (!objectiveIds.has(objectiveId)) {
+      errors.push(`${objectivePath} references an unknown optional objective`);
+    }
+    if (!outcomeEffects || typeof outcomeEffects !== 'object' || Array.isArray(outcomeEffects)) {
+      errors.push(`${objectivePath} must define completed and/or failed effects`);
+      continue;
+    }
+    for (const key of Object.keys(outcomeEffects)) {
+      if (!['completed', 'failed'].includes(key)) {
+        errors.push(`${objectivePath}.${key} is not a recognized objective result`);
+      } else {
+        validateCampaignEffect(outcomeEffects[key], `${objectivePath}.${key}`, errors);
+      }
+    }
+  }
 }
 
 export function validateCampaigns(campaigns = CAMPAIGNS, missions = MISSIONS) {
@@ -735,8 +843,9 @@ export function validateCampaigns(campaigns = CAMPAIGNS, missions = MISSIONS) {
         return;
       }
       const chapterKeys = new Set([
-        'id', 'day', 'areaId', 'baseMissionId', 'titleKey', 'briefingKey',
-        'decisiveObjectiveId', 'effects', 'missionOverrides',
+        'id', 'day', 'timeOfDay', 'areaId', 'baseMissionId', 'titleKey', 'briefingKey',
+        'decisiveObjectiveId', 'effects', 'missionOverrides', 'sustainmentDecision',
+        'optionalObjectiveEffects',
       ]);
       for (const key of Object.keys(chapter)) {
         if (!chapterKeys.has(key)) errors.push(`${chapterPath}.${key} is not a recognized setting`);
@@ -745,6 +854,7 @@ export function validateCampaigns(campaigns = CAMPAIGNS, missions = MISSIONS) {
       if (chapterIds.has(chapter.id)) errors.push(`${path}.chapters contains duplicate id "${chapter.id}"`);
       chapterIds.add(chapter.id);
       validateNode(chapter.day, number(1, 365, true), `${chapterPath}.day`, errors);
+      validateNode(chapter.timeOfDay, number(0, 24), `${chapterPath}.timeOfDay`, errors);
       if (!CAMPAIGN_AREAS.has(chapter.areaId)) errors.push(`${chapterPath}.areaId is not a known terrain area`);
       if (!Object.hasOwn(missions, chapter.baseMissionId)) {
         errors.push(`${chapterPath}.baseMissionId contains unknown mission "${chapter.baseMissionId}"`);
@@ -760,6 +870,21 @@ export function validateCampaigns(campaigns = CAMPAIGNS, missions = MISSIONS) {
         validateCampaignMissionOverrides(
           chapter.missionOverrides,
           `${chapterPath}.missionOverrides`,
+          errors,
+        );
+      }
+      if (chapter.sustainmentDecision !== undefined) {
+        validateCampaignSustainmentDecision(
+          chapter.sustainmentDecision,
+          `${chapterPath}.sustainmentDecision`,
+          errors,
+        );
+      }
+      if (chapter.optionalObjectiveEffects !== undefined) {
+        validateCampaignOptionalObjectiveEffects(
+          chapter.optionalObjectiveEffects,
+          `${chapterPath}.optionalObjectiveEffects`,
+          objectiveIds,
           errors,
         );
       }

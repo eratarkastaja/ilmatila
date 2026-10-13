@@ -1,7 +1,19 @@
 import * as THREE from 'three';
 
-const roundelWhite = new THREE.MeshBasicMaterial({ color: '#e3e6df' });
-const roundelBlue = new THREE.MeshBasicMaterial({ color: '#174577' });
+// Roundels are painted markings, not self-illuminated lamps. Standard
+// materials keep them subdued in ordinary night lighting while the separate
+// night-vision grade can still lift their luminance naturally with the rest of
+// the airframe.
+const roundelWhite = new THREE.MeshStandardMaterial({
+  color: '#e3e6df',
+  roughness: .78,
+  metalness: 0,
+});
+const roundelBlue = new THREE.MeshStandardMaterial({
+  color: '#174577',
+  roughness: .78,
+  metalness: 0,
+});
 const roundelRaycaster = new THREE.Raycaster();
 
 // Shared by the F-35A visual gun port and the player's/wingmen's ballistic muzzle.

@@ -32,7 +32,7 @@ export const DIFFICULTY_PRESETS = deepFreeze({
       passRangeScale: 0.88,
       detection: {
         range: 4500,
-        reactionDelay: 6.5
+        reactionDelay: 7.8
       },
       gun: {
         maxRange: 2300,
@@ -70,6 +70,12 @@ export const DIFFICULTY_PRESETS = deepFreeze({
       },
       targeting: {
         airPriorityRange: 8000,
+        decisionIntervalMin: 1.8,
+        decisionIntervalMax: 2.6,
+        sideAttackChance: 0,
+        sideAttackOffset: 0,
+        decoyTargetChance: 0,
+        attackPatternCount: 1,
         groundStrafe: {
           range: 5200,
           chance: 0.05,
@@ -79,6 +85,7 @@ export const DIFFICULTY_PRESETS = deepFreeze({
       missile: {
         capacity: 2,
         initialDelay: 9,
+        lockWarningSeconds: 4.5,
         cooldown: 19,
         cooldownJitter: 5,
         minRange: 3400,
@@ -194,6 +201,12 @@ export const DIFFICULTY_PRESETS = deepFreeze({
       },
       targeting: {
         airPriorityRange: 9000,
+        decisionIntervalMin: 1,
+        decisionIntervalMax: 1.7,
+        sideAttackChance: .12,
+        sideAttackOffset: 2800,
+        decoyTargetChance: .08,
+        attackPatternCount: 3,
         groundStrafe: {
           range: 6600,
           chance: 0.16,
@@ -203,6 +216,7 @@ export const DIFFICULTY_PRESETS = deepFreeze({
       missile: {
         capacity: 4,
         initialDelay: 5.5,
+        lockWarningSeconds: 2.5,
         cooldown: 10.5,
         cooldownJitter: 2.8,
         minRange: 2200,
@@ -320,6 +334,12 @@ export const DIFFICULTY_PRESETS = deepFreeze({
       },
       targeting: {
         airPriorityRange: 10500,
+        decisionIntervalMin: .35,
+        decisionIntervalMax: .75,
+        sideAttackChance: .55,
+        sideAttackOffset: 4800,
+        decoyTargetChance: .3,
+        attackPatternCount: 3,
         focusFireLimit: 2,
         lowEnergyFocusFireLimit: 3,
         lowEnergySpeed: 270,
@@ -333,6 +353,7 @@ export const DIFFICULTY_PRESETS = deepFreeze({
       missile: {
         capacity: 5,
         initialDelay: 2.8,
+        lockWarningSeconds: 1.65,
         cooldown: 6.5,
         cooldownJitter: 1.8,
         minRange: 1900,

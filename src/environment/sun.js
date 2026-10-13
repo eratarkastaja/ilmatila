@@ -7,9 +7,12 @@ export class SunEffects {
   constructor(scene, camera) {
     this.camera = camera;
     this.sunDirection = SUN_DIRECTION.clone();
+    this.moonDirection = SUN_DIRECTION.clone().negate();
+    this.timeOfDay = 12;
     this._cameraForward = new THREE.Vector3();
     this._cameraPosition = new THREE.Vector3();
     this._sunScreenPosition = new THREE.Vector3();
+    this._moonScreenPosition = new THREE.Vector3();
 
     this.sky = new Sky();
     this.sky.scale.setScalar(18000);
@@ -31,7 +34,27 @@ export class SunEffects {
     this.flare.renderOrder = 1000;
     camera.add(this.flare);
     this.flareSprites = createFlareSprites(this.flare);
+    this.moon = new THREE.Group();
+    this.moon.renderOrder = 900;
+    camera.add(this.moon);
+    this.moonSprites = createMoonSprites(this.moon);
+    this.setTimeOfDay(this.timeOfDay);
     this.update(camera);
+  }
+
+  setTimeOfDay(hours) {
+    const time = THREE.MathUtils.euclideanModulo(Number.isFinite(hours) ? hours : 12, 24);
+    const solarHeight = Math.sin((time - 6) / 12 * Math.PI);
+    const azimuth = time / 24 * Math.PI * 2 - Math.PI * 0.5;
+    const horizontal = Math.sqrt(Math.max(0, 1 - solarHeight * solarHeight));
+    this.sunDirection.set(
+      Math.cos(azimuth) * horizontal,
+      solarHeight,
+      Math.sin(azimuth) * horizontal,
+    ).normalize();
+    this.moonDirection.copy(this.sunDirection).negate();
+    this.timeOfDay = time;
+    this.sky.material.uniforms.sunPosition.value.copy(this.sunDirection).multiplyScalar(10000);
   }
 
   update(camera) {
@@ -81,7 +104,112 @@ export class SunEffects {
       }
       flare.material.opacity = flare.opacity * visibility;
     }
+
+    const moonAlignment = this._cameraForward.dot(this.moonDirection);
+    const moonAngularVisibility = THREE.MathUtils.smoothstep(
+      moonAlignment,
+      Math.cos(THREE.MathUtils.degToRad(18)),
+      Math.cos(THREE.MathUtils.degToRad(2)),
+    );
+    this._moonScreenPosition
+      .copy(this._cameraPosition)
+      .addScaledVector(this.moonDirection, 10000)
+      .project(camera);
+    const moonInFront = this._moonScreenPosition.z > -1 && this._moonScreenPosition.z < 1;
+    const moonEdge = Math.max(
+      Math.abs(this._moonScreenPosition.x),
+      Math.abs(this._moonScreenPosition.y),
+    );
+    const moonScreenVisibility = 1 - THREE.MathUtils.smoothstep(moonEdge, 0.72, 1.2);
+    const solarHeight = Math.sin((this.timeOfDay - 6) / 12 * Math.PI);
+    const moonPhaseVisibility = 1 - THREE.MathUtils.smoothstep(solarHeight, .08, .58);
+    const moonVisibility = moonInFront
+      ? moonAngularVisibility * moonScreenVisibility * moonPhaseVisibility
+      : 0;
+    const moonDepth = 38;
+    const moonHalfHeight = Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5)) * moonDepth;
+    const moonHalfWidth = moonHalfHeight * camera.aspect;
+    const moonCenterX = this._moonScreenPosition.x * moonHalfWidth;
+    const moonCenterY = this._moonScreenPosition.y * moonHalfHeight;
+    for (const moon of this.moonSprites) {
+      moon.sprite.visible = moonVisibility > 0.005;
+      moon.sprite.position.set(
+        moonCenterX,
+        moonCenterY,
+        -moonDepth,
+      );
+      moon.sprite.scale.setScalar(moon.size * moonHalfHeight * moonVisibility);
+      moon.material.opacity = moon.opacity * moonVisibility;
+    }
   }
+}
+
+function createMoonSprites(parent) {
+  const haloMaterial = new THREE.SpriteMaterial({
+    map: makeMoonTexture('halo'),
+    color: '#b8d6ff',
+    transparent: true,
+    opacity: 0.16,
+    blending: THREE.AdditiveBlending,
+    depthTest: false,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const discMaterial = new THREE.SpriteMaterial({
+    map: makeMoonTexture('disc'),
+    color: '#d9e7ff',
+    transparent: true,
+    opacity: 0.88,
+    depthTest: false,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const sprites = [
+    { sprite: new THREE.Sprite(haloMaterial), material: haloMaterial, size: .24, opacity: .16 },
+    { sprite: new THREE.Sprite(discMaterial), material: discMaterial, size: .075, opacity: .88 },
+  ];
+  for (const moon of sprites) {
+    moon.sprite.renderOrder = 10000;
+    moon.sprite.frustumCulled = false;
+    parent.add(moon.sprite);
+  }
+  return sprites;
+}
+
+function makeMoonTexture(type) {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const context = canvas.getContext('2d');
+  const center = size * .5;
+  if (type === 'halo') {
+    const gradient = context.createRadialGradient(center, center, 0, center, center, center);
+    gradient.addColorStop(0, 'rgba(219,235,255,.3)');
+    gradient.addColorStop(.22, 'rgba(173,207,255,.12)');
+    gradient.addColorStop(1, 'rgba(132,175,255,0)');
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, size, size);
+  } else {
+    const gradient = context.createRadialGradient(center * .8, center * .75, 2, center, center, center * .62);
+    gradient.addColorStop(0, 'rgba(255,255,255,.98)');
+    gradient.addColorStop(.68, 'rgba(218,231,250,.96)');
+    gradient.addColorStop(1, 'rgba(157,180,215,.5)');
+    context.fillStyle = gradient;
+    context.beginPath();
+    context.arc(center, center, center * .62, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = 'rgba(130,155,190,.14)';
+    for (const crater of [[48, 46, 7], [76, 61, 5], [57, 77, 4]]) {
+      context.beginPath();
+      context.arc(crater[0], crater[1], crater[2], 0, Math.PI * 2);
+      context.fill();
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  return texture;
 }
 
 function createFlareSprites(parent) {

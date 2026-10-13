@@ -28,6 +28,7 @@ import { CombatHud } from '../ui/combat-hud.js';
 import { renderOptionalObjectives } from '../ui/optional-objectives.js';
 import { formatNumber, formatPercent, t } from '../ui/i18n.js';
 import { AIR_SPAWN_LAYOUT_SEED_XOR } from './air-combat-utils.js';
+import { getWeatherTimeOfDay, isNightTime, resolveWeather } from './weather.js';
 
 export { disposeCombatEffectResources };
 
@@ -35,6 +36,28 @@ const forward=new THREE.Vector3(0,0,1);
 const headingDirection=new THREE.Vector3();
 const HUD_UPDATE_INTERVAL=1/15;
 const LOW_FUEL_PRESSURE_FRACTION=.2;
+
+const contactIntent = units => {
+  let hasStrike = false;
+  let hasFlank = false;
+  let hasSweep = false;
+  let hasAttackHelicopter = false;
+  let hasNonCombatant = false;
+  for (const unit of units ?? []) {
+    if (unit.combatant === false) hasNonCombatant = true;
+    if (unit.kind === 'attack-helicopter') hasAttackHelicopter = true;
+    if (unit.missionRole === 'strike') hasStrike = true;
+    else if (unit.missionRole === 'flank') hasFlank = true;
+    else if (unit.missionRole === 'sweep') hasSweep = true;
+  }
+  if (hasNonCombatant && !hasStrike && !hasFlank && !hasSweep && !hasAttackHelicopter) return 'radio.intent.probe';
+  if (hasAttackHelicopter && !hasStrike && !hasFlank && !hasSweep) return 'radio.intent.groundAttack';
+  if (hasStrike && (hasFlank || hasSweep)) return 'radio.intent.mixed';
+  if (hasStrike) return 'radio.intent.strike';
+  if (hasFlank) return 'radio.intent.flank';
+  if (hasSweep) return 'radio.intent.intercept';
+  return 'radio.intent.unknown';
+};
 
 export class CombatWorld {
   constructor(scene, player, terrain, fx, aircraftAsset = null, mission = {}, audio = null, onMissionEnd = () => {}, difficultyId = 'standard', inputTarget = null, seed = DEFAULT_RANDOM_SEED) {
@@ -55,9 +78,17 @@ export class CombatWorld {
     this.missionVariant=missionResolution.variant;
     this.encounters=missionResolution.encounters;
     const missionConfig={hostiles:4,wingmen:2,groundBattle:true,groundPairs:6,groundTrucks:12,...missionResolution.mission};
+    this.weather = resolveWeather(missionConfig.weather);
+    const campaignStores=missionConfig.campaignStores ?? {};
+    const effectiveWeapons={
+      ...this.difficulty.player.weapons,
+      ...(Number.isFinite(campaignStores.airMissiles) ? { airMissiles: campaignStores.airMissiles } : {}),
+      ...(Number.isFinite(campaignStores.groundMissiles) ? { groundMissiles: campaignStores.groundMissiles } : {}),
+      ...(campaignStores.gunRounds !== undefined ? { gunRounds: campaignStores.gunRounds } : {}),
+    };
     missionConfig.optionalObjectives=scaleMissileReserveObjectives(
       missionConfig.optionalObjectives,
-      this.difficulty.player.weapons,
+      effectiveWeapons,
       getDifficultyPreset('standard').player.weapons,
     );
     this.input = new CombatInput(window, inputTarget);
@@ -93,6 +124,9 @@ export class CombatWorld {
     this.missileLaunchSource=null;
     this.missileLaunchSeeker=null;
     this.missileLaunchAlertCooldown=0;
+    this.initialContactReported=false;
+    this.initialContactIdentificationReported=false;
+    this.nightVisionEnabled=false;
     this.terrain=terrain; this.playerHeading=0; this.previousPlayerPosition=player.position.clone();
     this.objectiveAnchor=player.position.clone();
     this._fallbackBoundaryBounds=terrain.operationBounds??{
@@ -115,6 +149,7 @@ export class CombatWorld {
       onPopUpThreat: (stage, units) => this.reportPopUpThreat(stage, units),
       onOperationalEvent: (event, unit) => this.reportOperationalEvent(event, unit),
       canStartHostileMissileAttack: (enemy, target) => this.canStartHostileMissileAttack(enemy, target),
+      weather: this.weather,
       difficulty:this.difficulty,
       random:this.random,
       spawnRandom:this.spawnRandom,
@@ -157,6 +192,7 @@ export class CombatWorld {
       scene, player,
       collision: this.collisionSystem, audio,
       incomingDamageMultiplier:this.difficulty?.player?.incomingDamage,
+      weather: this.weather,
       hostileMissileTurnRate:this.difficulty?.fighter?.missile?.projectile?.turnRate,
       hostileMissileDamage:this.difficulty?.fighter?.missile?.projectile?.damage,
       hostileMissileProximityRadius:this.difficulty?.fighter?.missile?.projectile?.proximityRadius,
@@ -183,17 +219,18 @@ export class CombatWorld {
       playerShots: this.projectileSystem.playerShots, hostileShots: this.projectileSystem.hostiles,
       hostileAircraft: this.airBattle.enemies,
       addTransientGlow,
-      initialCount:this.difficulty?.player?.countermeasures,
+      initialCount:campaignStores.flares ?? this.difficulty?.player?.countermeasures,
+      initialChaff:campaignStores.chaff ?? this.difficulty?.player?.chaff?.count,
       chaffConfig:this.difficulty?.player?.chaff,
       random:this.random,
       onInventoryChange: () => this.updateHud(),
     });
     this.projectileSystem.setDecoys(this.countermeasureSystem.decoys);
-    this.radar = new CombatRadar(player, audio);
+    this.radar = new CombatRadar(player, audio, this.weather);
     this.weaponSystem = new WeaponSystem({
-      player, scene, fx, audio, radar: this.radar, playerVelocity: this.playerVelocity,
+      player, scene, fx, audio, radar: this.radar, playerVelocity: this.playerVelocity, weather: this.weather,
       addProjectile: shot => this.projectileSystem.addPlayerProjectile(shot),
-      loadout:this.difficulty?.player?.weapons,
+      loadout:effectiveWeapons,
       canFireWeapons:()=>missionConfig.rulesOfEngagement!=='weaponsHold',
       onWeaponsHoldViolation:()=>this.radio.emit('mission.weaponsHold',{scope:missionConfig.campaignAttemptId??missionConfig.id}),
       random: this.random,
@@ -291,6 +328,8 @@ export class CombatWorld {
       damage:document.querySelector('#debrief-damage'),
       objectives:document.querySelector('#debrief-objectives'),
       optionalObjectives:document.querySelector('#debrief-optional-objective-list'),
+      turningPoint:document.querySelector('#debrief-turning-point'),
+      threatBreach:document.querySelector('#debrief-threat-breach'),
       gradeMark:document.querySelector('#debrief-grade-mark'),
       gradeScore:document.querySelector('#debrief-grade-score'),
       gradeCriteria:{
@@ -303,6 +342,11 @@ export class CombatWorld {
       },
     };
     this.debriefData=null;
+    this.debriefEvents=[];
+    this.debriefThreats=[];
+    this.debriefTurningPoint=null;
+    this.debriefOptionalStatuses=new Map();
+    this.debriefObjectiveReported=false;
     this.missionFlow=new MissionFlowSystem({
       mission:missionConfig,
       player,
@@ -335,9 +379,10 @@ export class CombatWorld {
         }
       },
       onRtb:()=>this.missionSystem.returnToBase(),
-      onPhaseChange:(_previous,phase)=>this.reportMissionPhase(phase),
+      onPhaseChange:(previous,phase)=>this.reportMissionPhase(previous,phase),
       onEnd:(outcome,elapsed)=>this.finishMission(outcome,elapsed),
     });
+    this.airBattle.setWingmanReturnPoint(this.missionFlow.home);
     this.optionalObjectiveTracker=new MissionOptionalObjectives(missionConfig.optionalObjectives??[]);
     this.protectedSiteLossReported=false;
     this.optionalObjectiveState={
@@ -375,12 +420,13 @@ export class CombatWorld {
       weapons:{missiles:this.weaponSystem.missiles,gunAmmoRemaining:this.weaponSystem.gunAmmoRemaining,cooldown:0,feedbackKey:null,feedbackTimer:0},
       fuel:{unlimited:this.fuelSystem.unlimited,fraction:this.fuelSystem.fraction},
       countermeasures:{flares:0,chaff:0},
+      environment:{timeOfDay:this.weather.timeOfDay,night:false,nightVision:false},
       wingmanOrder:this.airBattle.wingmanOrder,
       wingmanStatus:{alive:0,total:this.allies.length},
       wingmanRescue:{wingman:null,attacker:null,remaining:0,missileInbound:false},
       supportForce:{active:false,fraction:1,unitsAlive:0,unitsTotal:0},
       score:0,
-      mission:{waypoint:null,boundaryApproach:null,boundaryCritical:false,protectedAsset:{active:false,fraction:0,distance:Infinity}},
+      mission:{phase:null,waypoint:null,boundaryApproach:null,boundaryCritical:false,protectedAsset:{active:false,fraction:0,distance:Infinity}},
       threats:{
         radarWarningState:null,missile:null,missileEta:Infinity,missileDistance:Infinity,
         launchVisible:false,launchSourcePosition:null,launchSeeker:null,
@@ -464,6 +510,10 @@ export class CombatWorld {
     const state=this.hudState;
     if(!state)return;
     state.session.destroyed=this.destroyed;
+    const timeOfDay=getWeatherTimeOfDay(this.weather,this.missionFlow?.elapsed??0);
+    state.environment.timeOfDay=timeOfDay;
+    state.environment.night=isNightTime(timeOfDay);
+    state.environment.nightVision=this.nightVisionEnabled;
     state.session.gunFiring=this.input.pressed.has('Space');
     state.radar.mode=this.radar.mode;
     state.radar.target=this.radar.target;
@@ -518,6 +568,7 @@ export class CombatWorld {
     supportForce.unitsAlive=defendersAlive;
     supportForce.unitsTotal=defendersTotal;
     state.score=this.score;
+    state.mission.phase=this.missionFlow?.phase??null;
     state.mission.waypoint=this.missionFlow.waypoint;
     state.mission.boundaryApproach=this.boundaryApproach;
     state.mission.boundaryCritical=this.boundaryCritical;
@@ -565,7 +616,8 @@ export class CombatWorld {
     const missileRequested=justPressed.has('KeyM')||justPressed.has('MouseSecondary');
     const flareRequested=justPressed.has('KeyF');
     const chaffRequested=justPressed.has('KeyC');
-    const wingmanOrder=justPressed.has('Digit1')?'attack':justPressed.has('Digit2')?'defend':justPressed.has('Digit3')?'regroup':justPressed.has('Digit4')?'disengage':null;
+    const nightVisionRequested=justPressed.has('KeyN');
+    const wingmanOrder=justPressed.has('Digit1')?'attack':justPressed.has('Digit2')?'defend':justPressed.has('Digit3')?'regroup':justPressed.has('Digit4')?'rtb':null;
     if(radarModeRequested)this.radar.toggleMode();
     if(flareRequested){
       const deployed=this.countermeasureSystem.deployFlare();
@@ -575,6 +627,20 @@ export class CombatWorld {
       const deployed=this.countermeasureSystem.deployChaff();
       this.feedback.countermeasures('chaff',deployed,this.countermeasureSystem.lastChaffDeployment,this.countermeasureSystem.chaff);
     }
+    if(nightVisionRequested){
+      const timeOfDay=getWeatherTimeOfDay(this.weather,this.missionFlow?.elapsed??0);
+      if(isNightTime(timeOfDay)){
+        this.nightVisionEnabled=!this.nightVisionEnabled;
+        this.feedback.notify(
+          this.nightVisionEnabled?'combat.nightVisionEnabled':'combat.nightVisionDisabled',
+          1.2,
+          'friendly',
+        );
+      }else{
+        this.nightVisionEnabled=false;
+        this.feedback.notify('combat.nightVisionUnavailable',1.4,'info');
+      }
+    }
     if(wingmanOrder&&this.airBattle.issueWingmanOrder(wingmanOrder)){
       this.audio?.playWingmanOrder(wingmanOrder);
       this.feedback.notify(`combat.wingmanOrder.${wingmanOrder}`,1.65,'friendly');
@@ -582,6 +648,7 @@ export class CombatWorld {
     }
     const gunFiring=(this.input.pressed.has('Space')||this.input.pressed.has('MousePrimary'))&&!this.destroyed;
     this.radar.updateContacts(dt,this.getPlayerHeading(),this._radarContactSets);
+    this.reportInitialContactAssessment();
     if(targetCycleDirection){
       if(this.radar.cycleTarget(this.enemies,this.redUnits,targetCycleDirection)){
         this.weaponSystem.clearFeedback();
@@ -640,6 +707,7 @@ export class CombatWorld {
     this.radio.update(dt);
     this.refreshOptionalObjectiveState();
     const optionalResults=this.optionalObjectiveTracker.update(this.optionalObjectiveState);
+    this.recordOptionalObjectiveChanges(optionalResults);
     if(!this.protectedSiteLossReported&&optionalResults.some(result=>
       result.type==='interceptBeforeZone'
       &&result.status==='failed'
@@ -648,6 +716,16 @@ export class CombatWorld {
       this.radio.emit('mission.protectedSiteLost',{scope:'protected-installation'});
     }
     this.missionSystem.update(dt,this.destroyed);
+    if(this.missionSystem.objectiveSatisfied&&!this.debriefObjectiveReported){
+      this.debriefObjectiveReported=true;
+      this.recordTurningPoint({
+        key:this.missionSystem.objectiveResult===MISSION_OUTCOME.SETBACK
+          ?'mission.debrief.turningPoint.objectiveSetback'
+          :'mission.debrief.turningPoint.objectiveComplete',
+        phase:MISSION_PHASE.OBJECTIVE,
+        priority:80,
+      });
+    }
     if(this.missionSystem.objectiveSatisfied
       &&this.missionSystem.objectiveResult===MISSION_OUTCOME.COMPLETE)this.scoreSystem.awardObjectiveCompletion();
     let detectedHostiles=0;
@@ -690,6 +768,13 @@ export class CombatWorld {
       this.feedback.damage(this.feedback.hull);
     }
     this.destroyed=true;
+    this.recordThreatBreach('mission.debrief.threat.aircraft',{reason:{key:reasonKey,params}},110);
+    this.recordTurningPoint({
+      key:'mission.debrief.turningPoint.aircraftLost',
+      phase:this.missionFlow?.phase??MISSION_PHASE.ENGAGEMENT,
+      priority:120,
+      params:{reason:{key:reasonKey,params}},
+    });
     this.hudState.session.destroyed=true;
     this.combatHud.hideRadarAndBoundaryWarnings();
     this.missionSystem.markPlayerDestroyed();
@@ -760,23 +845,47 @@ export class CombatWorld {
     if(reporter)this.radio.emit('wingman.missileInbound',{wingmanId:reporter.radioId,scope:'player'});
   }
 
-  reportPopUpThreat(stage, units){
+  reportPopUpThreat(stage, units, scope='scheduled-reinforcement'){
     const position=units?.find(unit=>!unit.dead)?.mesh?.position;
     if(!position)return;
     const dx=position.x-this.player.position.x;
     const dz=position.z-this.player.position.z;
     const bearing=THREE.MathUtils.euclideanModulo(THREE.MathUtils.radToDeg(Math.atan2(dx,dz)),360);
     const range=Math.hypot(dx,position.y-this.player.position.y,dz);
-    const event=this.mission.id==='support'
+    const event=this.missionSystem.mission.id==='support'
       ?stage==='newContact'?'support.contactAwaitingOrders':'support.fightersIdentified'
       :stage==='newContact'?'threat.newContact':'threat.contactIdentified';
     this.radio.emit(event,{
-      scope:'scheduled-reinforcement',
+      scope,
       params:{
         bearing:String(Math.round(bearing)%360).padStart(3,'0'),
         range:formatNumber(range/1000,{minimumFractionDigits:1,maximumFractionDigits:1}),
+        intent:{key:contactIntent(units)},
       },
     });
+  }
+
+  reportInitialContactAssessment(){
+    if(this.initialContactIdentificationReported)return;
+    const contacts=this.enemies.filter(unit=>
+      !unit.dead
+      &&unit.encounterGroupId==='primary'
+      &&unit.mesh?.position
+      &&this.radar.tracks.has(unit.mesh),
+    );
+    if(!contacts.length)return;
+    if(!this.initialContactReported){
+      this.initialContactReported=true;
+      this.reportPopUpThreat('newContact',contacts,'initial-contact');
+    }
+    const identified=contacts.filter(unit=>{
+      if(unit.combatant===false)return false;
+      const track=this.radar.tracks.get(unit.mesh);
+      return track?.team==='hostile'&&!track.uncertain;
+    });
+    if(!identified.length)return;
+    this.initialContactIdentificationReported=true;
+    this.reportPopUpThreat('identified',identified,'initial-contact-identified');
   }
 
   reportOperationalEvent(event,unit){
@@ -800,12 +909,66 @@ export class CombatWorld {
         params:{
           bearing:String(Math.round(bearing)%360).padStart(3,'0'),
           range:formatNumber(range/1000,{minimumFractionDigits:1,maximumFractionDigits:1}),
+          intent:{key:contactIntent([unit])},
         },
       });
     }
   }
 
-  reportMissionPhase(phase){
+  recordDebriefEvent(event){
+    if(!event)return;
+    this.debriefEvents.push({
+      ...event,
+      elapsed:Math.max(0,Number(this.missionFlow?.elapsed??0)),
+    });
+  }
+
+  recordTurningPoint(event){
+    if(!event)return;
+    const candidate={
+      ...event,
+      phase:event.phase??this.missionFlow?.phase??MISSION_PHASE.ENGAGEMENT,
+      elapsed:Math.max(0,Number(this.missionFlow?.elapsed??0)),
+    };
+    if(!this.debriefTurningPoint||candidate.priority>(this.debriefTurningPoint.priority??0)){
+      this.debriefTurningPoint=candidate;
+    }
+    this.recordDebriefEvent(candidate);
+  }
+
+  recordThreatBreach(key,params={},priority=100){
+    const phase=this.missionFlow?.phase??MISSION_PHASE.ENGAGEMENT;
+    const threat={key,params,phase,elapsed:Math.max(0,Number(this.missionFlow?.elapsed??0))};
+    if(!this.debriefThreats.some(item=>item.key===key&&item.phase===phase)){
+      this.debriefThreats.push(threat);
+    }
+    this.recordTurningPoint({
+      key:'mission.debrief.turningPoint.threatBreakthrough',
+      phase,
+      priority,
+      params:{threat:{key,params}},
+    });
+  }
+
+  recordOptionalObjectiveChanges(results=[]){
+    for(const result of results){
+      if(!result?.id)continue;
+      const previous=this.debriefOptionalStatuses.get(result.id);
+      if(previous===result.status)continue;
+      this.debriefOptionalStatuses.set(result.id,result.status);
+      if(result.status==='failed'){
+        if(result.type==='interceptBeforeZone'&&result.detailKey==='mission.optionalObjective.result.zoneReached'){
+          this.recordThreatBreach('mission.debrief.threat.installation',{target:result.params?.target
+            ?{key:result.params.target}
+            :undefined});
+        }else if(result.type==='protectFriendlyGroundUnit'){
+          this.recordThreatBreach('mission.debrief.threat.friendlyLine');
+        }
+      }
+    }
+  }
+
+  reportMissionPhase(previous,phase){
     const keys={
       [MISSION_PHASE.CONTACT]:'mission.contact',
       [MISSION_PHASE.ENGAGEMENT]:'mission.engagement',
@@ -814,6 +977,10 @@ export class CombatWorld {
     };
     const event=keys[phase];
     if(!event)return;
+    this.recordDebriefEvent({key:`mission.debrief.phase.${phase}`,phase,previous});
+    if(phase===MISSION_PHASE.ENGAGEMENT&&!this.debriefTurningPoint){
+      this.recordTurningPoint({key:'mission.debrief.turningPoint.engagement',phase,priority:10});
+    }
     if(phase===MISSION_PHASE.OBJECTIVE&&this.missionSystem.objectiveSatisfied)return;
     this.radio.emit(event);
     const controlEvents={
@@ -860,6 +1027,23 @@ export class CombatWorld {
     this.optionalObjectiveState.outcome=outcome;
     this.optionalObjectiveState.elapsed=elapsed;
     const optionalObjectiveResults=this.optionalObjectiveTracker.update(this.optionalObjectiveState,true);
+    this.recordOptionalObjectiveChanges(optionalObjectiveResults);
+    if(outcome===MISSION_OUTCOME.SETBACK
+      &&this.missionSystem.mission.objective?.type==='forceDefense'
+      &&!this.debriefThreats.some(threat=>threat.key==='mission.debrief.threat.friendlyLine')){
+      this.recordThreatBreach('mission.debrief.threat.friendlyLine');
+    }
+    if(!this.debriefTurningPoint){
+      const lastPhase=this.debriefEvents.filter(event=>event.phase&&event.phase!==MISSION_PHASE.DEBRIEF).at(-1)?.phase
+        ?? MISSION_PHASE.ENGAGEMENT;
+      this.recordTurningPoint({
+        key:outcome===MISSION_OUTCOME.COMPLETE
+          ?'mission.debrief.turningPoint.extraction'
+          :'mission.debrief.turningPoint.missionFailed',
+        phase:outcome===MISSION_OUTCOME.COMPLETE?MISSION_PHASE.RTB:lastPhase,
+        priority:20,
+      });
+    }
     this.missionSystem.finish(outcome);
     this.missionEnded=true;
     if(outcome===MISSION_OUTCOME.COMPLETE)this.scoreSystem.awardMissionCompletion();
@@ -895,6 +1079,15 @@ export class CombatWorld {
       objectiveCount:1,
       missionTime:Math.max(0,elapsed),
       optionalObjectives:optionalObjectiveResults,
+      turningPoint:this.debriefTurningPoint,
+      threatsPassed:this.debriefThreats,
+      remainingStores: {
+        airMissiles: this.weaponSystem.missiles.air,
+        groundMissiles: this.weaponSystem.missiles.ground,
+        gunRounds: this.weaponSystem.gunAmmoRemaining,
+        flares: this.countermeasureSystem.flares,
+        chaff: this.countermeasureSystem.chaff,
+      },
     };
     this.debriefData.wingmenReturned=this.debriefData.wingmenSurvived;
     this.debriefData.grade=calculateDebriefGrade(this.debriefData);
@@ -925,6 +1118,21 @@ export class CombatWorld {
       :setback?'mission.debrief.setback':aborted?'mission.debrief.aborted':'mission.debrief.failed');
     const lossCause=!successful&&!aborted&&this.deathReasonKey?` · ${t(this.deathReasonKey,this.deathReasonParams)}`:'';
     if(this.debriefNodes.outcome)this.debriefNodes.outcome.textContent=`${outcomeText}${lossCause}`;
+    const turningPoint=this.debriefData.turningPoint;
+    const phaseParam=turningPoint?.phase
+      ? {key:`mission.phase.${turningPoint.phase}.title`}
+      : {key:'mission.phase.engagement.title'};
+    if(this.debriefNodes.turningPoint){
+      this.debriefNodes.turningPoint.textContent=turningPoint
+        ? t(turningPoint.key,{...turningPoint.params,phase:phaseParam})
+        : t('mission.debrief.turningPoint.none');
+    }
+    if(this.debriefNodes.threatBreach){
+      const threat=this.debriefData.threatsPassed?.[0];
+      this.debriefNodes.threatBreach.textContent=threat
+        ? t(threat.key,threat.params)
+        : t('mission.debrief.threat.none');
+    }
     const seconds=Math.max(0,Math.floor(elapsed));
     if(this.debriefNodes.duration)this.debriefNodes.duration.textContent=`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;
     if(this.debriefNodes.airKills)this.debriefNodes.airKills.textContent=formatNumber(this.airKills);

@@ -1,5 +1,6 @@
 import { MISSILE_PROFILES } from '../combat/projectiles.js';
 import { formatNumber, t } from './i18n.js';
+import { formatTimeOfDay } from '../combat/weather.js';
 
 const setTextIfChanged = (node, value) => {
   if (node && node.textContent !== value) node.textContent = value;
@@ -50,9 +51,13 @@ export class CombatHud {
     this.boundaryWarning = document.querySelector('#boundary-warning');
     this.boundaryWarningText = document.querySelector('#boundary-warning-text');
     this.boundaryWarningDistance = document.querySelector('#boundary-warning-distance');
+    this.radarTime = document.querySelector('#radar-time');
+    this.nightVisionStatus = document.querySelector('#night-vision-status');
   }
 
   update(state) {
+    if (this.radarTime && state.environment) setTextIfChanged(this.radarTime, formatTimeOfDay(state.environment.timeOfDay));
+    setHiddenIfChanged(this.nightVisionStatus, !state.environment?.nightVision);
     const gunEmpty = state.weapons.gunAmmoRemaining === 0;
     setTextIfChanged(this.weapon, gunEmpty
       ? t('combat.noGunAmmo')
