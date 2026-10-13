@@ -33,7 +33,9 @@ Use `npm run build` to create the production site and `npm run preview` to serve
 
 ## Current game
 
-The available sorties are Combat Air Patrol, Intercept Flight, Close Air Support, and Training. Combat missions use a briefing, departure, navigation, contact, engagement, objective, return-to-base, extraction, and debrief flow. The briefing lists each sortie's optional objectives, and the debrief reports which were completed; optional objectives do not determine primary mission success. Intercept Flight is an air-only mission; Close Air Support pits Finnish defenders against advancing armor and two Mi-24 gunships. Difficulty affects hostile detection, combat behavior, and damage. Mission records and unlocks are stored locally in the browser.
+The available standalone sorties are Combat Air Patrol, Intercept Flight, Close Air Support, and Training. The campaign **Shadow at the Border** links ten sorties from an airspace incursion over Virolahti to a ground invasion and counterattack. It stores independent Easy, Standard, and Hard runs locally, carries air control, defense integrity, and sortie readiness between chapters, and lets the player accept a result or retry the same seeded encounter. Unknown Track uses visual-range identification, a sustained escort, and enforced weapons hold. Broken Silence can end in a recovered setback if its strike aircraft reaches the protected zone, while The Border Breaks uses the surviving defensive-line strength and permits hostile armor to remain. The other chapters currently reuse the existing Patrol, Intercept, and Support rules while their operational objectives are developed.
+
+Combat missions use a briefing, departure, navigation, contact, engagement, objective, return-to-base, extraction, and debrief flow. The briefing lists each sortie's optional objectives, and the debrief reports which were completed; optional objectives do not determine primary mission success. Intercept Flight is an air-only mission; Close Air Support pits Finnish defenders against advancing armor and two Mi-24 gunships. Difficulty affects hostile detection, combat behavior, damage, and campaign force size. Mission records, unlocks, and campaign saves are stored locally in the browser.
 
 The player flies an F-35A representation using an included FlightGear F-35B visual model. Hostile flights use FlightGear Su-27-family and MiG-29 exterior models. Ground vehicles and the Mi-24 helicopter are low-detail, project-authored procedural models. These models are visual game assets, not exact engineering replicas.
 
@@ -77,6 +79,7 @@ Generated terrain packages are published separately from the source repository. 
 
 - `src/bootstrap.js` checks browser support; `src/main.js` coordinates the menu, missions, and app lifecycle.
 - `src/aircraft/`, `src/ground/`, and `src/assets/` contain aircraft, procedural ground units, and asset loading.
+- `src/campaign/` contains campaign definitions, persistent session state, and deterministic mission resolution.
 - `src/combat/` contains `CombatWorld` and the flight, weapon, projectile, collision, radar, mission, radio, and AI systems.
 - `src/environment/` contains terrain, terrain coverage and streaming, atmosphere, clouds, and sun effects.
 - `src/audio/`, `src/effects/`, `src/input/`, `src/mission/`, and `src/ui/` contain audio, effects, controls, mission data/progression, HUD, menu, translations, and styles.

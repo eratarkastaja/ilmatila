@@ -162,7 +162,7 @@ export class WingmanController {
       ally.threatTimer = Math.max(0, ally.threatTimer - dt);
       if (ally.threatTimer <= 0) ally.threatTarget = null;
       this.updateMissileDefense(battle, ally, dt);
-      if (ally.target?.dead || ally.target?.identified === false) ally.target = null;
+      if (ally.target?.dead || ally.target?.identified === false || ally.target?.combatant === false) ally.target = null;
       if (ally.groundTarget?.dead) ally.groundTarget = null;
       if (battle.wingmanOrder === 'defend' && ally.target && ally.target.mesh.position.distanceTo(battle.player.position) > 5600
         && ally.target.mesh.position.distanceTo(ally.mesh.position) > 2800) {
@@ -350,7 +350,8 @@ export class WingmanController {
     let selected = null;
     let bestScore = Infinity;
     for (const enemy of battle.enemies) {
-      if (enemy.dead || enemy.identified === false || enemy.phase === 'staging' || enemy.mesh.position.distanceTo(battle.player.position) > 9400) continue;
+      if (enemy.dead || enemy.identified === false || enemy.combatant === false
+        || enemy.phase === 'staging' || enemy.mesh.position.distanceTo(battle.player.position) > 9400) continue;
       if (battle.wingmanOrder === 'defend' && enemy.mesh.position.distanceTo(battle.player.position) > 5200) continue;
       const range = enemy.mesh.position.distanceTo(ally.mesh.position);
       if (range > 10200) continue;
@@ -371,7 +372,9 @@ export class WingmanController {
 
   selectAllyGroundTarget(battle, ally) {
     if (isHoldingFormation(battle.wingmanOrder)) return null;
-    const liveAirThreats = battle.enemies.some(enemy => !enemy.dead && enemy.identified !== false);
+    const liveAirThreats = battle.enemies.some(enemy => (
+      !enemy.dead && enemy.identified !== false && enemy.combatant !== false
+    ));
     let selected = null;
     let bestScore = Infinity;
     for (const unit of battle.groundUnits) {

@@ -124,8 +124,8 @@ vi.mock('../../src/input/controls.js', () => ({
 
 vi.mock('../../src/combat/world.js', () => ({
   CombatWorld: class {
-    constructor(scene, player, terrain, fx, aircraftAsset, mission, audio, onMissionEnd, _difficulty, _inputTarget, seed) {
-      Object.assign(this, { scene, player, terrain, fx, aircraftAsset, mission, audio, onMissionEnd, seed });
+    constructor(scene, player, terrain, fx, aircraftAsset, mission, audio, onMissionEnd, difficulty, _inputTarget, seed) {
+      Object.assign(this, { scene, player, terrain, fx, aircraftAsset, mission, audio, onMissionEnd, difficulty, seed });
       this.destroyed = false;
       this.enemies = [];
       this.allies = [];
@@ -469,6 +469,125 @@ describe('main game session lifecycle', () => {
     expect(harness.worlds[9]).not.toBe(firstWorld);
     expect(harness.worlds.every(world => world.dispose.mock.calls.length === 1)).toBe(true);
     expect(harness.audio.startEngine).toHaveBeenCalledTimes(10);
+  });
+
+  it('launches, commits, persists, and advances a campaign chapter', async () => {
+    const document = await loadMain('patrol');
+    document.querySelector('#campaign-mode').dispatch('click');
+
+    await vi.waitFor(() => {
+      expect(document.querySelector('#menu-theater').value).toBe('virolahti');
+      expect(document.querySelector('#launch-mission').disabled).toBe(false);
+    });
+    expect(document.querySelector('#campaign-overview').hidden).toBe(false);
+    expect(document.querySelector('#standalone-mission-selection').hidden).toBe(true);
+    expect(document.querySelector('#menu-difficulty').disabled).toBe(false);
+    expect(document.querySelector('#menu-theater').disabled).toBe(true);
+
+    await launch(document);
+    const firstWorld = harness.worlds[0];
+    expect(firstWorld.mission).toMatchObject({
+      id: 'patrol',
+      campaignId: 'shadow-border',
+      campaignChapterId: 'unknown-track',
+    });
+    expect(firstWorld.difficulty).toBe('standard');
+
+    firstWorld.onMissionEnd('complete', {
+      missionId: 'patrol',
+      campaignAttemptId: firstWorld.mission.campaignAttemptId,
+      score: 1800,
+      accuracy: 0.75,
+      optionalObjectives: [{ id: 'no-damage', status: 'completed' }],
+    });
+
+    expect(document.querySelector('#campaign-debrief-actions').hidden).toBe(false);
+    expect(document.querySelector('#campaign-continue').disabled).toBe(false);
+    expect(document.querySelector('#mission-debrief-return').hidden).toBe(true);
+    document.querySelector('#campaign-continue').dispatch('click');
+
+    const { CampaignProgress } = await import('../../src/campaign/campaign-progress.js');
+    const { CareerProgress } = await import('../../src/mission/progression.js');
+    expect(new CampaignProgress(globalThis.localStorage).getSave('standard')).toMatchObject({
+      chapterIndex: 1,
+      airControl: 68,
+      defenseIntegrity: 71,
+      sortieReadiness: 72,
+    });
+    expect(new CareerProgress(globalThis.localStorage).getBest('patrol')).toBeNull();
+    expect(document.querySelector('#mission-debrief').open).toBe(false);
+    expect(document.querySelector('#campaign-progress-label').textContent).toContain('2');
+
+    await launch(document);
+    expect(harness.worlds[1].mission).toMatchObject({
+      id: 'intercept',
+      campaignId: 'shadow-border',
+      campaignChapterId: 'broken-silence',
+    });
+    const secondWorld = harness.worlds[1];
+    secondWorld.onMissionEnd('setback', {
+      missionId: 'intercept',
+      campaignAttemptId: secondWorld.mission.campaignAttemptId,
+      score: 600,
+      optionalObjectives: [],
+    });
+    expect(document.querySelector('#campaign-debrief-title').textContent).toBe('SETBACK');
+    expect(document.querySelector('#campaign-continue').disabled).toBe(false);
+    document.querySelector('#campaign-continue').dispatch('click');
+    expect(new CampaignProgress(globalThis.localStorage).getSave('standard')).toMatchObject({
+      chapterIndex: 2,
+      airControl: 59,
+      defenseIntegrity: 66,
+      sortieReadiness: 69,
+    });
+  });
+
+  it('allows campaign difficulty to switch between its independent saves', async () => {
+    const document = await loadMain('patrol');
+    document.querySelector('#campaign-mode').dispatch('click');
+
+    await vi.waitFor(() => expect(document.querySelector('#launch-mission').disabled).toBe(false));
+    const difficulty = document.querySelector('#menu-difficulty');
+    difficulty.value = 'hard';
+    difficulty.dispatch('change');
+
+    expect(difficulty.disabled).toBe(false);
+    expect(document.querySelector('#menu-theater').disabled).toBe(true);
+    await launch(document);
+    expect(harness.worlds[0].difficulty).toBe('hard');
+    expect(harness.worlds[0].mission.campaignChapterId).toBe('unknown-track');
+  });
+
+  it('retries an uncommittable campaign loss with the same seed and a new attempt id', async () => {
+    const document = await loadMain('patrol');
+    document.querySelector('#campaign-mode').dispatch('click');
+    await vi.waitFor(() => expect(document.querySelector('#launch-mission').disabled).toBe(false));
+    await launch(document);
+    const firstWorld = harness.worlds[0];
+
+    firstWorld.onMissionEnd('failed', {
+      missionId: 'patrol',
+      campaignAttemptId: firstWorld.mission.campaignAttemptId,
+      score: 200,
+      optionalObjectives: [],
+    });
+
+    expect(document.querySelector('#campaign-continue').hidden).toBe(true);
+    expect(document.querySelector('#campaign-retry-sortie').hidden).toBe(false);
+    document.querySelector('#campaign-retry-sortie').dispatch('click');
+
+    const { CampaignProgress } = await import('../../src/campaign/campaign-progress.js');
+    const retrySave = new CampaignProgress(globalThis.localStorage).getSave('standard');
+    expect(retrySave).toMatchObject({ chapterIndex: 0, chapterRetryCount: 1 });
+    expect(retrySave.currentSeed).toBe(firstWorld.seed);
+    expect(retrySave.currentAttemptId).not.toBe(firstWorld.mission.campaignAttemptId);
+
+    await launch(document);
+    expect(harness.worlds[1].seed).toBe(firstWorld.seed);
+    expect(harness.worlds[1].mission).toMatchObject({
+      campaignChapterId: 'unknown-track',
+      campaignAttemptId: retrySave.currentAttemptId,
+    });
   });
 
   it('does not start a prepared sortie unless launch pointer lock is confirmed', async () => {

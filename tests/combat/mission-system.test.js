@@ -117,4 +117,32 @@ describe('MissionSystem', () => {
     expect(system.missionComplete).toBe(true);
     expect(system.outcome).toBe(MISSION_OUTCOME.COMPLETE);
   });
+
+  it('defers an operational setback until recovery without treating it as success', () => {
+    const system = new MissionSystem({
+      mission: { id: 'intercept' },
+      objective: { type: 'assetDefense' },
+      totals: { air: 3, ground: 0 },
+      getRemaining: () => ({
+        airRemaining: 3,
+        groundRemaining: 0,
+        priorityTargetsRemaining: 1,
+        protectedAssetLost: true,
+      }),
+      nodes: {},
+      deferCompletion: true,
+      initiallyActive: true,
+    });
+
+    system.update(0);
+
+    expect(system.objectiveSatisfied).toBe(true);
+    expect(system.objectiveResult).toBe(MISSION_OUTCOME.SETBACK);
+    expect(system.outcome).toBe(MISSION_OUTCOME.ACTIVE);
+    expect(system.missionFailed).toBe(false);
+    system.notifyObjectiveSetback();
+    system.finish(MISSION_OUTCOME.SETBACK);
+    expect(system.outcome).toBe(MISSION_OUTCOME.SETBACK);
+    expect(system.missionFailed).toBe(true);
+  });
 });

@@ -44,6 +44,7 @@ export class MissionFlowSystem {
     this.contactDetected = false;
     this.ingressReached = false;
     this.objectiveNotified = false;
+    this.recoveryOutcome = MISSION_OUTCOME.COMPLETE;
 
     this.home = player.position.clone();
     horizontal.copy(forward).applyQuaternion(player.quaternion);
@@ -79,6 +80,7 @@ export class MissionFlowSystem {
     hostileEngaged = false,
     targetDestroyed = false,
     objectiveSatisfied = false,
+    objectiveOutcome = MISSION_OUTCOME.COMPLETE,
     destroyed = false,
   } = {}) {
     if (this.phase === MISSION_PHASE.DEBRIEF) return;
@@ -112,15 +114,18 @@ export class MissionFlowSystem {
 
     if (objectiveSatisfied && !this.objectiveNotified) {
       this.objectiveNotified = true;
+      this.recoveryOutcome = objectiveOutcome === MISSION_OUTCOME.SETBACK
+        ? MISSION_OUTCOME.SETBACK
+        : MISSION_OUTCOME.COMPLETE;
       if (this.phase !== MISSION_PHASE.OBJECTIVE) this.setPhase(MISSION_PHASE.OBJECTIVE);
       else this.phaseElapsed = 0;
-      this.onObjectiveComplete();
+      this.onObjectiveComplete(this.recoveryOutcome);
     }
     if (objectiveSatisfied && this.phase !== MISSION_PHASE.RTB && this.phase !== MISSION_PHASE.DEBRIEF) {
       if (this.phaseElapsed >= (this.mission.objectiveReportDuration ?? 4)) this.enterRtb();
     }
     if (this.phase === MISSION_PHASE.RTB && this.horizontalDistanceTo(this.home) <= this.extractionRadius) {
-      this.finish(MISSION_OUTCOME.COMPLETE);
+      this.finish(this.recoveryOutcome);
     }
 
     this.routeHudElapsed += delta;
@@ -175,9 +180,13 @@ export class MissionFlowSystem {
   render(updateRouteReadout = true) {
     const phaseTitle = t(`mission.phase.${this.phase}.title`);
     const phaseDetailKey = this.phase === MISSION_PHASE.CONTACT
-      ? `mission.phase.contact.${this.contactDetected ? 'detected' : 'search'}`
+      ? this.mission.objective?.type === 'airPolicing'
+        ? 'mission.phase.contact.airPolicing'
+        : `mission.phase.contact.${this.contactDetected ? 'detected' : 'search'}`
       : this.phase === MISSION_PHASE.DEBRIEF
         ? `mission.phase.debrief.${this.outcome}`
+        : this.phase === MISSION_PHASE.RTB && this.recoveryOutcome === MISSION_OUTCOME.SETBACK
+          ? 'mission.phase.rtb.setbackDetail'
         : `mission.phase.${this.phase}.detail`;
     const phaseDetail = t(phaseDetailKey);
     if (this.nodes.phaseTitle && this.nodes.phaseTitle.textContent !== phaseTitle) this.nodes.phaseTitle.textContent = phaseTitle;

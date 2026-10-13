@@ -144,4 +144,27 @@ describe('WeaponSystem', () => {
     expect(fireWithSeed(1234)).toEqual(fireWithSeed(1234));
     expect(fireWithSeed(1234)).not.toEqual(fireWithSeed(5678));
   });
+
+  it('inhibits cannon and missile fire while weapons hold is active', () => {
+    const onWeaponsHoldViolation = vi.fn();
+    const { system, radar, shots, audio, target } = makeSystem({
+      canFireWeapons: () => false,
+      onWeaponsHoldViolation,
+    });
+    radar.target = target;
+    radar.targetDomain = 'air';
+    radar.targetInSensorRange = true;
+    radar.inLockEnvelope = true;
+    radar.lockCueConfirmed = true;
+
+    system.update(.1, { gunFiring: true, missileRequested: true });
+    system.update(.1, { gunFiring: true });
+
+    expect(shots).toHaveLength(0);
+    expect(system.gunRoundCount).toBe(0);
+    expect(system.missiles.air).toBe(MISSILE_PROFILES.playerAir.count);
+    expect(system.missileFeedbackKey).toBe('combat.weaponsHold');
+    expect(onWeaponsHoldViolation).toHaveBeenCalledTimes(2);
+    expect(audio.setGunFiring).toHaveBeenLastCalledWith(false);
+  });
 });

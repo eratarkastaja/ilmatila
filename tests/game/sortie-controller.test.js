@@ -8,9 +8,10 @@ import { createTerrainLease } from '../../src/environment/terrain.js';
 vi.mock('../../src/aircraft/plane.js', () => ({ loadCombatAircraft: vi.fn() }));
 vi.mock('../../src/combat/world.js', () => ({
   CombatWorld: class {
-    constructor(_scene, _player, terrain, _fx, asset) {
+    constructor(_scene, _player, terrain, _fx, asset, mission) {
       this.terrain = terrain;
       this.asset = asset;
+      this.mission = mission;
       this.destroyed = false;
       this.setTelemetry = vi.fn();
       this.dispose = vi.fn(() => { this.destroyed = true; });
@@ -166,6 +167,23 @@ describe('SortieController async preparation recovery', () => {
     expect(state.installed).toEqual([nextTerrain.terrain]);
     expect(controller.start()).toBe(true);
     expect(state.loading).toBe(false);
+    controller.dispose();
+  });
+
+  it('uses an explicitly resolved mission without adding it to standalone mission data', async () => {
+    const terrain = makeTerrain('north');
+    const resolvedMission = { id: 'patrol', campaignChapterId: 'unknown-track' };
+    const { controller } = createHarness({
+      terrainLoader: vi.fn().mockResolvedValue(terrain.terrain),
+      aircraftLoader: vi.fn().mockResolvedValue({ id: 'aircraft' }),
+    });
+
+    await expect(controller.prepare({
+      ...launchOptions,
+      mission: resolvedMission,
+    })).resolves.toBe(true);
+
+    expect(controller.combat.mission).toBe(resolvedMission);
     controller.dispose();
   });
 

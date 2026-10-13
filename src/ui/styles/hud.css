@@ -1282,6 +1282,17 @@
   filter: drop-shadow(0 0 2px currentColor);
 }
 
+.radar-contact.neutral {
+  color: #d9e1ca;
+}
+
+.radar-contact.neutral:before {
+  inset: 1px;
+  border: 1px solid currentColor;
+  background: transparent;
+  clip-path: none;
+}
+
 .radar-contact.ground {
   width: 8px;
   height: 8px;

@@ -27,6 +27,40 @@ describe('mission objective progression', () => {
       .toBe(MISSION_OUTCOME.COMPLETE);
   });
 
+  it('completes air policing after identification and a sustained escort', () => {
+    const objective = { type: 'airPolicing', requiredContacts: 2, escortDuration: 12 };
+
+    expect(evaluateMissionObjective(objective, {
+      identifiedCount: 1, contactCount: 2, escortElapsed: 12,
+    })).toBe(MISSION_OUTCOME.ACTIVE);
+    expect(evaluateMissionObjective(objective, {
+      identifiedCount: 2, contactCount: 2, escortElapsed: 11.9,
+    })).toBe(MISSION_OUTCOME.ACTIVE);
+    expect(evaluateMissionObjective(objective, {
+      identifiedCount: 2, contactCount: 2, escortElapsed: 12,
+    })).toBe(MISSION_OUTCOME.COMPLETE);
+  });
+
+  it('resolves asset and force defense as success or setback at authored thresholds', () => {
+    expect(evaluateMissionObjective({ type: 'assetDefense' }, {
+      priorityTargetsRemaining: 0,
+    })).toBe(MISSION_OUTCOME.COMPLETE);
+    expect(evaluateMissionObjective({ type: 'assetDefense' }, {
+      priorityTargetsRemaining: 1,
+      protectedAssetLost: true,
+    })).toBe(MISSION_OUTCOME.SETBACK);
+
+    const forceDefense = {
+      type: 'forceDefense', minimumFriendlyStrength: 0.4, maximumGroundRemaining: 3,
+    };
+    expect(evaluateMissionObjective(forceDefense, {
+      airRemaining: 0, groundRemaining: 3, friendlyStrengthFraction: 0.4,
+    })).toBe(MISSION_OUTCOME.COMPLETE);
+    expect(evaluateMissionObjective(forceDefense, {
+      airRemaining: 0, groundRemaining: 2, friendlyStrengthFraction: 0.39,
+    })).toBe(MISSION_OUTCOME.SETBACK);
+  });
+
   it('advances training time without exceeding its duration', () => {
     const objective = { type: 'training', duration: 90 };
     const state = { elapsed: 89.5, outcome: MISSION_OUTCOME.ACTIVE };

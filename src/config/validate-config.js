@@ -1,5 +1,6 @@
 import { DIFFICULTY_PRESETS } from '../combat/difficulty.js';
 import { MISSIONS } from '../mission/missions.js';
+import { CAMPAIGNS } from '../campaign/campaigns.js';
 
 const number = (min, max, integer = false) => ({ type: 'number', min, max, integer });
 const string = { type: 'string' };
@@ -11,6 +12,8 @@ const ammoCapacity = { type: 'ammoCapacity' };
 const nullableNumber = (min, max, integer = false) => ({ type: 'nullableNumber', min, max, integer });
 const REQUIRED_DIFFICULTY_IDS = ['easy', 'standard', 'hard'];
 const REQUIRED_MISSION_IDS = ['intercept', 'patrol', 'support', 'training'];
+const REQUIRED_CAMPAIGN_IDS = ['shadow-border'];
+const CAMPAIGN_AREAS = new Set(['paijanne', 'virolahti', 'ilomantsi', 'kuusamo']);
 const OPTIONAL_OBJECTIVE_FIELDS = {
   allWingmenSurvive: [],
   noDamage: [],
@@ -269,11 +272,20 @@ function validateObjective(objective, path, errors) {
     errors.push(`${path} must be an object`);
     return;
   }
-  if (!['clearAir', 'support', 'training'].includes(objective.type)) {
-    errors.push(`${path}.type must be clearAir, support, or training`);
+  const fieldsByType = {
+    clearAir: [],
+    support: [],
+    training: ['duration'],
+    airPolicing: ['identifyRange', 'identifyDuration', 'escortRange', 'escortDuration'],
+    assetDefense: ['target', 'zoneRadius'],
+    forceDefense: ['minimumFriendlyStrength', 'maximumGroundRemaining'],
+  };
+  const fields = fieldsByType[objective.type];
+  if (!fields) {
+    errors.push(`${path}.type is not a recognized mission objective type`);
     return;
   }
-  const keys = objective.type === 'training' ? ['type', 'duration'] : ['type'];
+  const keys = ['type', ...fields];
   for (const key of keys) {
     if (!(key in objective)) errors.push(`${path}.${key} is required`);
   }
@@ -281,6 +293,20 @@ function validateObjective(objective, path, errors) {
     if (!keys.includes(key)) errors.push(`${path}.${key} is not valid for ${objective.type}`);
   }
   if (objective.type === 'training') validateNode(objective.duration, number(1, 3600), `${path}.duration`, errors);
+  if (objective.type === 'airPolicing') {
+    validateNode(objective.identifyRange, number(100, 20000), `${path}.identifyRange`, errors);
+    validateNode(objective.identifyDuration, number(.1, 120), `${path}.identifyDuration`, errors);
+    validateNode(objective.escortRange, number(100, 20000), `${path}.escortRange`, errors);
+    validateNode(objective.escortDuration, number(1, 600), `${path}.escortDuration`, errors);
+  }
+  if (objective.type === 'assetDefense') {
+    validateOptionalObjectiveTarget(objective.target, `${path}.target`, 'airHostiles', errors);
+    validateNode(objective.zoneRadius, number(100, 100000), `${path}.zoneRadius`, errors);
+  }
+  if (objective.type === 'forceDefense') {
+    validateNode(objective.minimumFriendlyStrength, number(0, 1), `${path}.minimumFriendlyStrength`, errors);
+    validateNode(objective.maximumGroundRemaining, number(0, 200, true), `${path}.maximumGroundRemaining`, errors);
+  }
 }
 
 function validateOptionalObjectiveTarget(target, path, expectedCollection, errors) {
@@ -592,6 +618,150 @@ export function validateMissions(missions = MISSIONS) {
   return errors;
 }
 
-export function validateGameConfig({ difficulties = DIFFICULTY_PRESETS, missions = MISSIONS } = {}) {
-  return [...validateDifficultyPresets(difficulties), ...validateMissions(missions)];
+function validateCampaignEffect(effect, path, errors) {
+  if (!effect || typeof effect !== 'object' || Array.isArray(effect)) {
+    errors.push(`${path} must be an object`);
+    return;
+  }
+  const allowed = new Set(['airControl', 'defenseIntegrity', 'sortieReadiness', 'addFlags']);
+  for (const key of Object.keys(effect)) {
+    if (!allowed.has(key)) errors.push(`${path}.${key} is not a recognized campaign effect`);
+  }
+  for (const key of ['airControl', 'defenseIntegrity', 'sortieReadiness']) {
+    if (effect[key] !== undefined) validateNode(effect[key], number(-100, 100), `${path}.${key}`, errors);
+  }
+  if (effect.addFlags !== undefined) validateNode(effect.addFlags, array(string), `${path}.addFlags`, errors);
+}
+
+function validateCampaignMissionOverrides(overrides, path, errors) {
+  if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides)) {
+    errors.push(`${path} must be an object`);
+    return;
+  }
+  const allowed = new Set([
+    'disableVariants', 'rulesOfEngagement', 'hostileDisposition',
+    'hostiles', 'wingmanInitialOrder', 'objective',
+  ]);
+  for (const key of Object.keys(overrides)) {
+    if (!allowed.has(key)) errors.push(`${path}.${key} is not a permitted campaign mission override`);
+  }
+  if (overrides.disableVariants !== undefined) {
+    validateNode(overrides.disableVariants, boolean, `${path}.disableVariants`, errors);
+  }
+  if (overrides.rulesOfEngagement !== undefined && overrides.rulesOfEngagement !== 'weaponsHold') {
+    errors.push(`${path}.rulesOfEngagement must be weaponsHold`);
+  }
+  if (overrides.hostileDisposition !== undefined && overrides.hostileDisposition !== 'noncombatant') {
+    errors.push(`${path}.hostileDisposition must be noncombatant`);
+  }
+  if (overrides.hostiles !== undefined) validateNode(overrides.hostiles, number(0, 100, true), `${path}.hostiles`, errors);
+  if (overrides.wingmanInitialOrder !== undefined
+    && !['attack', 'defend', 'regroup', 'disengage'].includes(overrides.wingmanInitialOrder)) {
+    errors.push(`${path}.wingmanInitialOrder must be attack, defend, regroup, or disengage`);
+  }
+  if (overrides.objective !== undefined) validateObjective(overrides.objective, `${path}.objective`, errors);
+}
+
+export function validateCampaigns(campaigns = CAMPAIGNS, missions = MISSIONS) {
+  const errors = [];
+  if (!campaigns || typeof campaigns !== 'object' || Array.isArray(campaigns)) {
+    return ['campaigns must be an object keyed by campaign id'];
+  }
+  for (const [campaignId, campaign] of Object.entries(campaigns)) {
+    const path = `campaigns.${campaignId}`;
+    if (!campaign || typeof campaign !== 'object' || Array.isArray(campaign)) {
+      errors.push(`${path} must be an object`);
+      continue;
+    }
+    const allowed = new Set(['id', 'titleKey', 'descriptionKey', 'initialState', 'chapters']);
+    for (const key of Object.keys(campaign)) {
+      if (!allowed.has(key)) errors.push(`${path}.${key} is not a recognized setting`);
+    }
+    if (campaign.id !== campaignId) errors.push(`${path}.id must match its key`);
+    validateNode(campaign.titleKey, string, `${path}.titleKey`, errors);
+    validateNode(campaign.descriptionKey, string, `${path}.descriptionKey`, errors);
+    const initial = campaign.initialState;
+    if (!initial || typeof initial !== 'object' || Array.isArray(initial)) {
+      errors.push(`${path}.initialState must be an object`);
+    } else {
+      const initialKeys = new Set(['airControl', 'defenseIntegrity', 'sortieReadiness', 'flags']);
+      for (const key of Object.keys(initial)) {
+        if (!initialKeys.has(key)) errors.push(`${path}.initialState.${key} is not a recognized setting`);
+      }
+      for (const key of ['airControl', 'defenseIntegrity', 'sortieReadiness']) {
+        validateNode(initial[key], number(0, 100), `${path}.initialState.${key}`, errors);
+      }
+      validateNode(initial.flags, array(string), `${path}.initialState.flags`, errors);
+    }
+    if (!Array.isArray(campaign.chapters) || campaign.chapters.length === 0) {
+      errors.push(`${path}.chapters must contain at least one chapter`);
+      continue;
+    }
+    const chapterIds = new Set();
+    campaign.chapters.forEach((chapter, index) => {
+      const chapterPath = `${path}.chapters[${index}]`;
+      if (!chapter || typeof chapter !== 'object' || Array.isArray(chapter)) {
+        errors.push(`${chapterPath} must be an object`);
+        return;
+      }
+      const chapterKeys = new Set([
+        'id', 'day', 'areaId', 'baseMissionId', 'titleKey', 'briefingKey',
+        'decisiveObjectiveId', 'effects', 'missionOverrides',
+      ]);
+      for (const key of Object.keys(chapter)) {
+        if (!chapterKeys.has(key)) errors.push(`${chapterPath}.${key} is not a recognized setting`);
+      }
+      validateNode(chapter.id, string, `${chapterPath}.id`, errors);
+      if (chapterIds.has(chapter.id)) errors.push(`${path}.chapters contains duplicate id "${chapter.id}"`);
+      chapterIds.add(chapter.id);
+      validateNode(chapter.day, number(1, 365, true), `${chapterPath}.day`, errors);
+      if (!CAMPAIGN_AREAS.has(chapter.areaId)) errors.push(`${chapterPath}.areaId is not a known terrain area`);
+      if (!Object.hasOwn(missions, chapter.baseMissionId)) {
+        errors.push(`${chapterPath}.baseMissionId contains unknown mission "${chapter.baseMissionId}"`);
+      }
+      validateNode(chapter.titleKey, string, `${chapterPath}.titleKey`, errors);
+      validateNode(chapter.briefingKey, string, `${chapterPath}.briefingKey`, errors);
+      validateNode(chapter.decisiveObjectiveId, string, `${chapterPath}.decisiveObjectiveId`, errors);
+      const objectiveIds = new Set((missions[chapter.baseMissionId]?.optionalObjectives ?? []).map(item => item.id));
+      if (Object.hasOwn(missions, chapter.baseMissionId) && !objectiveIds.has(chapter.decisiveObjectiveId)) {
+        errors.push(`${chapterPath}.decisiveObjectiveId is not an optional objective in ${chapter.baseMissionId}`);
+      }
+      if (chapter.missionOverrides !== undefined) {
+        validateCampaignMissionOverrides(
+          chapter.missionOverrides,
+          `${chapterPath}.missionOverrides`,
+          errors,
+        );
+      }
+      const effects = chapter.effects;
+      if (!effects || typeof effects !== 'object' || Array.isArray(effects)) {
+        errors.push(`${chapterPath}.effects must be an object`);
+      } else {
+        for (const type of ['decisive', 'success', 'setback']) {
+          validateCampaignEffect(effects[type], `${chapterPath}.effects.${type}`, errors);
+        }
+        for (const type of Object.keys(effects)) {
+          if (!['decisive', 'success', 'setback'].includes(type)) {
+            errors.push(`${chapterPath}.effects.${type} is not a recognized result type`);
+          }
+        }
+      }
+    });
+  }
+  for (const id of REQUIRED_CAMPAIGN_IDS) {
+    if (!(id in campaigns)) errors.push(`campaigns.${id} is required`);
+  }
+  return errors;
+}
+
+export function validateGameConfig({
+  difficulties = DIFFICULTY_PRESETS,
+  missions = MISSIONS,
+  campaigns = CAMPAIGNS,
+} = {}) {
+  return [
+    ...validateDifficultyPresets(difficulties),
+    ...validateMissions(missions),
+    ...validateCampaigns(campaigns, missions),
+  ];
 }

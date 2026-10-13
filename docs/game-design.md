@@ -65,6 +65,20 @@ Wingman-pressure fighters can lock and launch at their assigned wingman. The win
 - Mission phase/route/objective indicators and radio reports provide navigation, task, wingman-command, and threat context. Avoid removing cues when changing their owning system.
 - The debrief reports mission result, score, air/ground and total kills, cannon rounds/accuracy, player missiles fired/hit, damage, completion time, wingmen returned, and objectives completed. “Wingmen returned” counts wingmen still alive when the sortie closes. Current mission success depends on the primary objective and player extraction; wingman losses do not block completion. It adds an A–F sortie grade with visible points and reasons for mission completion, aircraft survival, wingman survival, cannon accuracy, damage avoidance, and missile efficiency. A weapon or wingman criterion is marked not scored when the sortie had no relevant weapon use or assigned wingmen; the grade is normalized over the remaining criteria. Progression continues to use the existing mission result data.
 
-## Future design directions (non-binding)
+## Campaign
 
-Ideas that could be explored in separate design work include richer AI tactics, campaign-lite progression, loadout choices, and replay playback. The simulation now uses an internal deterministic seed per sortie; this does not change the current balance rules.
+The first campaign layer implements the ten-chapter **Shadow at the Border**
+sequence, one persistent run per difficulty, three visible strategic state
+values, deterministic retries, and accept/retry handling after the tactical
+debrief. Campaign difficulty also scales authored force counts before the normal
+difficulty preset controls combat behavior and resources. Unknown Track has
+proximity identification, escort timing, unknown/neutral radar states, and
+weapons hold. Broken Silence has a primary asset-defense zone, and The Border
+Breaks resolves against friendly-line strength and a permitted hostile-survivor
+threshold. The remaining chapters reuse Patrol, Intercept, and Support rules as
+temporary playable scenarios.
+
+The intended scenario, difficulty targets, campaign-specific objectives, and
+remaining implementation sequence are specified in [campaign design](campaign-design.md).
+Other non-binding ideas include richer AI tactics, loadout choices, and replay
+playback.

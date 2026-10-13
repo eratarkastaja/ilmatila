@@ -82,6 +82,8 @@ Each planned sortie gets one 32-bit seed when its mission is selected. The menu 
 
 Mission variants and encounter probability, response, and warning delay use a separate stream derived from the sortie seed and mission id, so choosing a plan does not consume simulation rolls. The same seed and mission therefore select the same authored variant and encounter plan. Encounter tests should cover unmet conditions, one-time warning, the full preselected delay, cancellation before warning (including destroying Support's marked reinforcement relay), and execution after warning; include objective accounting for pending and cancelled groups. The same seed, mission setup, frame steps, and player inputs should produce the same simulation state. Test observable state such as selected variant, encounter response, spawned composition/positions, weapon use, projectiles, and damage. Do not stub global `Math.random()` to control gameplay randomness.
 
+Campaign retries keep the chapter's sortie seed while assigning a new attempt id. Campaign tests should therefore assert the resolved mission variant and encounter plan remain stable across retry, accepted results advance exactly once, and abort or aircraft-loss results leave persistent campaign state unchanged. Inject the campaign seed factory in focused tests instead of stubbing global randomness.
+
 ## Test quality
 
 Favor tests that would catch a realistic regression: user-visible state, simulation invariants, ownership, cancellation, or ordering. Avoid tests that mirror implementation line-by-line, assert private details without protecting an invariant, or pad coverage without meaningful failure detection.

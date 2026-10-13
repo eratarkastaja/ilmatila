@@ -9,6 +9,7 @@ src/
   assets/                 runtime asset loading and disposal
   aircraft/               player and hostile aircraft visuals
   audio/                  game audio
+  campaign/               campaign definitions, resolution, session state and persistence
   combat/                 sortie composition and combat systems
   config/                 mission and difficulty configuration validation
   effects/                flight particles, trails, and combat effects
@@ -28,6 +29,7 @@ tests/
   environment/terrain/    coverage tests
   input/                  control tests
   integration/            full combat and app lifecycle tests
+  campaign/               campaign state and persistence tests
   mission/                progression tests
 ```
 
@@ -40,7 +42,11 @@ tests/
 | Page bootstrap, menu, app-level scene/renderer and outer frame loop | `main.js` | DOM, Three.js, controls, assets, terrain, audio, UI |
 | Combat frame orchestration, system connections, combat state for presentation and debrief | `CombatWorld` | Scene, player, terrain, combat systems, stable borrowed `hudState` |
 | Mission preparation, pause/resume, and sortie resource cleanup | `SortieController` | Asset repository, terrain, combat world, controls, audio callbacks |
-| Built-in mission and difficulty configuration validation | `validateGameConfig` | Schemas, mission and difficulty definitions; currently called by tests, not runtime |
+| Campaign chapter progression and one-time result application | `CampaignSession` | Campaign definition, campaign save, sortie result and seed factory |
+| Versioned campaign persistence per difficulty | `CampaignProgress` | Browser local storage and tolerant save normalization |
+| Campaign chapter to ordinary mission resolution | `resolveCampaignMission` | Chapter, campaign state, selected difficulty, sortie seed and built-in mission definition |
+| Campaign menu and debrief presentation | `CampaignView` | Campaign session read state, translations and campaign DOM nodes |
+| Built-in mission, difficulty and campaign configuration validation | `validateGameConfig` | Schemas and built-in definitions; currently called by tests, not runtime |
 | Seeded authored mission variant and encounter selection | `resolveMissionVariant` in `mission/mission-variants.js` | Mission seed, weighted alternatives and responses, isolated from combat RNG |
 | Authored encounter trigger and warning-delay lifecycle | `EncounterDirector` in `combat/encounter-director.js`, owned by `CombatWorld` | Preselected encounter plan, remaining group/objective state and Support reinforcement-relay state, warning and spawn callbacks |
 | Shared asset loading and terrain ownership | `AssetRepository` | Aircraft loader, terrain loader, per caller terrain leases |
@@ -75,11 +81,14 @@ The outer active-frame order in `main.js` is flight controls (which spend the so
 ```mermaid
 flowchart TD
   A[main.js app and menu] -->|launch click| B[SortieController.prepare]
+  I[CampaignSession] -->|resolved mission definition| B
   B -->|terrain lease + aircraft assets ready| C[CombatWorld and HUD views]
   C --> D[SortieController.start]
   D --> E[active frame loop]
   E --> F[mission flow ends]
-  F --> G[debrief and CareerProgress]
+  F --> G[debrief]
+  G -->|standalone| J[CareerProgress]
+  G -->|campaign preview and accept| I
   G -->|return to menu| H[SortieController.dispose]
   H --> A
 ```
@@ -106,6 +115,8 @@ The same `SortieController` is reused after returning to the menu, but each laun
 - `CombatWorld` owns sampled player velocity and connections between systems. It publishes a stable borrowed `hudState` read model; the combat systems remain its source of truth, and HUD code does not receive the whole world object.
 - The Support force-health meter is a read-only aggregate of `GroundBattle` units with the `defender` role. `CombatWorld` refreshes it into `hudState`; unit health, damage, and loss remain owned by ground combat.
 - The menu plans a sortie seed when a mission is selected, resolves its authored variant and encounter plan for the briefing, and passes the same seed to `SortieController.prepare()`. The controller can still choose a seed through its factory when no seed is supplied. `CombatWorld` resolves the plan again with a separate seed-derived stream, then derives the shared gameplay RNG from that seed and passes it to combat, AI, weapon, countermeasure, and spawn systems. Mission variant or encounter selection therefore cannot consume combat RNG rolls. Pure presentation randomness also uses a separate source so visual details cannot shift later gameplay rolls.
+- `CampaignSession` owns the current chapter, selected difficulty, three strategic state values, authored flags, attempt identity and retry seed. `resolveCampaignMission` turns that snapshot into a normal mission definition before launch. `SortieController` and `CombatWorld` receive the resolved definition but do not read or persist campaign state. Campaign results remain previews until the player accepts them; accepted attempt ids make state application idempotent. Abort and aircraft-loss results cannot be accepted. The menu can switch between independent difficulty saves while no sortie is preparing; the selected difficulty is fixed for the active sortie.
+- `CampaignProgress` persists one versioned campaign run per difficulty independently of `CareerProgress`. It clamps loaded state, removes unknown flags and keeps the current page session playable when browser storage is unavailable.
 - Menu, page-level dialogs, and outer frame wiring live in `main.js`. Combat status markup is rendered by `CombatHud` from the stable `CombatWorld.hudState` view, while `TacticalHud` reads the same view for frame-rate cues. `CombatWorld` still queries mission, status, and debrief nodes and passes node references to other presentation systems; radar and some combat-facing presentation code also talks to DOM nodes. UI separation through narrow callbacks/adapters is partial, so changes must preserve current markup bindings unless deliberately migrating them.
 - `FlightControls`, `MenuRadar`, `GameAudio`, the asset repository, and some module-level event listeners/resources are app-lifetime objects. Several have no common application shutdown coordinator; `main.js` disposes the sortie, `FlightFX`, missile mesh pool, and shared combat-effect GPU resources on non-persisted `pagehide`, while the remaining globals rely on the page lifetime. Per-world combat-effect pools are emptied by `CombatWorld.dispose()`. This is an existing lifecycle boundary to consider before adding more app-level listeners or resources.
 
@@ -115,7 +126,7 @@ After `bootstrap.js` confirms WebGL2 and Pointer Lock and accepts a desktop devi
 
 Sortie preparation gives terrain and aircraft loading independent timeouts. A failed or timed-out request aborts its sibling load, releases any terrain lease that arrived but was not installed, and returns a preparation failure to the menu. Disposing the controller during preparation aborts both subscriptions and notifies `main.js` to clear the loading state. Page exit also invalidates and aborts menu terrain loading. Generation checks dispose late terrain results after cancellation or when a newer menu terrain request has taken ownership.
 
-`MissionFlowSystem` advances from departure and ingress through contact/engagement/objective and RTB extraction. Completion, failure, or boundary abort produces a debrief through `CombatWorld`; `SortieController.finish()` freezes input and audio state, and `main.js` records progress and presents the debrief. Returning to the menu calls `dispose()`, which releases the combat world and session resources and resets player/menu state. `CombatWorld` removes its input/language/restart listeners, radar tracks, AI units, projectiles, radio state, and per-world effect pools. `MissionSystem` cancels its notice timer and pending reveal frame. The app coordinator also cancels its menu transition timer and clears the development telemetry/stress handles. A subsequent launch builds a fresh combat world.
+`MissionFlowSystem` advances from departure and ingress through contact/engagement/objective and RTB extraction. Completion, failure, or boundary abort produces a debrief through `CombatWorld`; `SortieController.finish()` freezes input and audio state. In standalone mode `main.js` records the result in `CareerProgress`. In campaign mode it asks `CampaignSession` for a strategic-effect preview and exposes accept or retry; only acceptance advances and persists the campaign. Returning to the menu calls `dispose()`, which releases the combat world and session resources and resets player/menu state. `CombatWorld` removes its input/language/restart listeners, radar tracks, AI units, projectiles, radio state, and per-world effect pools. `MissionSystem` cancels its notice timer and pending reveal frame. The app coordinator also cancels its menu transition timer and clears the development telemetry/stress handles. A subsequent launch builds a fresh combat world.
 
 The installed terrain stays available across sorties. Replacing it releases the previous terrain lease and disposes its terrain/detail resources after the last lease is released. `FlightFX` is reset, not disposed, between sorties. Imported aircraft geometry and textures are shared by instance clones and cached for the app session; `disposeAircraftVisual()` releases instance-owned resources without disposing shared model geometry. `AssetRepository` currently has no general shutdown method for the cached aircraft asset, so that cache has no explicit app-level disposal path. The app-level missile mesh pool and shared combat-effect GPU resources are explicitly released on non-persisted `pagehide`.
 

@@ -23,7 +23,7 @@ export class HostileFighterAI {
     const playerPosition = battle.player.position;
 
     for (const enemy of battle.enemies) {
-      if (enemy.dead || enemy.identified === false) continue;
+      if (enemy.dead || enemy.identified === false || enemy.combatant === false) continue;
       if (enemy.kind === 'attack-helicopter') {
         battle.helicopterAI.update(battle, enemy, dt, playerForward, playerRight);
         continue;

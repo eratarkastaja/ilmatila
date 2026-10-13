@@ -9,13 +9,21 @@ export class MissionSystem {
     this.totals = totals;
     this.getRemaining = getRemaining;
     this.remaining = { airRemaining: 0, groundRemaining: 0 };
-    this.evaluation={elapsed:0,airRemaining:0,groundRemaining:0,destroyed:false,outcome:MISSION_OUTCOME.ACTIVE};
-    this._progressParams={elapsed:0,duration:0,remaining:0,airRemaining:0,airTotal:0,groundRemaining:0,groundTotal:0};
+    this.evaluation={
+      elapsed:0,airRemaining:0,groundRemaining:0,identifiedCount:0,contactCount:0,
+      escortElapsed:0,priorityTargetsRemaining:0,protectedAssetLost:false,
+      friendlyStrengthFraction:1,destroyed:false,outcome:MISSION_OUTCOME.ACTIVE,
+    };
+    this._progressParams={
+      elapsed:0,duration:0,remaining:0,airRemaining:0,airTotal:0,
+      groundRemaining:0,groundTotal:0,identified:0,total:0,seconds:0,strength:0,
+    };
     this.nodes = nodes;
     this.elapsed = 0;
     this.deferCompletion = deferCompletion;
     this.objectiveActive = initiallyActive;
     this.objectiveSatisfied = false;
+    this.objectiveResult = MISSION_OUTCOME.ACTIVE;
     this.outcome = MISSION_OUTCOME.ACTIVE;
     this.missionComplete = false;
     this.missionFailed = false;
@@ -33,19 +41,23 @@ export class MissionSystem {
       const delta=Number.isFinite(dt)?Math.max(0,dt):0;
       this.elapsed=Math.min(this.objective.duration??90,this.elapsed+delta);
     }
+    Object.assign(this.evaluation,remaining);
     this.evaluation.elapsed=this.elapsed;
     this.evaluation.airRemaining=remaining.airRemaining;
     this.evaluation.groundRemaining=remaining.groundRemaining;
     this.evaluation.destroyed=destroyed;
     this.evaluation.outcome=this.outcome;
     const evaluatedOutcome=evaluateMissionObjective(this.objective,this.evaluation);
-    if (evaluatedOutcome === MISSION_OUTCOME.COMPLETE && this.deferCompletion) {
+    if ((evaluatedOutcome === MISSION_OUTCOME.COMPLETE || evaluatedOutcome === MISSION_OUTCOME.SETBACK)
+      && this.deferCompletion) {
       this.objectiveSatisfied = true;
+      this.objectiveResult = evaluatedOutcome;
       this.renderObjective(remaining);
       return;
     }
-    if (evaluatedOutcome === MISSION_OUTCOME.COMPLETE) {
-      this.complete();
+    if (evaluatedOutcome === MISSION_OUTCOME.COMPLETE || evaluatedOutcome === MISSION_OUTCOME.SETBACK) {
+      if (evaluatedOutcome === MISSION_OUTCOME.COMPLETE) this.complete();
+      else this.finish(MISSION_OUTCOME.SETBACK);
       return;
     }
     this.outcome=evaluatedOutcome;
@@ -75,7 +87,9 @@ export class MissionSystem {
     if (objectiveTitle&&objectiveTitle.textContent!==titleText) objectiveTitle.textContent = titleText;
     if (!objectiveProgress) return;
     if (this.missionComplete || this.objectiveSatisfied) {
-      const text=t('mission.progress.complete');
+      const text=t(this.objectiveResult===MISSION_OUTCOME.SETBACK
+        ?'mission.progress.setback'
+        :'mission.progress.complete');
       if(objectiveProgress.textContent!==text)objectiveProgress.textContent=text;
       return;
     }
@@ -92,6 +106,23 @@ export class MissionSystem {
       params.groundRemaining=remaining.groundRemaining;
       params.groundTotal=this.totals.ground;
       progressText = t('mission.progress.support',params);
+    } else if (this.objective.type === 'airPolicing') {
+      params.identified=remaining.identifiedCount??0;
+      params.total=remaining.contactCount??this.objective.requiredContacts??0;
+      params.seconds=Math.max(0,Math.ceil((this.objective.escortDuration??0)-(remaining.escortElapsed??0)));
+      progressText=params.identified<Math.min(params.total,this.objective.requiredContacts??params.total)
+        ?t('mission.progress.airPolicingIdentify',params)
+        :t('mission.progress.airPolicingEscort',params);
+    } else if (this.objective.type === 'assetDefense') {
+      params.remaining=remaining.priorityTargetsRemaining??0;
+      progressText=t('mission.progress.assetDefense',params);
+    } else if (this.objective.type === 'forceDefense') {
+      params.airRemaining=remaining.airRemaining;
+      params.airTotal=this.totals.air;
+      params.groundRemaining=remaining.groundRemaining;
+      params.groundTotal=this.totals.ground;
+      params.strength=Math.round((remaining.friendlyStrengthFraction??0)*100);
+      progressText=t('mission.progress.forceDefense',params);
     } else {
       params.remaining=remaining.airRemaining;
       progressText = t('mission.progress.air',params);
@@ -102,13 +133,16 @@ export class MissionSystem {
   renderComplete() {
     if (!this.missionComplete && !this.objectiveSatisfied) return;
     const title = this.nodes.notice?.querySelector('#mission-complete-title');
-    if (title) title.textContent = t('mission.objectiveAchieved');
+    if (title) title.textContent = t(this.objectiveResult===MISSION_OUTCOME.SETBACK
+      ?'mission.objectiveSetback'
+      :'mission.objectiveAchieved');
     if (this.nodes.detail) this.nodes.detail.textContent = t(this.noticeDetailKey);
   }
 
   complete() {
     if (this.missionComplete) return;
     this.finish(MISSION_OUTCOME.COMPLETE);
+    this.objectiveResult = MISSION_OUTCOME.COMPLETE;
     this.noticeDetailKey = `mission.complete.${this.mission.id}`;
     this.renderComplete();
     this.showNotice(8500);
@@ -116,7 +150,17 @@ export class MissionSystem {
 
   notifyObjectiveAchieved() {
     this.objectiveSatisfied = true;
+    this.objectiveResult = MISSION_OUTCOME.COMPLETE;
     this.noticeDetailKey = 'mission.rtb.detail';
+    this.renderObjective();
+    this.renderComplete();
+    this.showNotice(6500);
+  }
+
+  notifyObjectiveSetback() {
+    this.objectiveSatisfied = true;
+    this.objectiveResult = MISSION_OUTCOME.SETBACK;
+    this.noticeDetailKey = 'mission.rtb.setbackDetail';
     this.renderObjective();
     this.renderComplete();
     this.showNotice(6500);
@@ -130,6 +174,7 @@ export class MissionSystem {
   finish(outcome) {
     if (this.outcome !== MISSION_OUTCOME.ACTIVE) return;
     this.outcome = outcome;
+    this.objectiveResult = outcome === MISSION_OUTCOME.SETBACK ? outcome : this.objectiveResult;
     this.missionComplete = outcome === MISSION_OUTCOME.COMPLETE;
     this.missionFailed = outcome !== MISSION_OUTCOME.ACTIVE && outcome !== MISSION_OUTCOME.COMPLETE;
     if (this.missionComplete) this.objectiveSatisfied = true;
@@ -139,7 +184,9 @@ export class MissionSystem {
       if (this.nodes.statusText) this.nodes.statusText.textContent = t('mission.statusComplete');
       this.nodes.status?.classList.add('complete');
     } else if (this.missionFailed) {
-      if (this.nodes.statusText) this.nodes.statusText.textContent = t('mission.statusFailed');
+      if (this.nodes.statusText) this.nodes.statusText.textContent = t(
+        outcome === MISSION_OUTCOME.SETBACK ? 'mission.statusSetback' : 'mission.statusFailed',
+      );
       this.nodes.status?.classList.add('destroyed');
     }
   }

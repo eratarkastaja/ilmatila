@@ -54,8 +54,25 @@
           <p class="menu-version"><span data-i18n="menu.versionLabel">VERSION</span><b id="menu-version"></b></p>
           <p class="menu-intro" data-i18n="menu.intro">Choose a mission and area of operations.</p>
 
-          <div class="mission-heading"><span>01</span><strong data-i18n="menu.chooseProfile">Select a mission</strong><i data-i18n="menu.missionCount">4 MISSIONS</i></div>
-          <div class="mission-grid" role="group" data-i18n-aria-label="menu.selectMissionAria">
+          <div class="operation-mode" role="group" data-i18n-aria-label="campaign.modeAria">
+            <button id="standalone-mode" class="selected" type="button" aria-pressed="true" data-i18n="campaign.modeStandalone">STANDALONE SORTIE</button>
+            <button id="campaign-mode" type="button" aria-pressed="false" data-i18n="campaign.modeCampaign">CAMPAIGN</button>
+          </div>
+
+          <section id="campaign-overview" class="campaign-overview" hidden aria-labelledby="campaign-title">
+            <header><div><small id="campaign-progress-label"></small><h2 id="campaign-title"></h2></div><b id="campaign-day"></b></header>
+            <p id="campaign-description"></p>
+            <div class="campaign-state-grid">
+              <div><span><small data-i18n="campaign.airControl">AIR CONTROL</small><b id="campaign-air-control-value">0</b></span><i><b id="campaign-air-control-fill"></b></i></div>
+              <div><span><small data-i18n="campaign.defenseIntegrity">DEFENSE INTEGRITY</small><b id="campaign-defense-integrity-value">0</b></span><i><b id="campaign-defense-integrity-fill"></b></i></div>
+              <div><span><small data-i18n="campaign.sortieReadiness">SORTIE READINESS</small><b id="campaign-sortie-readiness-value">0</b></span><i><b id="campaign-sortie-readiness-fill"></b></i></div>
+            </div>
+            <p id="campaign-ending" class="campaign-ending" hidden></p>
+          </section>
+
+          <div id="standalone-mission-selection">
+            <div class="mission-heading"><span>01</span><strong data-i18n="menu.chooseProfile">Select a mission</strong><i data-i18n="menu.missionCount">4 MISSIONS</i></div>
+            <div class="mission-grid" role="group" data-i18n-aria-label="menu.selectMissionAria">
             <button class="mission-card selected" type="button" data-mission="patrol" aria-pressed="true">
               <span class="mission-card-top"><b>01 / CAP</b><i data-i18n="mission.patrol.posture">ON STATION</i></span>
               <strong data-i18n="mission.patrol.title">COMBAT AIR PATROL</strong>
@@ -84,6 +101,7 @@
               <span class="mission-card-bottom"><i class="contact-mark friendly"></i> <span data-i18n="mission.training.count">NO HOSTILE CONTACTS</span> <b>↗</b></span>
               <span class="mission-card-state" data-mission-state="training"></span>
             </button>
+            </div>
           </div>
 
           <div class="theater-select-row">
@@ -319,6 +337,14 @@
         <section id="debrief-optional-objectives" class="debrief-optional-objectives" data-optional-objectives aria-labelledby="debrief-optional-objectives-title" hidden>
           <h3 id="debrief-optional-objectives-title" data-i18n="mission.optionalObjectives.debriefTitle">OPTIONAL OBJECTIVES</h3>
           <ul id="debrief-optional-objective-list" class="optional-objective-list"></ul>
+        </section>
+        <section id="campaign-debrief-actions" class="campaign-debrief-actions" hidden aria-labelledby="campaign-debrief-title">
+          <div><small data-i18n="campaign.debrief.kicker">CAMPAIGN EFFECT</small><h3 id="campaign-debrief-title"></h3></div>
+          <p id="campaign-debrief-changes"></p>
+          <div>
+            <button id="campaign-retry-sortie" type="button"><span data-i18n="campaign.debrief.retry">RETRY SORTIE</span><b>↻</b></button>
+            <button id="campaign-continue" type="button"><span data-i18n="campaign.debrief.continue">ACCEPT AND CONTINUE</span><b>→</b></button>
+          </div>
         </section>
         <div class="diagnostics-tools" data-diagnostics-tools>
           <button id="copy-diagnostics-debrief" type="button" data-copy-diagnostics="app" data-i18n="diagnostics.copy">COPY DIAGNOSTICS</button>

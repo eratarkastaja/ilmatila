@@ -19,7 +19,7 @@ const tracerDirection=new THREE.Vector3();
 
 /** Owns trigger cadence, weapon selection gates, ammunition and launch feedback. */
 export class WeaponSystem {
-  constructor({ player, scene, fx, audio, radar, playerVelocity, addProjectile, loadout = {}, random = createSeededRandom(DEFAULT_RANDOM_SEED) }) {
+  constructor({ player, scene, fx, audio, radar, playerVelocity, addProjectile, loadout = {}, canFireWeapons = () => true, onWeaponsHoldViolation = () => {}, random = createSeededRandom(DEFAULT_RANDOM_SEED) }) {
     this.player = player;
     this.scene = scene;
     this.fx = fx;
@@ -27,6 +27,8 @@ export class WeaponSystem {
     this.radar = radar;
     this.playerVelocity = playerVelocity;
     this.addProjectile = addProjectile;
+    this.canFireWeapons = canFireWeapons;
+    this.onWeaponsHoldViolation = onWeaponsHoldViolation;
     this.random = random;
     this.missiles = {
       air: loadout.airMissiles ?? MISSILE_PROFILES.playerAir.count,
@@ -54,14 +56,22 @@ export class WeaponSystem {
     };
     this.missileFeedbackKey = null;
     this.missileFeedbackTimer = 0;
+    this.gunRequestedLastFrame = false;
   }
 
   update(dt, { gunFiring = false, missileRequested = false } = {}) {
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.missileFeedbackTimer = Math.max(0, this.missileFeedbackTimer - dt);
     const canFireGun = this.gunAmmoRemaining === null || this.gunAmmoRemaining > 0;
-    this.audio?.setGunFiring(gunFiring && canFireGun);
-    if (gunFiring && canFireGun) {
+    const weaponsAuthorized = this.canFireWeapons();
+    if (gunFiring && !weaponsAuthorized) {
+      this.audio?.setGunFiring(false);
+      this.gunClock = 0;
+      if (!this.gunRequestedLastFrame) this.reportWeaponsHoldViolation();
+    } else {
+      this.audio?.setGunFiring(gunFiring && canFireGun);
+    }
+    if (gunFiring && canFireGun && weaponsAuthorized) {
       this.gunClock -= dt;
       let roundsThisFrame = 0;
       while (this.gunClock <= 0 && roundsThisFrame < 3) {
@@ -73,9 +83,10 @@ export class WeaponSystem {
         roundsThisFrame++;
       }
       if (this.gunAmmoRemaining === 0) this.audio?.setGunFiring(false);
-    } else {
+    } else if (weaponsAuthorized) {
       this.gunClock = 0;
     }
+    this.gunRequestedLastFrame = gunFiring;
     if (missileRequested) this.requestMissile();
   }
 
@@ -93,6 +104,11 @@ export class WeaponSystem {
     this.missileFeedbackKey = key;
     this.missileFeedbackTimer = duration;
     this.audio?.playWeaponNoLock();
+  }
+
+  reportWeaponsHoldViolation() {
+    this.showFeedback('combat.weaponsHold', 1.8);
+    this.onWeaponsHoldViolation();
   }
 
   fireGun() {
@@ -184,6 +200,10 @@ export class WeaponSystem {
   }
 
   requestMissile() {
+    if (!this.canFireWeapons()) {
+      this.reportWeaponsHoldViolation();
+      return false;
+    }
     const mode = this.radar.mode;
     if (this.cooldown > 0 || this.missiles[mode] <= 0) {
       this.audio?.playWeaponNoLock();

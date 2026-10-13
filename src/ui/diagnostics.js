@@ -38,6 +38,7 @@ function detectPlatform(navigatorObject) {
 export function createDiagnosticsSnapshot({
   mission = null,
   missionVariant = null,
+  campaign = null,
   difficulty = null,
   area = null,
   terrain = null,
@@ -51,6 +52,7 @@ export function createDiagnosticsSnapshot({
     gameVersion: APP_VERSION,
     mission,
     missionVariant,
+    campaign,
     difficulty,
     area,
     terrain,

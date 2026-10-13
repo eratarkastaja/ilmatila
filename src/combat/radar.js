@@ -100,7 +100,7 @@ export class CombatRadar {
       }
       track.age = 0;
       track.domain = domain;
-      track.team = unit.identified === false ? 'unknown' : team;
+      track.team = unit.identified === false ? 'unknown' : unit.radarTeam ?? team;
       if (this.target?.mesh === mesh) {
         this.targetLastKnownPosition.copy(mesh.position);
         this.hasLastKnownPosition = true;

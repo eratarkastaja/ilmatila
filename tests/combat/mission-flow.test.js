@@ -82,4 +82,32 @@ describe('MissionFlowSystem', () => {
     expect(flow.outcome).toBe(MISSION_OUTCOME.FAILED);
     expect(onEnd).toHaveBeenCalledWith(MISSION_OUTCOME.FAILED, expect.any(Number));
   });
+
+  it('carries a resolved setback through RTB and extraction', () => {
+    const { flow, player, onObjectiveComplete, onEnd } = createFlow({
+      hostiles: 0,
+      departureDuration: 0,
+      navigationDistance: 100,
+      navigationRadius: 20,
+      extractionRadius: 20,
+      objectiveReportDuration: 0,
+    });
+    flow.update(0);
+    player.position.copy(flow.ingress);
+    flow.update(0, {
+      objectiveSatisfied: true,
+      objectiveOutcome: MISSION_OUTCOME.SETBACK,
+    });
+
+    expect(onObjectiveComplete).toHaveBeenCalledWith(MISSION_OUTCOME.SETBACK);
+    expect(flow.phase).toBe(MISSION_PHASE.RTB);
+    player.position.copy(flow.home);
+    flow.update(0, {
+      objectiveSatisfied: true,
+      objectiveOutcome: MISSION_OUTCOME.SETBACK,
+    });
+
+    expect(flow.outcome).toBe(MISSION_OUTCOME.SETBACK);
+    expect(onEnd).toHaveBeenCalledWith(MISSION_OUTCOME.SETBACK, expect.any(Number));
+  });
 });

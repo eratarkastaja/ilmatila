@@ -91,7 +91,7 @@ export class SortieController {
     this.pendingTerrain = null;
   }
 
-  async prepare({ missionId, areaId, area, difficulty = this.difficulty, seed }) {
+  async prepare({ missionId, mission: requestedMission, areaId, area, difficulty = this.difficulty, seed }) {
     if (this.started || this.launchInProgress || this.prepared) return false;
     this.sortieSeed = seed === undefined ? this.seedFactory() : Number(seed) >>> 0;
     const generation = ++this.generation;
@@ -182,9 +182,11 @@ export class SortieController {
       await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
       if (generation !== this.generation) return false;
 
+      const baseMission = requestedMission ?? MISSIONS[missionId];
+      if (!baseMission) throw new Error(`Unknown mission: ${missionId}`);
       const mission = this.stressMode
         ? {
-            ...MISSIONS[missionId],
+            ...baseMission,
             deferredHostiles: false,
             hostiles: 36,
             hostileSpawnDistance: 6900,
@@ -198,7 +200,7 @@ export class SortieController {
             convoyArea: 11600,
             variants: [],
           }
-        : MISSIONS[missionId];
+        : baseMission;
       preparedCombat = new CombatWorld(
         this.scene,
         this.player,

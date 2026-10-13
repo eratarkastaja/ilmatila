@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DIFFICULTY_PRESETS } from '../../src/combat/difficulty.js';
+import { CAMPAIGNS } from '../../src/campaign/campaigns.js';
 import { MISSIONS } from '../../src/mission/missions.js';
 import { validateGameConfig } from '../../src/config/validate-config.js';
 
@@ -100,6 +101,33 @@ describe('game configuration validation', () => {
 
     expect(errors).toContain(
       'missions.support.variants[0].encounters[0].trigger.reinforcementLogisticsRemainingAtLeast must be between 0 and 500',
+    );
+  });
+
+  it('validates campaign chapters, mission references, effects, and decisive objectives', () => {
+    const campaigns = structuredClone(CAMPAIGNS);
+    campaigns['shadow-border'].chapters[0].baseMissionId = 'missing';
+    campaigns['shadow-border'].chapters[1].effects.success.airControl = 140;
+    campaigns['shadow-border'].chapters[2].decisiveObjectiveId = 'missing-objective';
+    campaigns['shadow-border'].chapters[0].missionOverrides.rulesOfEngagement = 'freeFire';
+
+    const errors = validateGameConfig({
+      difficulties: DIFFICULTY_PRESETS,
+      missions: MISSIONS,
+      campaigns,
+    });
+
+    expect(errors).toContain(
+      'campaigns.shadow-border.chapters[0].baseMissionId contains unknown mission "missing"',
+    );
+    expect(errors).toContain(
+      'campaigns.shadow-border.chapters[1].effects.success.airControl must be between -100 and 100',
+    );
+    expect(errors).toContain(
+      'campaigns.shadow-border.chapters[2].decisiveObjectiveId is not an optional objective in patrol',
+    );
+    expect(errors).toContain(
+      'campaigns.shadow-border.chapters[0].missionOverrides.rulesOfEngagement must be weaponsHold',
     );
   });
 });

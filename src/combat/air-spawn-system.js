@@ -135,6 +135,7 @@ export class AirSpawnSystem {
       const laneCoordinate = lane / Math.max(.5, (hostileCount - 1) * .5);
       jet.position.copy(formation.positions[i]);
       const missionRole = mission.hostileRoles?.[i] ?? 'sweep';
+      const nonCombatant = mission.hostileDisposition === 'noncombatant';
 
       const ground = battle.terrain?.sampleHeight(jet.position.x, jet.position.z) ?? -Infinity;
       jet.position.y = Math.max(battle.player.position.y + altitudeOffsets[i % altitudeOffsets.length], ground + 360);
@@ -155,7 +156,10 @@ export class AirSpawnSystem {
       battle.enemies.push({
         mesh: jet,
         label: jet.userData.platformName,
-        identified: true,
+        identified: !nonCombatant,
+        combatant: !nonCombatant,
+        radarTeam: nonCombatant ? 'unknown' : 'hostile',
+        identificationProgress: 0,
         missionRole,
         hp: maxHp,
         maxHp,

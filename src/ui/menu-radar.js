@@ -86,7 +86,13 @@ function getScenarioContacts(missionResolution, terrain, origin, heading) {
     forwardLaneSpacing: 90,
     margin: spawnMargin,
   });
-  addFormationContacts(contacts, hostilePositions, 'hostile', origin, heading);
+  addFormationContacts(
+    contacts,
+    hostilePositions,
+    mission.hostileDisposition === 'noncombatant' ? 'unknown' : 'hostile',
+    origin,
+    heading,
+  );
 
   const helicopterPositions = formationPositions(origin, forward, right, terrain, {
     count: mission.hostileHelicopters ?? 0,
@@ -168,7 +174,10 @@ export class MenuRadar {
 
   updateContactLabels() {
     for (const contact of this.contacts) {
-      contact.element.textContent = t(contact.team === 'friendly' ? 'radar.friendlyCode' : 'radar.hostileCode');
+      const key = contact.team === 'friendly'
+        ? 'radar.friendlyCode'
+        : contact.team === 'unknown' ? 'radar.unknownCode' : 'radar.hostileCode';
+      contact.element.textContent = t(key);
     }
   }
 

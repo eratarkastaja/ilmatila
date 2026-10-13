@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { disposeAircraftVisual } from '../aircraft/plane.js';
-import { forwardOfHeading, rightOfHeading } from './air-combat-utils.js';
+import { forwardOfHeading, rightOfHeading, wrapAngle } from './air-combat-utils.js';
 import { AirSpawnSystem } from './air-spawn-system.js';
 import { HostileFighterAI } from './hostile-fighter-ai.js';
 import { HelicopterAI } from './helicopter-ai.js';
@@ -14,7 +14,7 @@ const POP_UP_IDENTIFICATION_DELAY = 5;
 
 /** Coordinates air units and advances their behavior in simulation order. */
 export class AirBattle {
-  constructor({ scene, player, aircraftAsset, mission, terrain, audio, fx, playerVelocity, getPlayerHeading, deployHostileCountermeasures, addHostileProjectile, addPlayerProjectile, onMissileLaunch, onWingmanRadio, onPopUpThreat, canStartHostileMissileAttack, difficulty = {}, random = createSeededRandom(DEFAULT_RANDOM_SEED) }) {
+  constructor({ scene, player, aircraftAsset, mission, terrain, audio, fx, playerVelocity, getPlayerHeading, deployHostileCountermeasures, addHostileProjectile, addPlayerProjectile, onMissileLaunch, onWingmanRadio, onPopUpThreat, onOperationalEvent, canStartHostileMissileAttack, difficulty = {}, random = createSeededRandom(DEFAULT_RANDOM_SEED) }) {
     this.scene = scene;
     this.player = player;
     this.aircraftAssets = aircraftAsset;
@@ -30,6 +30,7 @@ export class AirBattle {
     this.onMissileLaunch = onMissileLaunch;
     this.onWingmanRadio = onWingmanRadio;
     this.onPopUpThreat = onPopUpThreat;
+    this.onOperationalEvent = onOperationalEvent;
     this.canStartHostileMissileAttack = canStartHostileMissileAttack;
     this.difficulty = difficulty;
     this.random = random;
@@ -37,6 +38,12 @@ export class AirBattle {
     this.unidentifiedReinforcements = [];
     this._playerForward = new THREE.Vector3();
     this._playerRight = new THREE.Vector3();
+    this._nonCombatantVelocity = new THREE.Vector3();
+    this.operationalState = {
+      identifiedCount: 0,
+      contactCount: 0,
+      escortElapsed: 0,
+    };
     this.enemies = [];
     this.allies = [];
     this.groundUnits = [];
@@ -95,8 +102,63 @@ export class AirBattle {
     const heading = this.currentPlayerHeading();
     const playerForward = forwardOfHeading(heading, this._playerForward);
     const playerRight = rightOfHeading(heading, this._playerRight);
+    this.updateNonCombatants(delta, playerForward);
     this.hostileFighterAI.update(this, dt, playerForward, playerRight, playerThreat);
     this.wingmanController.update(this, dt, playerForward, playerRight);
+  }
+
+  updateNonCombatants(dt, playerForward) {
+    const objective = this.mission.objective;
+    if (objective?.type !== 'airPolicing') return;
+    let contactCount = 0;
+    let identifiedCount = 0;
+    let escortedCount = 0;
+    const identifyRange = objective.identifyRange ?? 3200;
+    const identifyDuration = objective.identifyDuration ?? 3;
+    const escortRange = objective.escortRange ?? 4200;
+
+    for (const contact of this.enemies) {
+      if (contact.dead || contact.combatant !== false) continue;
+      contactCount++;
+      const range = contact.mesh.position.distanceTo(this.player.position);
+      if (!contact.identified) {
+        contact.identificationProgress = range <= identifyRange
+          ? Math.min(identifyDuration, (contact.identificationProgress ?? 0) + dt)
+          : Math.max(0, (contact.identificationProgress ?? 0) - dt * .5);
+        if (contact.identificationProgress >= identifyDuration) {
+          contact.identified = true;
+          contact.radarTeam = 'neutral';
+          this.onOperationalEvent?.('airPolicing.identified', contact);
+        }
+      }
+
+      if (contact.identified) {
+        identifiedCount++;
+        // Once inspected, the intruder turns onto a predictable outbound track
+        // so the player can hold an arcade-length escort instead of chasing a merge.
+        this._nonCombatantVelocity.copy(playerForward).multiplyScalar(255);
+        contact.velocity.lerp(this._nonCombatantVelocity, Math.min(1, dt * .7));
+        contact.heading = wrapAngle(Math.atan2(contact.velocity.x, contact.velocity.z));
+        contact.mesh.rotation.y = contact.heading;
+        if (range <= escortRange) escortedCount++;
+      }
+      contact.mesh.position.addScaledVector(contact.velocity, dt);
+    }
+
+    const requiredContacts = Math.min(contactCount, objective.requiredContacts ?? contactCount);
+    const escortActive = identifiedCount >= requiredContacts && escortedCount >= requiredContacts;
+    this.operationalState.contactCount = contactCount;
+    this.operationalState.identifiedCount = identifiedCount;
+    this.operationalState.escortElapsed = escortActive
+      ? Math.min(objective.escortDuration ?? 15, this.operationalState.escortElapsed + dt)
+      : Math.max(0, this.operationalState.escortElapsed - dt);
+  }
+
+  getOperationalState(target = {}) {
+    target.identifiedCount = this.operationalState.identifiedCount;
+    target.contactCount = this.operationalState.contactCount;
+    target.escortElapsed = this.operationalState.escortElapsed;
+    return target;
   }
 
   setFriendlyGroundUnits(units) {

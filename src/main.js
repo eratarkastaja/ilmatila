@@ -14,11 +14,14 @@ import { MISSIONS } from './mission/missions.js';
 import { resolveMissionVariant } from './mission/mission-variants.js';
 import { scaleMissileReserveObjectives } from './mission/optional-objectives.js';
 import { CareerProgress } from './mission/progression.js';
+import { CampaignProgress } from './campaign/campaign-progress.js';
+import { CampaignSession } from './campaign/campaign-session.js';
 import { SortieController } from './game/sortie-controller.js';
 import { disposeMissilePool } from './combat/projectiles.js';
 import { createSortieSeed } from './combat/random.js';
 import { getDifficultyPreset } from './combat/difficulty.js';
 import { renderOptionalObjectives } from './ui/optional-objectives.js';
+import { CampaignView } from './ui/campaign-view.js';
 import { formatPercent, getLanguage, t } from './ui/i18n.js';
 import { APP_VERSION, createDiagnosticsSnapshot, installDiagnosticsCopyButtons } from './ui/diagnostics.js';
 import { FrameProfiler } from './performance/frame-profiler.js';
@@ -65,6 +68,8 @@ const missionCards = [...document.querySelectorAll('[data-mission]')];
 const briefingOptionalObjectiveList = document.querySelector('#briefing-optional-objective-list');
 const briefingVariant = document.querySelector('#briefing-variant');
 const careerProgress = new CareerProgress();
+const campaignProgress = new CampaignProgress();
+const campaignView = new CampaignView(document);
 menuDifficulty.value = careerProgress.difficulty;
 const urlParams = new URLSearchParams(location.search);
 const stressMode = import.meta.env.DEV && urlParams.get('stress') === '1';
@@ -72,9 +77,13 @@ const telemetryMode = import.meta.env.DEV;
 const areaAliases = new Map([['vironlahti', 'virolahti']]);
 let selectedMissionId = Object.hasOwn(MISSIONS, urlParams.get('mission')) ? urlParams.get('mission') : 'patrol';
 if (!careerProgress.isUnlocked(selectedMissionId)) selectedMissionId = 'patrol';
+let selectedMissionDefinition = MISSIONS[selectedMissionId];
 let plannedSortieSeed = null;
 let launchAttempt = 0;
 let selectedMissionResolution = null;
+let playMode = 'standalone';
+let campaignSession = null;
+let pendingCampaignResult = null;
 let menuRadar = null;
 const theaterAreas = TERRAIN_AREAS;
 if (!menuTheater.options.length) {
@@ -142,6 +151,27 @@ let launchErrorKind = null;
 let menuStatusDescriptor = { key: 'menu.statusReady', params: {}, state: 'ready' };
 let launchProgressDescriptor = { progress: 0, titleKey: 'menu.launchButton', detailKey: 'menu.launchReadyStatus', params: {} };
 
+function getSelectedDifficulty() {
+  return playMode === 'campaign' && campaignSession
+    ? campaignSession.difficulty
+    : careerProgress.difficulty;
+}
+
+function updateMenuControlLocks() {
+  const campaignLocked = playMode === 'campaign';
+  // Difficulty can be changed while the campaign is at the menu.  The
+  // selected value chooses the independent save for that difficulty; both
+  // selectors are still frozen once terrain/aircraft preparation begins.
+  menuDifficulty.disabled = Boolean(sortie?.launchInProgress);
+  menuTheater.disabled = campaignLocked || Boolean(sortie?.launchInProgress);
+}
+
+function restoreMenuControls() {
+  launchButton.disabled = !selectedMissionDefinition;
+  launchButton.setAttribute('aria-busy', 'false');
+  updateMenuControlLocks();
+}
+
 function createRuntimeDiagnosticsSnapshot() {
   const selectedArea = theaterAreas.find(area => area.id === selectedAreaId) ?? null;
   const activeSortie = Boolean(sortie?.launchInProgress || sortie?.started || sortie?.finished);
@@ -155,7 +185,12 @@ function createRuntimeDiagnosticsSnapshot() {
   return createDiagnosticsSnapshot({
     mission: selectedMissionId,
     missionVariant: selectedMissionResolution?.variant?.id ?? null,
-    difficulty: careerProgress.difficulty,
+    difficulty: getSelectedDifficulty(),
+    campaign: campaignSession ? {
+      id: campaignSession.definition.id,
+      chapter: campaignSession.currentChapter?.id ?? null,
+      attempt: campaignSession.state.currentAttemptId,
+    } : null,
     area: selectedArea ? { id: selectedArea.id, label: selectedArea.label } : { id: selectedAreaId },
     terrain: { id: terrain.id, label: terrain.label, real: Boolean(terrain.real) },
     sortieSeed: activeSortie ? sortie.sortieSeed : plannedSortieSeed,
@@ -210,7 +245,7 @@ function createPerformanceSnapshot() {
   return {
     mission: selectedMissionId,
     missionVariant: selectedMissionResolution?.variant?.id ?? null,
-    difficulty: careerProgress.difficulty,
+    difficulty: getSelectedDifficulty(),
     stressMode: Boolean(sortie?.stressScenario),
     sortieActive: Boolean(sortie?.started && !sortie?.paused),
     resolution: {
@@ -257,6 +292,7 @@ if (frameProfiler) {
     startSortie: async ({ missionId = selectedMissionId, seed = null } = {}) => {
       if (sortie?.started || sortie?.launchInProgress) return false;
       if (!Object.hasOwn(MISSIONS, missionId) || !careerProgress.isUnlocked(missionId)) return false;
+      if (playMode === 'campaign') activateStandaloneMode();
       if (missionId !== selectedMissionId) selectMission(missionId);
       if (seed !== null) {
         plannedSortieSeed = Number(seed) >>> 0;
@@ -268,9 +304,10 @@ if (frameProfiler) {
       const selectedArea = theaterAreas.find(area => area.id === selectedAreaId) ?? theaterAreas[0];
       const prepared = await sortie.prepare({
         missionId: selectedMissionId,
+        mission: selectedMissionDefinition,
         areaId: selectedArea.id,
         area: selectedArea,
-        difficulty: careerProgress.difficulty,
+        difficulty: getSelectedDifficulty(),
         seed: plannedSortieSeed,
       });
       return prepared && sortie.start();
@@ -284,7 +321,12 @@ installDiagnosticsCopyButtons(document, createRuntimeDiagnosticsSnapshot, {
 });
 
 document.addEventListener('ilmatila:languagechange', () => {
-  selectMission(selectedMissionId);
+  if (playMode === 'campaign' && campaignSession) {
+    renderCampaignChapter();
+    if (pendingCampaignResult) campaignView.renderDebrief(pendingCampaignResult.preview);
+  } else {
+    selectMission(selectedMissionId);
+  }
   renderMissionProgress();
   renderLaunchError();
   const areaLabel = menuStatusDescriptor.key === 'menu.statusTerrainError'
@@ -337,10 +379,7 @@ function showLaunchError(kind) {
 function returnToLaunchMenu() {
   if (launchErrorDialog.open) launchErrorDialog.close();
   launchErrorKind = null;
-  launchButton.disabled = false;
-  menuDifficulty.disabled = false;
-  menuTheater.disabled = false;
-  launchButton.setAttribute('aria-busy', 'false');
+  restoreMenuControls();
   setLaunchProgress(0, 'menu.launchButton', 'menu.launchReadyStatus');
   if (terrain.real && terrain.id === selectedAreaId) {
     setMenuStatus('menu.statusAreaReady', 'ready', { area: terrain.label.toUpperCase() });
@@ -391,6 +430,7 @@ function selectMission(id) {
   if (selectedMissionId !== id || plannedSortieSeed === null) plannedSortieSeed = createSortieSeed();
   selectedMissionId = id;
   const baseMission = stressMode ? { ...MISSIONS[id], variants: [] } : MISSIONS[id];
+  selectedMissionDefinition = baseMission;
   const missionResolution = resolveMissionVariant(baseMission, plannedSortieSeed);
   selectedMissionResolution = missionResolution;
   menuRadar?.setScenario(missionResolution, {
@@ -424,6 +464,99 @@ function selectMission(id) {
   return true;
 }
 
+function renderCampaignChapter() {
+  if (!campaignSession) return false;
+  campaignView.renderSession(campaignSession);
+  const resolved = campaignSession.resolveCurrentMission();
+  if (!resolved) {
+    selectedMissionResolution = null;
+    selectedMissionDefinition = null;
+    plannedSortieSeed = null;
+    launchButton.disabled = true;
+    document.querySelector('#briefing-code').textContent = t('campaign.complete');
+    document.querySelector('#briefing-copy').textContent = campaignSession.state.ending
+      ? t(`campaign.ending.${campaignSession.state.ending}`)
+      : '';
+    document.querySelector('#theater-mission-name').textContent = t(campaignSession.definition.titleKey).toUpperCase();
+    renderOptionalObjectives(briefingOptionalObjectiveList, []);
+    if (briefingVariant) briefingVariant.hidden = true;
+    return false;
+  }
+
+  selectedMissionId = resolved.chapter.baseMissionId;
+  selectedMissionDefinition = resolved.mission;
+  selectedMissionResolution = resolved.preview;
+  plannedSortieSeed = resolved.seed;
+  selectedAreaId = resolved.areaId;
+  menuTheater.value = selectedAreaId;
+  menuRadar?.setScenario(resolved.preview, {
+    seed: plannedSortieSeed,
+    terrain,
+    origin: player.position,
+    heading: controls.heading,
+  });
+  document.querySelector('#briefing-code').textContent = t(`mission.${selectedMissionId}.code`);
+  document.querySelector('#briefing-copy').textContent = t(resolved.chapter.briefingKey);
+  document.querySelector('#theater-mission-name').textContent = t(resolved.chapter.titleKey).toUpperCase();
+  const standardWeapons = getDifficultyPreset('standard').player.weapons;
+  const selectedWeapons = getDifficultyPreset(campaignSession.difficulty).player.weapons;
+  const optionalObjectives = scaleMissileReserveObjectives(
+    resolved.preview.mission.optionalObjectives,
+    selectedWeapons,
+    standardWeapons,
+  );
+  renderOptionalObjectives(briefingOptionalObjectiveList, optionalObjectives);
+  if (briefingVariant) {
+    briefingVariant.hidden = !resolved.preview.variant;
+    briefingVariant.textContent = resolved.preview.variant
+      ? t('mission.briefing.variant', { name: t(resolved.preview.variant.labelKey) })
+      : '';
+  }
+  const area = theaterAreas.find(candidate => candidate.id === selectedAreaId);
+  updateMenuArea(area);
+  return true;
+}
+
+function activateCampaignMode() {
+  if (sortie?.started || sortie?.launchInProgress) return;
+  playMode = 'campaign';
+  const difficulty = ['easy', 'standard', 'hard'].includes(menuDifficulty.value)
+    ? menuDifficulty.value
+    : careerProgress.difficulty;
+  menuDifficulty.value = difficulty;
+  campaignSession = new CampaignSession({
+    progress: campaignProgress,
+    difficulty,
+  });
+  pendingCampaignResult = null;
+  campaignView.setMode(playMode);
+  campaignView.hideDebrief();
+  renderCampaignChapter();
+  updateMenuControlLocks();
+  const nextUrl = new URL(location.href);
+  nextUrl.searchParams.set('mode', 'campaign');
+  nextUrl.searchParams.set('area', selectedAreaId);
+  history.replaceState(null, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+  if (!campaignSession.completed) void loadTerrainForMenu(selectedAreaId);
+}
+
+function activateStandaloneMode() {
+  if (sortie?.started || sortie?.launchInProgress) return;
+  playMode = 'standalone';
+  campaignSession = null;
+  pendingCampaignResult = null;
+  menuDifficulty.value = careerProgress.difficulty;
+  campaignView.setMode(playMode);
+  plannedSortieSeed = null;
+  selectMission(selectedMissionId);
+  updateMenuControlLocks();
+  const nextUrl = new URL(location.href);
+  nextUrl.searchParams.delete('mode');
+  nextUrl.searchParams.set('mission', selectedMissionId);
+  nextUrl.searchParams.set('area', selectedAreaId);
+  history.replaceState(null, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+}
+
 function updateMenuArea(area) {
   const name = area?.real
     ? area.metadata?.region || area.label
@@ -448,12 +581,12 @@ function installTerrain(replacement) {
 }
 
 updateMenuArea(theaterAreas.find(area => area.id === initialAreaId));
+campaignView.setMode(playMode);
 selectMission(selectedMissionId);
 renderMissionProgress();
 setMenuStatus('menu.statusReady', 'ready');
 setLaunchProgress(0, 'menu.launchButton', 'menu.launchReadyStatus');
-menuTheater.disabled = false;
-launchButton.disabled = false;
+restoreMenuControls();
 
 let terrainRequest = 0;
 let menuTerrainController = null;
@@ -464,8 +597,7 @@ async function loadTerrainForMenu(requestedId) {
   if (!requestedArea || sortie?.started) return;
   if (requestedId === loadedAreaId) {
     if (!sortie?.launchInProgress && terrain.real) {
-      launchButton.disabled = false;
-      launchButton.setAttribute('aria-busy', 'false');
+      restoreMenuControls();
       setLaunchProgress(0, 'menu.launchButton', 'menu.launchReadyStatus');
       setMenuStatus('menu.statusAreaReady', 'ready', { area: terrain.label.toUpperCase() });
     }
@@ -493,8 +625,7 @@ async function loadTerrainForMenu(requestedId) {
     needsMenuRender = true;
     updateMenuArea(terrain);
     if (!sortie?.launchInProgress) {
-      launchButton.disabled = false;
-      launchButton.setAttribute('aria-busy', 'false');
+      restoreMenuControls();
       setLaunchProgress(0, 'menu.launchButton', 'menu.launchReadyStatus');
       setMenuStatus('menu.statusAreaReady', 'ready', { area: terrain.label.toUpperCase() });
     }
@@ -502,8 +633,7 @@ async function loadTerrainForMenu(requestedId) {
     if (controller.signal.aborted) return;
     console.error('Theater terrain failed to load.', error);
     if (requestId === terrainRequest && !sortie?.started && !sortie?.launchInProgress) {
-      launchButton.disabled = false;
-      launchButton.setAttribute('aria-busy', 'false');
+      restoreMenuControls();
       setLaunchProgress(0, 'menu.launchButton', 'menu.launchReadyStatus');
       const preview = createPreviewTerrain();
       installTerrain(preview);
@@ -517,18 +647,42 @@ async function loadTerrainForMenu(requestedId) {
 }
 
 menuTheater.addEventListener('change', () => {
+  if (playMode === 'campaign') {
+    menuTheater.value = selectedAreaId;
+    return;
+  }
   selectedAreaId = menuTheater.value;
   const requestedArea = theaterAreas.find(area => area.id === selectedAreaId);
   updateMenuArea(requestedArea);
   void loadTerrainForMenu(selectedAreaId);
 });
 menuDifficulty.addEventListener('change', () => {
+  if (playMode === 'campaign') {
+    const difficulty = menuDifficulty.value;
+    if (difficulty === campaignSession?.difficulty) return;
+    campaignSession = new CampaignSession({
+      progress: campaignProgress,
+      difficulty,
+    });
+    pendingCampaignResult = null;
+    campaignView.hideDebrief();
+    renderCampaignChapter();
+    updateMenuControlLocks();
+    const nextUrl = new URL(location.href);
+    nextUrl.searchParams.set('mode', 'campaign');
+    nextUrl.searchParams.set('difficulty', difficulty);
+    nextUrl.searchParams.set('area', selectedAreaId);
+    history.replaceState(null, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+    return;
+  }
   careerProgress.setDifficulty(menuDifficulty.value);
   renderMissionProgress();
   selectMission(selectedMissionId);
 });
 
 for (const card of missionCards) card.addEventListener('click', () => selectMission(card.dataset.mission));
+campaignView.standaloneModeButton.addEventListener('click', activateStandaloneMode);
+campaignView.campaignModeButton.addEventListener('click', activateCampaignMode);
 
 const creditsDialog = document.querySelector('#credits-dialog');
 const pauseDialog = document.querySelector('#pause-dialog');
@@ -745,22 +899,47 @@ function returnToMenu() {
   document.querySelector('#death-screen').hidden = true;
   startMenu.hidden = false;
   startMenu.classList.remove('menu-leaving');
-  launchButton.disabled = false;
-  menuDifficulty.disabled = false;
-  launchButton.setAttribute('aria-busy', 'false');
-  menuTheater.disabled = false;
+  campaignView.hideDebrief();
   setLaunchProgress(0, 'menu.launchButton', 'menu.launchReadyStatus');
-  updateMenuArea(terrain);
-  plannedSortieSeed = null;
-  selectMission(selectedMissionId);
+  let nextCampaignArea = null;
+  if (playMode === 'campaign' && campaignSession) {
+    renderCampaignChapter();
+    restoreMenuControls();
+    if (!campaignSession.completed) nextCampaignArea = selectedAreaId;
+  } else {
+    plannedSortieSeed = null;
+    selectMission(selectedMissionId);
+    restoreMenuControls();
+    updateMenuArea(terrain);
+  }
   if (terrain.real) setMenuStatus('menu.statusAreaReady', 'ready', { area: terrain.label.toUpperCase() });
   else setMenuStatus('menu.statusTerrainError', 'warning');
+  if (nextCampaignArea) void loadTerrainForMenu(nextCampaignArea);
   const nextUrl = new URL(location.href);
   nextUrl.searchParams.set('mission', selectedMissionId);
   nextUrl.searchParams.set('area', selectedAreaId);
+  if (playMode === 'campaign') nextUrl.searchParams.set('mode', 'campaign');
+  else nextUrl.searchParams.delete('mode');
   history.replaceState(null, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
   needsMenuRender = true;
-  launchButton.focus({ preventScroll: true });
+  (launchButton.disabled ? campaignView.campaignModeButton : launchButton).focus({ preventScroll: true });
+}
+
+function retryCampaignSortie() {
+  if (!pendingCampaignResult || !campaignSession || !campaignSession.retryCurrent()) return;
+  pendingCampaignResult = null;
+  returnToMenu();
+}
+
+function continueCampaign() {
+  if (!pendingCampaignResult || !campaignSession) return;
+  const accepted = campaignSession.acceptResult(
+    pendingCampaignResult.outcome,
+    pendingCampaignResult.result,
+  );
+  if (!accepted.applied) return;
+  pendingCampaignResult = null;
+  returnToMenu();
 }
 
 document.addEventListener('click', event => {
@@ -774,6 +953,8 @@ quitToMenuButton.addEventListener('click', confirmMissionInterruption);
 cancelQuitToMenuButton.addEventListener('click', () => returnToPauseOptions(true, quitToMenuButton));
 confirmQuitToMenuButton.addEventListener('click', returnToMenu);
 missionDebriefReturnButton.addEventListener('click', returnToMenu);
+campaignView.retryButton.addEventListener('click', retryCampaignSortie);
+campaignView.continueButton.addEventListener('click', continueCampaign);
 missionDebriefDialog.addEventListener('cancel', event => event.preventDefault());
 launchErrorReturnButton.addEventListener('click', returnToLaunchMenu);
 retryLaunchButton.addEventListener('click', () => {
@@ -818,9 +999,10 @@ async function launchMissionFromGesture({ allowDuringMenuTerrainLoad = false } =
   const selectedArea = theaterAreas.find(area => area.id === selectedAreaId) ?? theaterAreas[0];
   const prepared = await sortie.prepare({
     missionId: selectedMissionId,
+    mission: selectedMissionDefinition,
     areaId: selectedArea.id,
     area: selectedArea,
-    difficulty: careerProgress.difficulty,
+    difficulty: getSelectedDifficulty(),
     seed: plannedSortieSeed,
   });
   if (!prepared) {
@@ -836,10 +1018,7 @@ async function launchMissionFromGesture({ allowDuringMenuTerrainLoad = false } =
   const locked = await Promise.resolve(captureRequest).then(Boolean, () => false);
   if (!locked || document.pointerLockElement !== renderer.domElement) {
     sortie.dispose();
-    launchButton.disabled = false;
-    menuDifficulty.disabled = false;
-    launchButton.setAttribute('aria-busy', 'false');
-    menuTheater.disabled = false;
+    restoreMenuControls();
     setLaunchProgress(0, 'menu.launchButton', 'menu.launchReadyStatus');
     setMenuStatus('launch.pointerLockFailed', 'error');
     showLaunchError('pointerLock');
@@ -851,6 +1030,7 @@ async function launchMissionFromGesture({ allowDuringMenuTerrainLoad = false } =
 
 launchButton.addEventListener('click', () => { void launchMissionFromGesture(); });
 quickStartTrainingButton.addEventListener('click', () => {
+  if (playMode === 'campaign') activateStandaloneMode();
   selectMission('training');
   dismissQuickStart();
   void launchMissionFromGesture({ allowDuringMenuTerrainLoad: true });
@@ -948,6 +1128,8 @@ sortie = new SortieController({
     const nextUrl = new URL(location.href);
     nextUrl.searchParams.set('mission', selectedMissionId);
     nextUrl.searchParams.set('area', selectedAreaId);
+    if (playMode === 'campaign') nextUrl.searchParams.set('mode', 'campaign');
+    else nextUrl.searchParams.delete('mode');
     history.replaceState(null, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
     if (stressMode) window.__ilmatilaStress = sortie.stressScenario;
     if (telemetryMode) window.__ilmatilaTelemetry = sortie.telemetry;
@@ -987,38 +1169,44 @@ sortie = new SortieController({
   onFinish: (outcome, result) => {
     resumeCapturePending = false;
     setResumeLockStatus();
-    const careerUpdate = careerProgress.recordMission({ ...result, outcome });
-    renderMissionProgress();
     const note = document.querySelector('#debrief-career-note');
-    const messages = [];
-    if (careerUpdate.newRecord) messages.push(t('mission.debrief.newBest'));
-    if (careerUpdate.unlocked.length) {
-      const names = careerUpdate.unlocked.map(id => t(`mission.${id}.title`)).join(', ');
-      messages.push(t('mission.debrief.unlocked', { missions: names }));
+    let debriefFocus = missionDebriefReturnButton;
+    if (playMode === 'campaign' && campaignSession) {
+      const preview = campaignSession.previewResult(outcome, result);
+      pendingCampaignResult = { outcome, result, preview };
+      campaignView.renderDebrief(preview);
+      missionDebriefReturnButton.hidden = true;
+      note.hidden = true;
+      debriefFocus = preview.canAccept ? campaignView.continueButton : campaignView.retryButton;
+    } else {
+      const careerUpdate = careerProgress.recordMission({ ...result, outcome });
+      renderMissionProgress();
+      const messages = [];
+      if (careerUpdate.newRecord) messages.push(t('mission.debrief.newBest'));
+      if (careerUpdate.unlocked.length) {
+        const names = careerUpdate.unlocked.map(id => t(`mission.${id}.title`)).join(', ');
+        messages.push(t('mission.debrief.unlocked', { missions: names }));
+      }
+      note.textContent = messages.join(' · ');
+      note.hidden = messages.length === 0;
+      campaignView.hideDebrief();
+      missionDebriefReturnButton.hidden = false;
     }
-    note.textContent = messages.join(' · ');
-    note.hidden = messages.length === 0;
     root.classList.add('flight-paused');
     if (pauseDialog.open) pauseDialog.close();
     document.querySelector('#death-screen').hidden = true;
     if (!missionDebriefDialog.open) missionDebriefDialog.showModal();
-    missionDebriefReturnButton.focus({ preventScroll: true });
+    debriefFocus.focus({ preventScroll: true });
   },
   onPrepareFailure: error => {
     console.error('Mission launch failed.', error);
-    launchButton.disabled = false;
-    menuDifficulty.disabled = false;
-    launchButton.setAttribute('aria-busy', 'false');
-    menuTheater.disabled = false;
+    restoreMenuControls();
     setLaunchProgress(0, 'launch.startFlight', 'launch.loadingFailed');
     setMenuStatus('launch.couldNotPrepare', 'error');
     showLaunchError('assets');
   },
   onPrepareCancelled: () => {
-    launchButton.disabled = false;
-    menuDifficulty.disabled = false;
-    launchButton.setAttribute('aria-busy', 'false');
-    menuTheater.disabled = false;
+    restoreMenuControls();
     setLaunchProgress(0, 'menu.launchButton', 'menu.launchReadyStatus');
     if (terrain.real) setMenuStatus('menu.statusAreaReady', 'ready', { area: terrain.label.toUpperCase() });
     else setMenuStatus('menu.statusTerrainError', 'warning');
@@ -1128,9 +1316,15 @@ addEventListener('pagehide', event => {
   disposeMissilePool();
   disposeCombatEffectResources();
 },{once:true});
-openQuickStartForFirstVisit();
 animate();
-void loadTerrainForMenu(initialAreaId);
+if (urlParams.get('mode') === 'campaign') {
+  const requestedDifficulty = urlParams.get('difficulty');
+  if (['easy', 'standard', 'hard'].includes(requestedDifficulty)) menuDifficulty.value = requestedDifficulty;
+  activateCampaignMode();
+} else {
+  openQuickStartForFirstVisit();
+  void loadTerrainForMenu(initialAreaId);
+}
 void assets.ensureAircraftLoaded().catch((error) => {
   console.error('Combat aircraft assets failed to load; no placeholder aircraft will be shown.', error);
 });

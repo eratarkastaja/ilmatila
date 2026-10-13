@@ -124,6 +124,28 @@ describe('MenuRadar sortie preview', () => {
     radar.dispose();
   });
 
+  it('shows air-policing contacts as unknown instead of hostile', () => {
+    installDocument();
+    const radar = new MenuRadar();
+    const resolution = resolveMissionVariant({
+      ...MISSIONS.patrol,
+      variants: [],
+      hostiles: 2,
+      hostileDisposition: 'noncombatant',
+    }, 77);
+
+    radar.setScenario(resolution, {
+      seed: 77,
+      terrain: { worldSize: 32000, operationBounds: { minX: -16000, maxX: 16000, minZ: -16000, maxZ: 16000 } },
+    });
+
+    expect(radar.contacts.filter(contact => contact.team === 'unknown')).toHaveLength(2);
+    expect(radar.contacts.filter(contact => contact.team === 'hostile')).toHaveLength(0);
+    expect(radar.contacts.filter(contact => contact.team === 'unknown')
+      .every(contact => contact.element.textContent === t('radar.unknownCode'))).toBe(true);
+    radar.dispose();
+  });
+
   it('keeps heading-up radar positions repeatable for the same resolved mission and terrain', () => {
     installDocument();
     const radar = new MenuRadar();

@@ -92,6 +92,7 @@ export class CombatWorld {
     this.missileLaunchSeeker=null;
     this.missileLaunchAlertCooldown=0;
     this.terrain=terrain; this.playerHeading=0; this.previousPlayerPosition=player.position.clone();
+    this.objectiveAnchor=player.position.clone();
     this._fallbackBoundaryBounds=terrain.operationBounds??{
       minX:-terrain.worldSize*.5,maxX:terrain.worldSize*.5,
       minZ:-terrain.worldSize*.5,maxZ:terrain.worldSize*.5,
@@ -110,6 +111,7 @@ export class CombatWorld {
       onMissileLaunch: (enemy, missile, seeker, target) => this.onMissileLaunch(enemy, missile, seeker, target),
       onWingmanRadio: (event, wingman, details) => this.reportWingmanRadio(event, wingman, details),
       onPopUpThreat: (stage, units) => this.reportPopUpThreat(stage, units),
+      onOperationalEvent: (event, unit) => this.reportOperationalEvent(event, unit),
       canStartHostileMissileAttack: (enemy, target) => this.canStartHostileMissileAttack(enemy, target),
       difficulty:this.difficulty,
       random:this.random,
@@ -188,6 +190,8 @@ export class CombatWorld {
       player, scene, fx, audio, radar: this.radar, playerVelocity: this.playerVelocity,
       addProjectile: shot => this.projectileSystem.addPlayerProjectile(shot),
       loadout:this.difficulty?.player?.weapons,
+      canFireWeapons:()=>missionConfig.rulesOfEngagement!=='weaponsHold',
+      onWeaponsHoldViolation:()=>this.radio.emit('mission.weaponsHold',{scope:missionConfig.campaignAttemptId??missionConfig.id}),
       random: this.random,
     });
     this.lastObservedMissilesFired=this.weaponSystem.missilesFired;
@@ -214,6 +218,35 @@ export class CombatWorld {
           for(const enemy of this.enemies)if(!enemy.dead)state.airRemaining++;
         }
         for(const unit of this.redUnits)if(!unit.dead&&unit.armed!==false)state.groundRemaining++;
+        state.identifiedCount=0;
+        state.contactCount=0;
+        state.escortElapsed=0;
+        state.priorityTargetsRemaining=0;
+        state.protectedAssetLost=false;
+        state.friendlyStrengthFraction=1;
+        if(missionConfig.objective?.type==='airPolicing'){
+          this.airBattle.getOperationalState(state);
+        }else if(missionConfig.objective?.type==='assetDefense'){
+          const targetIndex=missionConfig.objective.target?.index??0;
+          const target=this.enemies[targetIndex];
+          state.priorityTargetsRemaining=!this.airBattle.hostilesSpawned||Boolean(target&&!target.dead)?1:0;
+          if(target&&!target.dead){
+            const dx=target.mesh.position.x-this.objectiveAnchor.x;
+            const dz=target.mesh.position.z-this.objectiveAnchor.z;
+            const radius=missionConfig.objective.zoneRadius??7200;
+            state.protectedAssetLost=dx*dx+dz*dz<=radius*radius;
+          }
+        }else if(missionConfig.objective?.type==='forceDefense'){
+          let health=0;
+          let maximum=0;
+          for(const unit of this.friends){
+            if(unit.role!=='defender')continue;
+            const maxHp=Math.max(0,unit.maxHp??unit.hp??0);
+            maximum+=maxHp;
+            if(!unit.dead&&unit.hp>0)health+=Math.min(unit.hp,maxHp);
+          }
+          state.friendlyStrengthFraction=maximum>0?health/maximum:0;
+        }
         return state;
       },
       nodes: {
@@ -277,9 +310,14 @@ export class CombatWorld {
         if(reporter)this.radio.emit('wingman.ingress',{wingmanId:reporter.radioId,scope:'ingress'});
       },
       onObjectiveActive:()=>this.missionSystem.activate(),
-      onObjectiveComplete:()=>{
-        this.missionSystem.notifyObjectiveAchieved();
-        this.radio.emit('mission.objectiveComplete');
+      onObjectiveComplete:outcome=>{
+        if(outcome===MISSION_OUTCOME.SETBACK){
+          this.missionSystem.notifyObjectiveSetback();
+          this.radio.emit('mission.setbackRtb');
+        }else{
+          this.missionSystem.notifyObjectiveAchieved();
+          this.radio.emit('mission.objectiveComplete');
+        }
       },
       onRtb:()=>this.missionSystem.returnToBase(),
       onPhaseChange:(_previous,phase)=>this.reportMissionPhase(phase),
@@ -307,7 +345,7 @@ export class CombatWorld {
     this._airPlayerThreat={lockedTarget:null,incomingMissiles:this.incomingAircraftMissiles};
     this._missionFlowState={
       detectedHostiles:0,playerEngaged:false,hostileEngaged:false,
-      targetDestroyed:false,objectiveSatisfied:false,destroyed:false,
+      targetDestroyed:false,objectiveSatisfied:false,objectiveOutcome:MISSION_OUTCOME.COMPLETE,destroyed:false,
     };
     /** Stable, borrowed-data read model for the UI; simulation systems remain the source of truth. */
     this.hudState={
@@ -559,7 +597,8 @@ export class CombatWorld {
       this.radio.emit('mission.protectedSiteLost',{scope:'protected-installation'});
     }
     this.missionSystem.update(dt,this.destroyed);
-    if(this.missionSystem.objectiveSatisfied)this.scoreSystem.awardObjectiveCompletion();
+    if(this.missionSystem.objectiveSatisfied
+      &&this.missionSystem.objectiveResult===MISSION_OUTCOME.COMPLETE)this.scoreSystem.awardObjectiveCompletion();
     let detectedHostiles=0;
     for(const track of this.radar.tracks.values())if(track.team==='hostile')detectedHostiles++;
     let hostileEngaged=false;
@@ -575,6 +614,7 @@ export class CombatWorld {
     missionFlowState.hostileEngaged=hostileEngaged;
     missionFlowState.targetDestroyed=targetDestroyed;
     missionFlowState.objectiveSatisfied=this.missionSystem.objectiveSatisfied;
+    missionFlowState.objectiveOutcome=this.missionSystem.objectiveResult;
     missionFlowState.destroyed=this.destroyed;
     this.missionFlow.update(dt,missionFlowState);
     this.updateBoundaryVisual();
@@ -688,6 +728,14 @@ export class CombatWorld {
     });
   }
 
+  reportOperationalEvent(event,unit){
+    if(event!=='airPolicing.identified'||!unit)return;
+    this.radio.emit('mission.airPolicingIdentified',{
+      scope:String(unit.mesh.id),
+      params:{aircraft:unit.label??'aircraft'},
+    });
+  }
+
   reportMissionPhase(phase){
     const keys={
       [MISSION_PHASE.CONTACT]:'mission.contact',
@@ -746,6 +794,10 @@ export class CombatWorld {
       outcome,
       elapsed,
       missionId:this.missionSystem.mission.id,
+      campaignId:this.missionSystem.mission.campaignId ?? null,
+      campaignChapterId:this.missionSystem.mission.campaignChapterId ?? null,
+      campaignAttemptId:this.missionSystem.mission.campaignAttemptId ?? null,
+      displayTitleKey:this.missionSystem.mission.displayTitleKey ?? null,
       variantId:this.missionVariant?.id ?? null,
       variantLabelKey:this.missionVariant?.labelKey ?? null,
       difficulty:this.difficulty?.id,
@@ -777,10 +829,13 @@ export class CombatWorld {
     if(!this.debriefData)return;
     const {outcome,elapsed}=this.debriefData;
     const successful=outcome===MISSION_OUTCOME.COMPLETE;
+    const setback=outcome===MISSION_OUTCOME.SETBACK;
     const aborted=outcome===MISSION_OUTCOME.ABORTED;
     const text=(node,key)=>{if(node)node.textContent=t(key);};
-    text(this.debriefNodes.title,successful?'mission.debrief.completeTitle':aborted?'mission.debrief.abortedTitle':'mission.debrief.failedTitle');
-    text(this.debriefNodes.mission,`mission.${this.missionSystem.mission.id}.title`);
+    text(this.debriefNodes.title,successful
+      ?'mission.debrief.completeTitle'
+      :setback?'mission.debrief.setbackTitle':aborted?'mission.debrief.abortedTitle':'mission.debrief.failedTitle');
+    text(this.debriefNodes.mission,this.debriefData.displayTitleKey ?? `mission.${this.missionSystem.mission.id}.title`);
     text(this.debriefNodes.difficulty,`difficulty.${this.debriefData.difficulty}`);
     if(this.debriefNodes.variant){
       this.debriefNodes.variant.hidden=!this.debriefData.variantLabelKey;
@@ -788,7 +843,9 @@ export class CombatWorld {
         ?t('mission.debrief.variant',{name:t(this.debriefData.variantLabelKey)})
         :'';
     }
-    const outcomeText=t(successful?'mission.debrief.complete':aborted?'mission.debrief.aborted':'mission.debrief.failed');
+    const outcomeText=t(successful
+      ?'mission.debrief.complete'
+      :setback?'mission.debrief.setback':aborted?'mission.debrief.aborted':'mission.debrief.failed');
     const lossCause=!successful&&!aborted&&this.deathReasonKey?` · ${t(this.deathReasonKey,this.deathReasonParams)}`:'';
     if(this.debriefNodes.outcome)this.debriefNodes.outcome.textContent=`${outcomeText}${lossCause}`;
     const seconds=Math.max(0,Math.floor(elapsed));
