@@ -6,7 +6,8 @@ export const zeroVelocity = new THREE.Vector3();
 export const eventLeadPoint = new THREE.Vector3();
 export const eventLeadOffset = new THREE.Vector3();
 export const contactOffset = new THREE.Vector3();
-export const AIR_SPAWN_BEARINGS = [0, 10, -10, 20, -20, 30, -30, 40, -40, 50, -50, 60, -60, 70, -70, 80, -80, 90, -90];
+export const AIR_SPAWN_LAYOUT_SEED_XOR = 0x9e3779b9;
+export const AIR_SPAWN_BEARINGS = [0, 10, -10, 20, -20, 30, -30, 40, -40, 50, -50, 60, -60, 70, -70, 80, -80];
 export const ENEMY_ATTACK_RUNS = [
   { trail: -850, lateral: 260, altitude: 0, passRange: 1450 },
   { trail: -1350, lateral: 540, altitude: 320, passRange: 1650 },
@@ -73,7 +74,7 @@ export function forwardOfHeading(heading,target=new THREE.Vector3()) {
   return target.set(Math.sin(heading), 0, Math.cos(heading));
 }
 
-export function chooseAirSpawnLayout(origin, forward, right, terrain, requestedDistance, minimumDistance, lateralHalfSpan, forwardExtra, margin) {
+export function chooseAirSpawnLayout(origin, forward, right, terrain, requestedDistance, minimumDistance, lateralHalfSpan, forwardExtra, margin, random = null) {
   const bounds = terrain?.operationBounds;
   const half = (terrain?.worldSize ?? 32000) * 0.5;
   const minX = (bounds?.minX ?? -half) + margin;
@@ -81,7 +82,9 @@ export function chooseAirSpawnLayout(origin, forward, right, terrain, requestedD
   const minZ = (bounds?.minZ ?? -half) + margin;
   const maxZ = (bounds?.maxZ ?? half) - margin;
   const direction = new THREE.Vector3();
+  const lateral = new THREE.Vector3();
   const lowerBound = Math.min(requestedDistance, minimumDistance);
+  const candidates = [];
 
   // Preserve the requested stand-off first, then fan to either side when the
   // theater edge would otherwise clamp the formation close to the player.
@@ -89,20 +92,29 @@ export function chooseAirSpawnLayout(origin, forward, right, terrain, requestedD
     for (const degrees of AIR_SPAWN_BEARINGS) {
       const angle = THREE.MathUtils.degToRad(degrees);
       direction.copy(forward).multiplyScalar(Math.cos(angle)).addScaledVector(right, Math.sin(angle)).normalize();
+      // Rotate the formation's lateral axis with its bearing. Keeping the
+      // authored player-right vector here would skew the lanes toward ownship
+      // once the group enters from the side and could violate stand-off.
+      lateral.copy(right).multiplyScalar(Math.cos(angle)).addScaledVector(forward, -Math.sin(angle)).normalize();
       const centerX = origin.x + direction.x * (distance + forwardExtra);
       const centerZ = origin.z + direction.z * (distance + forwardExtra);
-      const spreadX = Math.abs(right.x) * lateralHalfSpan;
-      const spreadZ = Math.abs(right.z) * lateralHalfSpan;
+      const spreadX = Math.abs(lateral.x) * lateralHalfSpan;
+      const spreadZ = Math.abs(lateral.z) * lateralHalfSpan;
       if (centerX - spreadX >= minX && centerX + spreadX <= maxX
         && centerZ - spreadZ >= minZ && centerZ + spreadZ <= maxZ) {
-        return { direction: direction.clone(), distance };
+        candidates.push({ direction: direction.clone(), right: lateral.clone(), distance });
       }
     }
   }
 
+  if (candidates.length) {
+    const roll = typeof random === 'function' ? THREE.MathUtils.clamp(random(), 0, .999999) : 0;
+    return candidates[Math.floor(roll * candidates.length)];
+  }
+
   // A normal sortie has ample theater room for the minimum separation. Keep a
   // stable forward fallback for unusually narrow custom/stress scenarios.
-  return { direction: forward.clone(), distance: lowerBound };
+  return { direction: forward.clone(), right: right.clone(), distance: lowerBound };
 }
 
 /** Shares exact theater-clamped aircraft formation placement between combat and previews. */
@@ -117,6 +129,7 @@ export function planAirFormation({
   lateralSpacing,
   forwardLaneSpacing = 0,
   margin,
+  random = null,
 }) {
   const maxLane = Math.max(0, (count - 1) * .5);
   const spawnMargin = margin ?? Math.min(getAircraftEdgeMargin({ terrain }), 1200);
@@ -130,14 +143,16 @@ export function planAirFormation({
     maxLane * lateralSpacing,
     maxLane * forwardLaneSpacing,
     spawnMargin,
+    random,
   );
   const battle = { terrain };
   const positions = [];
+  const formationRight = formation.right ?? right;
   for (let index = 0; index < count; index++) {
     const lane = index - (count - 1) * .5;
     const position = origin.clone()
       .addScaledVector(formation.direction, formation.distance + Math.abs(lane) * forwardLaneSpacing)
-      .addScaledVector(right, lane * lateralSpacing);
+      .addScaledVector(formationRight, lane * lateralSpacing);
     clampToTheater(battle, position, spawnMargin);
     positions.push(position);
   }

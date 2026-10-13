@@ -120,6 +120,7 @@ export class AirSpawnSystem {
       lateralSpacing,
       forwardLaneSpacing: 90,
       margin: spawnMargin,
+      random: battle.spawnRandom,
     });
 
     for (let i = 0; i < hostileCount; i++) {
@@ -240,6 +241,7 @@ export class AirSpawnSystem {
       minimumDistance: mission.hostileHelicopterMinimumSpawnDistance ?? 8500,
       lateralSpacing,
       margin: spawnMargin,
+      random: battle.spawnRandom,
     });
     for (let i = 0; i < count; i++) {
       const mesh = createMi24AttackHelicopter();

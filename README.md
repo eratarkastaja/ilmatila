@@ -31,7 +31,7 @@ npm run dev
 
 Use `npm run build` to create the production site and `npm run preview` to serve it locally. Run the automated checks with `npm test` and `npm run lint`; `npm run test:watch` runs Vitest in watch mode.
 
-The Vite development server shows a **DEV / MISSION SELECT** dropdown and keeps all standalone missions selectable, so gameplay work can be tested without completing the unlock chain. Production builds keep the normal progression locks.
+The Vite development server shows a **DEV / CAMPAIGN MISSION** dropdown for jumping between all ten campaign chapters; standalone missions remain selectable as well, so gameplay work can be tested without completing the unlock chain. Production builds keep the normal progression locks.
 
 ## Current game
 

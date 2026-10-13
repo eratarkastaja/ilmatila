@@ -4,6 +4,7 @@ const MAX_QUEUED_CALLS = 3;
 
 export const RADIO_CREW = Object.freeze({
   flightLead: Object.freeze({ callsignKey: 'radio.callsign.flightLead' }),
+  groundControl: Object.freeze({ callsignKey: 'radio.callsign.groundControl' }),
   wingman1: Object.freeze({ callsignKey: 'radio.callsign.wingman1' }),
   wingman2: Object.freeze({ callsignKey: 'radio.callsign.wingman2' }),
 });
@@ -19,6 +20,12 @@ export const WINGMAN_COMMAND_EVENTS = Object.freeze({
 /** Message catalog: gameplay emits event names; this layer owns priority and pacing. */
 export const RADIO_EVENTS = Object.freeze({
   'mission.departure': { messageKey: 'radio.phase.departure', crew: 'flightLead', priority: 1, duration: 3 },
+  'mission.controlIngress': { messageKey: 'radio.control.ingress', crew: 'groundControl', priority: 2, duration: 3.2, cooldown: 10 },
+  'mission.controlContact': { messageKey: 'radio.control.contact', crew: 'groundControl', priority: 2, duration: 3.4, cooldown: 8 },
+  'mission.controlEngagement': { messageKey: 'radio.control.engagement', crew: 'groundControl', priority: 2, duration: 3.4, cooldown: 8 },
+  'mission.controlObjective': { messageKey: 'radio.control.objective', crew: 'groundControl', priority: 2, duration: 3.4, cooldown: 8 },
+  'mission.controlPressure': { messageKey: 'radio.control.pressure', crew: 'groundControl', priority: 3, duration: 3.8, cooldown: 30 },
+  'mission.controlRtb': { messageKey: 'radio.control.rtb', crew: 'groundControl', priority: 2, duration: 3.2, cooldown: 8 },
   'mission.contact': { messageKey: 'radio.phase.contact', crew: 'flightLead', priority: 1, duration: 2.6 },
   'mission.engagement': { messageKey: 'radio.phase.engagement', crew: 'flightLead', priority: 1, duration: 2.6 },
   'mission.objective': { messageKey: 'radio.phase.objective', crew: 'flightLead', priority: 1, duration: 3 },

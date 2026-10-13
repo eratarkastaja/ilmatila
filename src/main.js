@@ -168,6 +168,9 @@ function updateMenuControlLocks() {
   // selectors are still frozen once terrain/aircraft preparation begins.
   menuDifficulty.disabled = Boolean(sortie?.launchInProgress);
   menuTheater.disabled = campaignLocked || Boolean(sortie?.launchInProgress);
+  if (devMissionSelect) {
+    devMissionSelect.disabled = !developmentMode || Boolean(sortie?.launchInProgress || sortie?.started);
+  }
 }
 
 function restoreMenuControls() {
@@ -435,7 +438,6 @@ function selectMission(id) {
     || (!developmentMode && !careerProgress.isUnlocked(id))) return false;
   if (selectedMissionId !== id || plannedSortieSeed === null) plannedSortieSeed = createSortieSeed();
   selectedMissionId = id;
-  if (devMissionSelect && devMissionSelect.value !== id) devMissionSelect.value = id;
   const baseMission = stressMode ? { ...MISSIONS[id], variants: [] } : MISSIONS[id];
   selectedMissionDefinition = baseMission;
   const missionResolution = resolveMissionVariant(baseMission, plannedSortieSeed);
@@ -474,6 +476,9 @@ function selectMission(id) {
 function renderCampaignChapter() {
   if (!campaignSession) return false;
   campaignView.renderSession(campaignSession);
+  if (devMissionSelect && campaignSession.currentChapter) {
+    devMissionSelect.value = campaignSession.currentChapter.id;
+  }
   const resolved = campaignSession.resolveCurrentMission();
   if (!resolved) {
     selectedMissionResolution = null;
@@ -521,6 +526,17 @@ function renderCampaignChapter() {
   }
   const area = theaterAreas.find(candidate => candidate.id === selectedAreaId);
   updateMenuArea(area);
+  return true;
+}
+
+function selectDevelopmentCampaignChapter(chapterId) {
+  if (!developmentMode || playMode !== 'campaign' || !campaignSession) return false;
+  const chapterIndex = campaignSession.definition.chapters.findIndex(chapter => chapter.id === chapterId);
+  if (!campaignSession.selectDevelopmentChapter(chapterIndex)) return false;
+  pendingCampaignResult = null;
+  campaignView.hideDebrief();
+  renderCampaignChapter();
+  void loadTerrainForMenu(selectedAreaId);
   return true;
 }
 
@@ -689,7 +705,7 @@ menuDifficulty.addEventListener('change', () => {
 
 for (const card of missionCards) card.addEventListener('click', () => selectMission(card.dataset.mission));
 devMissionSelect?.addEventListener('change', () => {
-  if (playMode === 'standalone') selectMission(devMissionSelect.value);
+  selectDevelopmentCampaignChapter(devMissionSelect.value);
 });
 campaignView.standaloneModeButton.addEventListener('click', activateStandaloneMode);
 campaignView.campaignModeButton.addEventListener('click', activateCampaignMode);
@@ -1115,6 +1131,7 @@ sortie = new SortieController({
     menuDifficulty.disabled = true;
     launchButton.setAttribute('aria-busy', 'true');
     menuTheater.disabled = true;
+    if (devMissionSelect) devMissionSelect.disabled = true;
     return supersededMenuTerrain;
   },
   onProgress: setLaunchProgress,

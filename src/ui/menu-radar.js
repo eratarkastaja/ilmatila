@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { getAircraftEdgeMargin, planAirFormation } from '../combat/air-combat-utils.js';
+import { AIR_SPAWN_LAYOUT_SEED_XOR, getAircraftEdgeMargin, planAirFormation } from '../combat/air-combat-utils.js';
+import { createSeededRandom, DEFAULT_RANDOM_SEED } from '../combat/random.js';
 import { t } from './i18n.js';
 
 const AIR_RADAR_RANGE = 27000;
@@ -47,6 +48,7 @@ function formationPositions(origin, forward, right, terrain, {
   lateralSpacing,
   forwardLaneSpacing = 0,
   margin,
+  random = null,
 }) {
   if (count <= 0) return [];
   return planAirFormation({
@@ -60,11 +62,14 @@ function formationPositions(origin, forward, right, terrain, {
     lateralSpacing,
     forwardLaneSpacing,
     margin,
+    random,
   }).positions;
 }
 
-function getScenarioContacts(missionResolution, terrain, origin, heading) {
+function getScenarioContacts(missionResolution, terrain, origin, heading, seed = DEFAULT_RANDOM_SEED) {
   const mission = { ...DEFAULT_MISSION, ...missionResolution.mission };
+  const layoutSeed = Number(seed) >>> 0;
+  const spawnRandom = createSeededRandom((layoutSeed ^ AIR_SPAWN_LAYOUT_SEED_XOR) >>> 0);
   const forward = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
   const right = new THREE.Vector3(Math.cos(heading), 0, -Math.sin(heading));
   const spawnMargin = Math.min(getAircraftEdgeMargin({ terrain }), 1200);
@@ -85,6 +90,7 @@ function getScenarioContacts(missionResolution, terrain, origin, heading) {
     lateralSpacing: mission.hostileLateralSpacing ?? 560,
     forwardLaneSpacing: 90,
     margin: spawnMargin,
+    random: spawnRandom,
   });
   addFormationContacts(
     contacts,
@@ -100,6 +106,7 @@ function getScenarioContacts(missionResolution, terrain, origin, heading) {
     minimumDistance: mission.hostileHelicopterMinimumSpawnDistance ?? 8500,
     lateralSpacing: mission.hostileHelicopterLateralSpacing ?? 850,
     margin: spawnMargin,
+    random: spawnRandom,
   });
   addFormationContacts(contacts, helicopterPositions, 'hostile', origin, heading);
 
@@ -116,6 +123,7 @@ function getScenarioContacts(missionResolution, terrain, origin, heading) {
       lateralSpacing: response.lateralSpacing ?? mission.hostileLateralSpacing ?? 560,
       forwardLaneSpacing: 90,
       margin: spawnMargin,
+      random: spawnRandom,
     });
     addFormationContacts(contacts, encounterPositions, 'hostile', origin, heading, { reinforcement: true });
   }
@@ -153,7 +161,7 @@ export class MenuRadar {
     this.missionId = missionResolution.mission.id;
     this.seed = seed === undefined ? null : Number(seed) >>> 0;
 
-    for (const contact of getScenarioContacts(missionResolution, terrain, origin, heading)) {
+    for (const contact of getScenarioContacts(missionResolution, terrain, origin, heading, this.seed ?? DEFAULT_RANDOM_SEED)) {
       const element = document.createElement('b');
       element.className = `grid-contact contact-${contact.team} contact-air${contact.reinforcement ? ' contact-reinforcement' : ''}`;
       element.style.left = `${contact.left}%`;

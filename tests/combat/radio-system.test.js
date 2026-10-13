@@ -80,6 +80,20 @@ describe('RadioSystem', () => {
     expect(radio.message.textContent).toBe('Ingress reached. Holding formation.');
   });
 
+  it('lets ground control build tension through mission phases', () => {
+    expect(radio.radio.emit('mission.controlIngress')).toBe(true);
+    expect(radio.callsign.textContent).toBe('CONTROL');
+    expect(radio.message.textContent).toContain('ingress confirmed');
+    radio.radio.update(3.3);
+    expect(radio.radio.emit('mission.controlPressure', { params: { remaining: '2' } })).toBe(true);
+    expect(radio.callsign.textContent).toBe('CONTROL');
+    expect(radio.message.textContent).toContain('2 hostile aircraft remain');
+    setLanguage('fi');
+    radio.radio.refreshLanguage();
+    expect(radio.callsign.textContent).toBe('JOHTO');
+    expect(radio.message.textContent).toContain('2 viholliskonetta jäljellä');
+  });
+
   it('acknowledges only accepted commands and staggers flight-wide replies in queue order', () => {
     const wingmen = [
       { radioId: 'wingman1', dead: false },

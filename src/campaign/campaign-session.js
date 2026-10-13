@@ -76,6 +76,25 @@ export class CampaignSession {
   get currentChapter() { return this.definition.chapters[this.state.chapterIndex] ?? null; }
   get completed() { return this.state.completed; }
 
+  /** Selects a chapter for the development campaign selector without saving the jump. */
+  selectDevelopmentChapter(chapterIndex) {
+    if (!Number.isInteger(chapterIndex) || chapterIndex < 0 || chapterIndex >= this.definition.chapters.length) {
+      return false;
+    }
+    const attemptSequence = this.state.attemptSequence + 1;
+    this.state = {
+      ...this.state,
+      chapterIndex,
+      attemptSequence,
+      currentAttemptId: createAttemptId(this.definition, this.difficulty, attemptSequence),
+      currentSeed: Number(this.seedFactory()) >>> 0,
+      chapterRetryCount: 0,
+      completed: false,
+      ending: null,
+    };
+    return true;
+  }
+
   snapshot() {
     return structuredClone(this.state);
   }

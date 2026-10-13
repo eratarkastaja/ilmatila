@@ -62,6 +62,21 @@
           <section id="campaign-overview" class="campaign-overview" hidden aria-labelledby="campaign-title">
             <header><div><small id="campaign-progress-label"></small><h2 id="campaign-title"></h2></div><b id="campaign-day"></b></header>
             <p id="campaign-description"></p>
+            <div id="dev-mission-picker" class="dev-mission-picker" hidden>
+              <label for="dev-mission-select"><span data-i18n="menu.devMissionKicker">DEV</span><strong data-i18n="menu.devMissionLabel">CAMPAIGN MISSION</strong></label>
+              <div class="select-wrap"><select id="dev-mission-select" data-i18n-aria-label="menu.devMissionAria">
+                <option value="unknown-track" data-i18n="campaign.shadowBorder.chapter.unknown-track.title">UNKNOWN TRACK</option>
+                <option value="broken-silence" data-i18n="campaign.shadowBorder.chapter.broken-silence.title">BROKEN SILENCE</option>
+                <option value="disperse" data-i18n="campaign.shadowBorder.chapter.disperse.title">DISPERSE</option>
+                <option value="northern-feint" data-i18n="campaign.shadowBorder.chapter.northern-feint.title">NORTHERN FEINT</option>
+                <option value="first-wave" data-i18n="campaign.shadowBorder.chapter.first-wave.title">FIRST WAVE</option>
+                <option value="border-breaks" data-i18n="campaign.shadowBorder.chapter.border-breaks.title">THE BORDER BREAKS</option>
+                <option value="hold-e18" data-i18n="campaign.shadowBorder.chapter.hold-e18.title">HOLD THE E18</option>
+                <option value="blind-spear" data-i18n="campaign.shadowBorder.chapter.blind-spear.title">BLIND THE SPEAR</option>
+                <option value="counterstroke" data-i18n="campaign.shadowBorder.chapter.counterstroke.title">COUNTERSTROKE</option>
+                <option value="border-holds" data-i18n="campaign.shadowBorder.chapter.border-holds.title">THE BORDER HOLDS</option>
+              </select><i>⌄</i></div>
+            </div>
             <div class="campaign-state-grid">
               <div><span><small data-i18n="campaign.airControl">AIR CONTROL</small><b id="campaign-air-control-value">0</b></span><i><b id="campaign-air-control-fill"></b></i></div>
               <div><span><small data-i18n="campaign.defenseIntegrity">DEFENSE INTEGRITY</small><b id="campaign-defense-integrity-value">0</b></span><i><b id="campaign-defense-integrity-fill"></b></i></div>
@@ -72,15 +87,6 @@
 
           <div id="standalone-mission-selection">
             <div class="mission-heading"><span>01</span><strong data-i18n="menu.chooseProfile">Select a mission</strong><i data-i18n="menu.missionCount">4 MISSIONS</i></div>
-            <div id="dev-mission-picker" class="dev-mission-picker" hidden>
-              <label for="dev-mission-select"><span data-i18n="menu.devMissionKicker">DEV</span><strong data-i18n="menu.devMissionLabel">MISSION SELECT</strong></label>
-              <div class="select-wrap"><select id="dev-mission-select" data-i18n-aria-label="menu.devMissionAria">
-                <option value="patrol" data-i18n="mission.patrol.title">COMBAT AIR PATROL</option>
-                <option value="intercept" data-i18n="mission.intercept.title">INTERCEPT FLIGHT</option>
-                <option value="support" data-i18n="mission.support.title">CLOSE AIR SUPPORT</option>
-                <option value="training" data-i18n="mission.training.title">TRAINING SORTIE</option>
-              </select><i>⌄</i></div>
-            </div>
             <div class="mission-grid" role="group" data-i18n-aria-label="menu.selectMissionAria">
             <button class="mission-card selected" type="button" data-mission="patrol" aria-pressed="true">
               <span class="mission-card-top"><b>01 / CAP</b><i data-i18n="mission.patrol.posture">ON STATION</i></span>

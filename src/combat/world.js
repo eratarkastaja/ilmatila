@@ -27,6 +27,7 @@ import { addTransientGlow, CombatEffects, disposeCombatEffectResources } from '.
 import { CombatHud } from '../ui/combat-hud.js';
 import { renderOptionalObjectives } from '../ui/optional-objectives.js';
 import { formatNumber, formatPercent, t } from '../ui/i18n.js';
+import { AIR_SPAWN_LAYOUT_SEED_XOR } from './air-combat-utils.js';
 
 export { disposeCombatEffectResources };
 
@@ -48,6 +49,7 @@ export class CombatWorld {
     this.fuelSystem=new FuelSystem(this.difficulty.player.fuel);
     this.seed = Number(seed) >>> 0;
     this.random = createSeededRandom(this.seed);
+    this.spawnRandom = createSeededRandom((this.seed ^ AIR_SPAWN_LAYOUT_SEED_XOR) >>> 0);
     this.telemetry=null;
     const missionResolution=resolveMissionVariant(mission,this.seed);
     this.missionVariant=missionResolution.variant;
@@ -115,6 +117,7 @@ export class CombatWorld {
       canStartHostileMissileAttack: (enemy, target) => this.canStartHostileMissileAttack(enemy, target),
       difficulty:this.difficulty,
       random:this.random,
+      spawnRandom:this.spawnRandom,
     });
     this.groundBattle = new GroundBattle({
       scene, player, playerVelocity: this.playerVelocity, terrain, mission: missionConfig,
@@ -132,6 +135,7 @@ export class CombatWorld {
       objectiveActive:false,
       playerCombatCapable:false,
     };
+    this.radioPressureReported=false;
     this.encounterDirector=new EncounterDirector(this.encounters,{
       onWarning:event=>this.radio.emit(event.warningEvent,{scope:event.id,params:{
         minimum:String(event.delayRangeSeconds.min),maximum:String(event.delayRangeSeconds.max),
@@ -306,8 +310,10 @@ export class CombatWorld {
       onIngress:()=>{
         this.airBattle.spawnHostiles();
         this.groundBattle.setAirDefenseActive(true);
-        const reporter=this.airBattle.allies.find(wingman=>!wingman.dead);
-        if(reporter)this.radio.emit('wingman.ingress',{wingmanId:reporter.radioId,scope:'ingress'});
+        this.radio.emit('mission.controlIngress',{scope:'ingress'});
+        for(const wingman of this.airBattle.allies){
+          if(!wingman.dead)this.radio.emit('wingman.ingress',{wingmanId:wingman.radioId,scope:'ingress'});
+        }
       },
       onObjectiveActive:()=>this.missionSystem.activate(),
       onObjectiveComplete:outcome=>{
@@ -580,6 +586,17 @@ export class CombatWorld {
       if(!unit.dead&&unit.armed!==false)encounterContext.primaryGroundRemaining++;
       if(!unit.dead&&unit.reinforcementSource)encounterContext.reinforcementLogisticsRemaining++;
     }
+    if(!this.radioPressureReported
+      &&this.missionSystem.mission.objective?.type!=='airPolicing'
+      &&this.baseObjectiveAirTotal>1
+      &&encounterContext.primaryGroupRemaining>0
+      &&encounterContext.primaryGroupRemaining<=Math.ceil(this.baseObjectiveAirTotal*.5)){
+      this.radioPressureReported=true;
+      this.radio.emit('mission.controlPressure',{
+        scope:'air-pressure',
+        params:{remaining:String(encounterContext.primaryGroupRemaining)},
+      });
+    }
     encounterContext.objectiveActive=this.missionSystem.objectiveActive;
     encounterContext.playerCombatCapable=!this.destroyed&&this.feedback.hull>this.feedback.maxHull*.25;
     encounterContext.complicationActive=this.isTacticalComplicationActive();
@@ -747,6 +764,14 @@ export class CombatWorld {
     if(!event)return;
     if(phase===MISSION_PHASE.OBJECTIVE&&this.missionSystem.objectiveSatisfied)return;
     this.radio.emit(event);
+    const controlEvents={
+      [MISSION_PHASE.CONTACT]:'mission.controlContact',
+      [MISSION_PHASE.ENGAGEMENT]:'mission.controlEngagement',
+      [MISSION_PHASE.OBJECTIVE]:'mission.controlObjective',
+      [MISSION_PHASE.RTB]:'mission.controlRtb',
+    };
+    const controlEvent=controlEvents[phase];
+    if(controlEvent)this.radio.emit(controlEvent,{scope:`phase:${phase}`});
     if(phase===MISSION_PHASE.RTB){
       const accepted=this.airBattle.issueWingmanOrder('rtb');
       this.radio.acknowledgeWingmanCommand('rtb',this.airBattle.allies,accepted);

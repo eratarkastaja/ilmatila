@@ -121,6 +121,20 @@ describe('CampaignSession', () => {
     expect(resolved.mission.wingmen).toBeGreaterThanOrEqual(1);
   });
 
+  it('can jump to a campaign chapter for development testing without saving the jump', () => {
+    const progress = new CampaignProgress(memoryStorage());
+    const session = new CampaignSession({
+      progress,
+      difficulty: 'standard',
+      seedFactory: () => 77,
+    });
+
+    expect(session.selectDevelopmentChapter(5)).toBe(true);
+    expect(session.currentChapter.id).toBe('border-breaks');
+    expect(session.resolveCurrentMission().chapter.id).toBe('border-breaks');
+    expect(progress.getSave('standard').chapterIndex).toBe(0);
+  });
+
   it('keeps Easy force counts below Hard for the same seeded chapter', () => {
     const easySession = new CampaignSession({
       progress: new CampaignProgress(memoryStorage()),

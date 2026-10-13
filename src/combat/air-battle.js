@@ -14,7 +14,7 @@ const POP_UP_IDENTIFICATION_DELAY = 5;
 
 /** Coordinates air units and advances their behavior in simulation order. */
 export class AirBattle {
-  constructor({ scene, player, aircraftAsset, mission, terrain, audio, fx, playerVelocity, getPlayerHeading, deployHostileCountermeasures, addHostileProjectile, addPlayerProjectile, onMissileLaunch, onWingmanRadio, onPopUpThreat, onOperationalEvent, canStartHostileMissileAttack, difficulty = {}, random = createSeededRandom(DEFAULT_RANDOM_SEED) }) {
+  constructor({ scene, player, aircraftAsset, mission, terrain, audio, fx, playerVelocity, getPlayerHeading, deployHostileCountermeasures, addHostileProjectile, addPlayerProjectile, onMissileLaunch, onWingmanRadio, onPopUpThreat, onOperationalEvent, canStartHostileMissileAttack, difficulty = {}, random = createSeededRandom(DEFAULT_RANDOM_SEED), spawnRandom = random }) {
     this.scene = scene;
     this.player = player;
     this.aircraftAssets = aircraftAsset;
@@ -34,6 +34,9 @@ export class AirBattle {
     this.canStartHostileMissileAttack = canStartHostileMissileAttack;
     this.difficulty = difficulty;
     this.random = random;
+    // Formation placement has its own deterministic stream so terrain-clamped
+    // bearing/range variation cannot shift combat AI or weapon rolls.
+    this.spawnRandom = spawnRandom;
     this.reinforcementIdentificationElapsed = 0;
     this.unidentifiedReinforcements = [];
     this._playerForward = new THREE.Vector3();

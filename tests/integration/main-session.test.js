@@ -371,14 +371,15 @@ describe('main game session lifecycle', () => {
     harness.resumeOrder.length = 0;
   });
 
-  it('keeps every standalone mission selectable in the development server', async () => {
+  it('keeps every campaign chapter selectable in the development server', async () => {
     const document = await loadMain('patrol');
+    document.querySelector('#campaign-mode').dispatch('click');
     const missionSelect = document.querySelector('#dev-mission-select');
-    missionSelect.value = 'support';
+    missionSelect.value = 'border-breaks';
     missionSelect.dispatch('change');
 
-    expect(document.querySelector('#briefing-code').textContent).toBe('CAS / CLOSE AIR SUPPORT');
-    expect(document.querySelector('#theater-mission-name').textContent).toBe('CLOSE AIR SUPPORT');
+    expect(document.querySelector('#campaign-progress-label').textContent).toBe('CHAPTER 6 / 10');
+    expect(document.querySelector('#theater-mission-name').textContent).toBe('THE BORDER BREAKS');
   });
 
   it('opens the menu flight controls in a modal instead of expanding the launch page', async () => {
