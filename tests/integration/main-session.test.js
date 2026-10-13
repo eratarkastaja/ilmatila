@@ -371,6 +371,16 @@ describe('main game session lifecycle', () => {
     harness.resumeOrder.length = 0;
   });
 
+  it('keeps every standalone mission selectable in the development server', async () => {
+    const document = await loadMain('patrol');
+    const missionSelect = document.querySelector('#dev-mission-select');
+    missionSelect.value = 'support';
+    missionSelect.dispatch('change');
+
+    expect(document.querySelector('#briefing-code').textContent).toBe('CAS / CLOSE AIR SUPPORT');
+    expect(document.querySelector('#theater-mission-name').textContent).toBe('CLOSE AIR SUPPORT');
+  });
+
   it('opens the menu flight controls in a modal instead of expanding the launch page', async () => {
     const document = await loadMain();
     const menu = document.querySelector('#start-menu');
@@ -643,7 +653,12 @@ describe('main game session lifecycle', () => {
     const missileObjective = [...document.querySelector('#briefing-optional-objective-list').children]
       .find(row => row.children[0].children[0].textContent === 'SAVE GUIDED MISSILES');
 
-    expect(missileObjective.children[0].children[1].textContent).toMatch(/(?:9|10) guided missiles/);
+    const reserveText = missileObjective.children[0].children[1].textContent;
+    const reserve = Number(reserveText.match(/\d+/)?.[0]);
+    // Patrol variants author a 15- or 16-missile reserve. Hard scales those
+    // targets to the eight-plus-eight missile loadout (12 or 13 missiles).
+    expect(reserve).toBeGreaterThanOrEqual(12);
+    expect(reserve).toBeLessThanOrEqual(13);
   });
 
   it('resumes with one click after an application pause releases pointer lock programmatically', async () => {

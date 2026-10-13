@@ -36,7 +36,7 @@ describe('MissionOptionalObjectives', () => {
       DIFFICULTY_PRESETS.standard.player.weapons,
     );
 
-    expect(scaled[0].minimumRemaining).toBe(10);
+    expect(scaled[0].minimumRemaining).toBe(13);
     expect(scaled[1]).toBe(objectives[1]);
     expect(objectives[0].minimumRemaining).toBe(16);
   });

@@ -154,8 +154,11 @@ export class AirWeaponAI {
       projectile: true, missile: true, homing: true, seeker: profile.seeker, mesh,
       velocity: aim.multiplyScalar(profile.speed), speed: profile.speed, turnRate: profile.turnRate, life: profile.life,
       burnRemaining: profile.burnTime, coastDrag: profile.coastDrag, motorBurning: true,
-      guidanceActive: true, damage: 3.8, proximityRadius: profile.proximityRadius,
-      proximityDamage: profile.proximityDamage, target, targetDomain: 'air', decoyTarget: null,
+      guidanceActive: true,
+      damage: 3.8 * (battle.difficulty?.wingman?.damage ?? 1),
+      proximityRadius: profile.proximityRadius,
+      proximityDamage: profile.proximityDamage * (battle.difficulty?.wingman?.damage ?? 1),
+      target, targetDomain: 'air', decoyTarget: null,
       decoyAttempts: new Set(), trail: 0, ally: true, sourceUnit: ally,
     });
     battle.onWingmanRadio?.('rifle', ally, { scope: String(target.mesh.id), target });

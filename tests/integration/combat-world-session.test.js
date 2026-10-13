@@ -585,8 +585,8 @@ describe('CombatWorld sortie lifecycle', () => {
     first.encounterDirector.events.pop();
     expect(first.fuelSystem.capacitySeconds).toBe(4 * 60 * 60);
     expect(first.fuelSystem.fraction).toBe(1);
-    expect(first.weaponSystem.missiles).toEqual({ air: 6, ground: 6 });
-    expect(first.weaponSystem.gunAmmoRemaining).toBe(2000);
+    expect(first.weaponSystem.missiles).toEqual({ air: 8, ground: 8 });
+    expect(first.weaponSystem.gunAmmoRemaining).toBe(2400);
     expect(first.countermeasureSystem.flares).toBe(10);
     expect(first.countermeasureSystem.chaff).toBe(10);
     expect(window.listenerCount('keydown')).toBe(1);

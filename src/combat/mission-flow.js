@@ -47,6 +47,9 @@ export class MissionFlowSystem {
     this.recoveryOutcome = MISSION_OUTCOME.COMPLETE;
 
     this.home = player.position.clone();
+    this.previousPlayerPosition = player.position.clone();
+    this._ingressSegment = new THREE.Vector3();
+    this._ingressClosest = new THREE.Vector3();
     horizontal.copy(forward).applyQuaternion(player.quaternion);
     horizontal.y = 0;
     if (horizontal.lengthSq() < 1e-6) horizontal.set(0, 0, 1);
@@ -98,12 +101,11 @@ export class MissionFlowSystem {
     }
 
     if (this.phase === MISSION_PHASE.NAVIGATION) {
-      const groundHeight = this.terrain?.sampleHeight?.(this.player.position.x, this.player.position.z);
-      const altitudeAgl = Number.isFinite(groundHeight)
-        ? this.player.position.y - groundHeight
-        : this.ingressAltitudeAgl;
-      const altitudeReady = this.ingressAltitudeAgl <= 0 || altitudeAgl >= this.ingressAltitudeAgl;
-      if (altitudeReady && this.horizontalDistanceTo(this.ingress) <= this.navigationRadius) this.enterIngress();
+      // The altitude cue is advisory in the arcade flight model. Requiring a
+      // precise climb at the waypoint makes a fast pass turn into a needless
+      // orbit, so the ingress volume itself always takes priority.
+      if (this.horizontalDistanceTo(this.ingress) <= this.navigationRadius
+        || this.crossedIngressBoundary()) this.enterIngress();
     } else if (this.phase === MISSION_PHASE.CONTACT) {
       this.contactDetected ||= detectedHostiles > 0;
       if (this.contactDetected || hostileEngaged) this.contactSeen = true;
@@ -129,6 +131,7 @@ export class MissionFlowSystem {
     }
 
     this.routeHudElapsed += delta;
+    this.previousPlayerPosition.copy(this.player.position);
     const updateRouteReadout = this.routeHudElapsed >= ROUTE_HUD_UPDATE_INTERVAL;
     if (updateRouteReadout) this.routeHudElapsed %= ROUTE_HUD_UPDATE_INTERVAL;
     this.render(updateRouteReadout);
@@ -175,6 +178,27 @@ export class MissionFlowSystem {
 
   horizontalDistanceTo(point) {
     return Math.hypot(point.x - this.player.position.x, point.z - this.player.position.z);
+  }
+
+  crossedIngressBoundary() {
+    const start = this.previousPlayerPosition;
+    const end = this.player.position;
+    const segment = this._ingressSegment.set(end.x - start.x, 0, end.z - start.z);
+    const lengthSquared = segment.lengthSq();
+    if (lengthSquared < 1e-6) return false;
+    const projection = THREE.MathUtils.clamp(
+      ((this.ingress.x - start.x) * segment.x + (this.ingress.z - start.z) * segment.z) / lengthSquared,
+      0,
+      1,
+    );
+    this._ingressClosest.set(
+      start.x + segment.x * projection,
+      0,
+      start.z + segment.z * projection,
+    );
+    const dx = this.ingress.x - this._ingressClosest.x;
+    const dz = this.ingress.z - this._ingressClosest.z;
+    return dx * dx + dz * dz <= this.navigationRadius * this.navigationRadius;
   }
 
   render(updateRouteReadout = true) {

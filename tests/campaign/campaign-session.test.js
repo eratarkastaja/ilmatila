@@ -150,6 +150,24 @@ describe('CampaignSession', () => {
     expect(easy.preview.mission.openingDelay).toBeGreaterThan(hard.preview.mission.openingDelay);
   });
 
+  it('leaves Hard asset defense a readable response window', () => {
+    const easySession = new CampaignSession({
+      progress: new CampaignProgress(memoryStorage()), difficulty: 'easy', seedFactory: () => 3,
+    });
+    const hardSession = new CampaignSession({
+      progress: new CampaignProgress(memoryStorage()), difficulty: 'hard', seedFactory: () => 3,
+    });
+    easySession.state.chapterIndex = 1;
+    hardSession.state.chapterIndex = 1;
+
+    const easy = easySession.resolveCurrentMission().mission.objective;
+    const hard = hardSession.resolveCurrentMission().mission.objective;
+
+    expect(easy.type).toBe('assetDefense');
+    expect(hard.graceDuration).toBeGreaterThan(easy.graceDuration);
+    expect(hard.zoneRadius).toBeLessThan(7200);
+  });
+
   it('can resolve and advance through all ten campaign chapters', () => {
     let seed = 400;
     const session = new CampaignSession({

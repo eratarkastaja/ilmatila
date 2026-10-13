@@ -126,7 +126,11 @@ export class CombatRadar {
     const groundMode = this.mode === 'ground';
     const candidates = (groundMode ? groundHostiles : enemies).filter(contact => {
       if (contact.dead || !this.tracks.has(contact.mesh)) return false;
-      if (this.tracks.get(contact.mesh).team !== 'hostile') return false;
+      const trackTeam = this.tracks.get(contact.mesh).team;
+      const selectableNeutral = !groundMode
+        && contact.combatant === false
+        && (trackTeam === 'neutral' || trackTeam === 'unknown');
+      if (trackTeam !== 'hostile' && !selectableNeutral) return false;
       return contact.mesh.position.distanceTo(this.player.position) <= this.range;
     });
     if (!candidates.length) return false;
@@ -162,7 +166,9 @@ export class CombatRadar {
 
     // Keep the pilot's selection after contact loss so the HUD can show its
     // bearing. It remains ineligible for weapon lock outside sensor range.
-    if (!candidate || candidate.dead || candidate.identified === false || !candidates.includes(candidate)) candidate = null;
+    if (!candidate || candidate.dead
+      || (!candidates.includes(candidate))
+      || (candidate.identified === false && candidate.combatant !== false)) candidate = null;
 
     const targetChanged = candidate !== this.target;
     const hadTarget = this.lockCueTarget;
@@ -173,7 +179,10 @@ export class CombatRadar {
     const offset = candidate ? this._lockOffset.copy(candidate.mesh.position).sub(this.player.position) : null;
     const distance = offset?.length() ?? Infinity;
     this.targetInSensorRange = Boolean(candidate && distance <= this.range);
-    this.inLockEnvelope = Boolean(candidate && this.targetInSensorRange && distance <= maxRange);
+    const identificationReady = candidate?.combatant === false && candidate.identified === false
+      ? false
+      : true;
+    this.inLockEnvelope = Boolean(candidate && identificationReady && this.targetInSensorRange && distance <= maxRange);
     const inBoresight = Boolean(this.inLockEnvelope && distance > 0 && forward.dot(offset.normalize()) > boresight);
     this.lock = THREE.MathUtils.damp(this.lock, inBoresight ? 1 : 0, inBoresight ? 2.8 : 4, dt);
     this.targetDomain = candidate ? (groundMode ? 'ground' : 'air') : null;

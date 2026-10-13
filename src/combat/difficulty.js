@@ -259,7 +259,9 @@ export const DIFFICULTY_PRESETS = deepFreeze({
     player: {
       hull: 94,
       countermeasures: 10,
-      weapons: { airMissiles: 6, groundMissiles: 6, gunRounds: 2000 },
+      // Hard keeps the pressure and evasion demands high without turning one
+      // missed lock into an unwinnable ammunition puzzle.
+      weapons: { airMissiles: 8, groundMissiles: 8, gunRounds: 2400 },
       fuel: { enduranceMinutes: 240, afterburnerMultiplier: 5 },
       chaff: {
         count: 10,
@@ -349,13 +351,13 @@ export const DIFFICULTY_PRESETS = deepFreeze({
       }
     },
     wingman: {
-      damage: 0.9,
-      aimSpread: 1.1,
+      damage: 1.05,
+      aimSpread: 1.0,
       airMissile: {
-        capacity: 8,
-        cooldown: 4.1,
+        capacity: 9,
+        cooldown: 3.7,
         minRange: 1900,
-        maxRange: 8500
+        maxRange: 8800
       }
     },
     groundAA: {

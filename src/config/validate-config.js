@@ -277,7 +277,7 @@ function validateObjective(objective, path, errors) {
     support: [],
     training: ['duration'],
     airPolicing: ['identifyRange', 'identifyDuration', 'escortRange', 'escortDuration'],
-    assetDefense: ['target', 'zoneRadius'],
+    assetDefense: ['target', 'zoneRadius', 'graceDuration'],
     forceDefense: ['minimumFriendlyStrength', 'maximumGroundRemaining'],
   };
   const fields = fieldsByType[objective.type];
@@ -302,6 +302,9 @@ function validateObjective(objective, path, errors) {
   if (objective.type === 'assetDefense') {
     validateOptionalObjectiveTarget(objective.target, `${path}.target`, 'airHostiles', errors);
     validateNode(objective.zoneRadius, number(100, 100000), `${path}.zoneRadius`, errors);
+    if (objective.graceDuration !== undefined) {
+      validateNode(objective.graceDuration, number(0, 600), `${path}.graceDuration`, errors);
+    }
   }
   if (objective.type === 'forceDefense') {
     validateNode(objective.minimumFriendlyStrength, number(0, 1), `${path}.minimumFriendlyStrength`, errors);

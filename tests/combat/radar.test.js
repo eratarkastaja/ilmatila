@@ -113,6 +113,47 @@ describe('combat radar target and lock logic', () => {
     expect(radar.cycleTarget([contact], [])).toBe(true);
   });
 
+  it('allows an identified neutral air-policing contact to be selected and locked', () => {
+    const { radar } = setupRadar();
+    const contact = makeContact(0, 0, 2600);
+    contact.identified = true;
+    contact.combatant = false;
+    contact.radarTeam = 'neutral';
+    radar.updateContacts(0.016, 0, {
+      airFriendly: [], airHostile: [contact], groundFriendly: [], groundHostile: [],
+    });
+
+    expect(radar.tracks.get(contact.mesh).team).toBe('neutral');
+    expect(radar.cycleTarget([contact], [])).toBe(true);
+    for (let step = 0; step < 20; step++) radar.updateLock(0.1, [contact], []);
+
+    expect(radar.target).toBe(contact);
+    expect(radar.lockCueConfirmed).toBe(true);
+  });
+
+  it('keeps an unknown air-policing contact selected until visual identification allows lock', () => {
+    const { radar } = setupRadar();
+    const contact = makeContact(0, 0, 2600);
+    contact.identified = false;
+    contact.combatant = false;
+    contact.radarTeam = 'unknown';
+    radar.updateContacts(0.016, 0, {
+      airFriendly: [], airHostile: [contact], groundFriendly: [], groundHostile: [],
+    });
+
+    expect(radar.cycleTarget([contact], [])).toBe(true);
+    radar.updateLock(.1, [contact], []);
+    expect(radar.target).toBe(contact);
+    expect(radar.lockCueConfirmed).toBe(false);
+    contact.identified = true;
+    contact.radarTeam = 'neutral';
+    radar.updateContacts(.016, 0, {
+      airFriendly: [], airHostile: [contact], groundFriendly: [], groundHostile: [],
+    });
+    for (let step = 0; step < 20; step++) radar.updateLock(0.1, [contact], []);
+    expect(radar.lockCueConfirmed).toBe(true);
+  });
+
   it('highlights the threatened wingman and missile attacker in both radar modes', () => {
     const { radar } = setupRadar();
     const wingman = makeContact(250, 300, 1800);

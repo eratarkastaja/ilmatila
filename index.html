@@ -72,6 +72,15 @@
 
           <div id="standalone-mission-selection">
             <div class="mission-heading"><span>01</span><strong data-i18n="menu.chooseProfile">Select a mission</strong><i data-i18n="menu.missionCount">4 MISSIONS</i></div>
+            <div id="dev-mission-picker" class="dev-mission-picker" hidden>
+              <label for="dev-mission-select"><span data-i18n="menu.devMissionKicker">DEV</span><strong data-i18n="menu.devMissionLabel">MISSION SELECT</strong></label>
+              <div class="select-wrap"><select id="dev-mission-select" data-i18n-aria-label="menu.devMissionAria">
+                <option value="patrol" data-i18n="mission.patrol.title">COMBAT AIR PATROL</option>
+                <option value="intercept" data-i18n="mission.intercept.title">INTERCEPT FLIGHT</option>
+                <option value="support" data-i18n="mission.support.title">CLOSE AIR SUPPORT</option>
+                <option value="training" data-i18n="mission.training.title">TRAINING SORTIE</option>
+              </select><i>⌄</i></div>
+            </div>
             <div class="mission-grid" role="group" data-i18n-aria-label="menu.selectMissionAria">
             <button class="mission-card selected" type="button" data-mission="patrol" aria-pressed="true">
               <span class="mission-card-top"><b>01 / CAP</b><i data-i18n="mission.patrol.posture">ON STATION</i></span>

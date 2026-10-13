@@ -37,10 +37,10 @@ export class MissionSystem {
   update(dt, destroyed = false) {
     if (this.outcome !== MISSION_OUTCOME.ACTIVE || !this.objectiveActive || this.objectiveSatisfied) return;
     const remaining = this.getRemaining(this.remaining);
-    if(this.objective.type==='training'){
-      const delta=Number.isFinite(dt)?Math.max(0,dt):0;
-      this.elapsed=Math.min(this.objective.duration??90,this.elapsed+delta);
-    }
+    const delta=Number.isFinite(dt)?Math.max(0,dt):0;
+    this.elapsed=this.objective.type==='training'
+      ? Math.min(this.objective.duration??90,this.elapsed+delta)
+      : this.elapsed+delta;
     Object.assign(this.evaluation,remaining);
     this.evaluation.elapsed=this.elapsed;
     this.evaluation.airRemaining=remaining.airRemaining;
@@ -115,6 +115,7 @@ export class MissionSystem {
         :t('mission.progress.airPolicingEscort',params);
     } else if (this.objective.type === 'assetDefense') {
       params.remaining=remaining.priorityTargetsRemaining??0;
+      params.airRemaining=remaining.airRemaining??0;
       progressText=t('mission.progress.assetDefense',params);
     } else if (this.objective.type === 'forceDefense') {
       params.airRemaining=remaining.airRemaining;

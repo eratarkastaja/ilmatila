@@ -31,6 +31,8 @@ npm run dev
 
 Use `npm run build` to create the production site and `npm run preview` to serve it locally. Run the automated checks with `npm test` and `npm run lint`; `npm run test:watch` runs Vitest in watch mode.
 
+The Vite development server shows a **DEV / MISSION SELECT** dropdown and keeps all standalone missions selectable, so gameplay work can be tested without completing the unlock chain. Production builds keep the normal progression locks.
+
 ## Current game
 
 The available standalone sorties are Combat Air Patrol, Intercept Flight, Close Air Support, and Training. The campaign **Shadow at the Border** links ten sorties from an airspace incursion over Virolahti to a ground invasion and counterattack. It stores independent Easy, Standard, and Hard runs locally, carries air control, defense integrity, and sortie readiness between chapters, and lets the player accept a result or retry the same seeded encounter. Unknown Track uses visual-range identification, a sustained escort, and enforced weapons hold. Broken Silence can end in a recovered setback if its strike aircraft reaches the protected zone, while The Border Breaks uses the surviving defensive-line strength and permits hostile armor to remain. The other chapters currently reuse the existing Patrol, Intercept, and Support rules while their operational objectives are developed.

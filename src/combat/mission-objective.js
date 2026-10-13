@@ -22,7 +22,9 @@ export function evaluateMissionObjective(objective, {
   if (outcome !== MISSION_OUTCOME.ACTIVE) return outcome;
   if (destroyed) return MISSION_OUTCOME.FAILED;
 
-  if (objective.type === 'assetDefense' && protectedAssetLost) return MISSION_OUTCOME.SETBACK;
+  if (objective.type === 'assetDefense'
+    && protectedAssetLost
+    && elapsed >= (objective.graceDuration ?? 0)) return MISSION_OUTCOME.SETBACK;
   if (objective.type === 'forceDefense'
     && friendlyStrengthFraction < (objective.minimumFriendlyStrength ?? 0)) {
     return MISSION_OUTCOME.SETBACK;
@@ -36,7 +38,7 @@ export function evaluateMissionObjective(objective, {
         ? identifiedCount >= Math.min(contactCount, objective.requiredContacts ?? contactCount)
           && escortElapsed >= (objective.escortDuration ?? 15)
         : objective.type === 'assetDefense'
-          ? priorityTargetsRemaining <= 0
+          ? priorityTargetsRemaining <= 0 && airRemaining <= 0
           : objective.type === 'forceDefense'
             ? airRemaining <= 0 && groundRemaining <= (objective.maximumGroundRemaining ?? 0)
             : airRemaining <= 0;

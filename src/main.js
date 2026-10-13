@@ -37,6 +37,8 @@ const flightHud = document.querySelector('#flight-hud');
 const menuStatus = document.querySelector('#menu-status');
 const menuTheater = document.querySelector('#menu-theater');
 const menuDifficulty = document.querySelector('#menu-difficulty');
+const devMissionPicker = document.querySelector('#dev-mission-picker');
+const devMissionSelect = document.querySelector('#dev-mission-select');
 const launchButton = document.querySelector('#launch-mission');
 const launchErrorDialog = document.querySelector('#launch-error-dialog');
 const launchErrorTitle = document.querySelector('#launch-error-title');
@@ -72,11 +74,13 @@ const campaignProgress = new CampaignProgress();
 const campaignView = new CampaignView(document);
 menuDifficulty.value = careerProgress.difficulty;
 const urlParams = new URLSearchParams(location.search);
-const stressMode = import.meta.env.DEV && urlParams.get('stress') === '1';
-const telemetryMode = import.meta.env.DEV;
+const developmentMode = import.meta.env.DEV;
+const stressMode = developmentMode && urlParams.get('stress') === '1';
+const telemetryMode = developmentMode;
+devMissionPicker.hidden = !developmentMode;
 const areaAliases = new Map([['vironlahti', 'virolahti']]);
 let selectedMissionId = Object.hasOwn(MISSIONS, urlParams.get('mission')) ? urlParams.get('mission') : 'patrol';
-if (!careerProgress.isUnlocked(selectedMissionId)) selectedMissionId = 'patrol';
+if (!developmentMode && !careerProgress.isUnlocked(selectedMissionId)) selectedMissionId = 'patrol';
 let selectedMissionDefinition = MISSIONS[selectedMissionId];
 let plannedSortieSeed = null;
 let launchAttempt = 0;
@@ -291,7 +295,8 @@ if (frameProfiler) {
     reset: () => frameProfiler.reset(),
     startSortie: async ({ missionId = selectedMissionId, seed = null } = {}) => {
       if (sortie?.started || sortie?.launchInProgress) return false;
-      if (!Object.hasOwn(MISSIONS, missionId) || !careerProgress.isUnlocked(missionId)) return false;
+      if (!Object.hasOwn(MISSIONS, missionId)
+        || (!developmentMode && !careerProgress.isUnlocked(missionId))) return false;
       if (playMode === 'campaign') activateStandaloneMode();
       if (missionId !== selectedMissionId) selectMission(missionId);
       if (seed !== null) {
@@ -402,7 +407,7 @@ function ensureTerrainLoaded(areaId, onProgress, signal) {
 function renderMissionProgress() {
   for (const card of missionCards) {
     const id = card.dataset.mission;
-    const unlocked = careerProgress.isUnlocked(id);
+    const unlocked = developmentMode || careerProgress.isUnlocked(id);
     const state = card.querySelector('[data-mission-state]');
     const best = careerProgress.getBest(id);
     card.disabled = !unlocked;
@@ -426,9 +431,11 @@ function renderMissionProgress() {
 }
 
 function selectMission(id) {
-  if (!Object.hasOwn(MISSIONS, id) || !careerProgress.isUnlocked(id)) return false;
+  if (!Object.hasOwn(MISSIONS, id)
+    || (!developmentMode && !careerProgress.isUnlocked(id))) return false;
   if (selectedMissionId !== id || plannedSortieSeed === null) plannedSortieSeed = createSortieSeed();
   selectedMissionId = id;
+  if (devMissionSelect && devMissionSelect.value !== id) devMissionSelect.value = id;
   const baseMission = stressMode ? { ...MISSIONS[id], variants: [] } : MISSIONS[id];
   selectedMissionDefinition = baseMission;
   const missionResolution = resolveMissionVariant(baseMission, plannedSortieSeed);
@@ -681,6 +688,9 @@ menuDifficulty.addEventListener('change', () => {
 });
 
 for (const card of missionCards) card.addEventListener('click', () => selectMission(card.dataset.mission));
+devMissionSelect?.addEventListener('change', () => {
+  if (playMode === 'standalone') selectMission(devMissionSelect.value);
+});
 campaignView.standaloneModeButton.addEventListener('click', activateStandaloneMode);
 campaignView.campaignModeButton.addEventListener('click', activateCampaignMode);
 

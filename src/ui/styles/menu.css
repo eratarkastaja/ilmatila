@@ -303,6 +303,49 @@
   font-style: normal;
 }
 
+.dev-mission-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: -2px 0 9px;
+  padding: 8px 10px;
+  border: 1px dashed rgba(169,225,189,.38);
+  background: rgba(8,24,26,.72);
+}
+
+.dev-mission-picker[hidden] {
+  display: none;
+}
+
+.dev-mission-picker label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: #a9e1bd;
+  font: 700 11px Rajdhani,sans-serif;
+  letter-spacing: .12em;
+  white-space: nowrap;
+}
+
+.dev-mission-picker label strong {
+  color: #dce9df;
+  font: inherit;
+}
+
+.dev-mission-picker .select-wrap {
+  width: min(270px, 58%);
+}
+
+.dev-mission-picker .select-wrap select {
+  padding-top: 7px;
+  padding-bottom: 7px;
+  color: #bde7ca;
+  border-color: rgba(169,225,189,.5);
+  background: #07191ae6;
+  font-size: 14px;
+}
+
 .mission-grid {
   display: grid;
   grid-template-columns: repeat(2,minmax(0,1fr));
@@ -2448,6 +2491,14 @@
   .mission-grid {
     grid-template-columns: 1fr;
     gap: 9px;
+  }
+  .dev-mission-picker {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .dev-mission-picker .select-wrap {
+    width: 100%;
   }
   .mission-card {
     min-height: 0;

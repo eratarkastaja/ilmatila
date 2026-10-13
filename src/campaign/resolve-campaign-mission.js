@@ -66,14 +66,23 @@ function tuneOperationalObjective(objective, difficulty, hostileCount) {
       tuned.escortRange = Math.round(tuned.escortRange * 1.3);
       tuned.escortDuration *= .5;
     } else if (difficulty === 'hard') {
-      tuned.identifyRange = Math.round(tuned.identifyRange * .78);
-      tuned.identifyDuration *= 1.5;
-      tuned.escortRange = Math.round(tuned.escortRange * .78);
-      tuned.escortDuration *= 1.6;
+      tuned.identifyRange = Math.round(tuned.identifyRange * .9);
+      tuned.identifyDuration *= 1.25;
+      tuned.escortRange = Math.round(tuned.escortRange * .95);
+      tuned.escortDuration *= 1.35;
     }
   } else if (tuned.type === 'assetDefense') {
-    if (difficulty === 'easy') tuned.zoneRadius = Math.round(tuned.zoneRadius * .78);
-    else if (difficulty === 'hard') tuned.zoneRadius = Math.round(tuned.zoneRadius * 1.18);
+    tuned.graceDuration = Number.isFinite(tuned.graceDuration) ? tuned.graceDuration : 0;
+    if (difficulty === 'easy') {
+      tuned.zoneRadius = Math.round(tuned.zoneRadius * .78);
+      tuned.graceDuration *= .75;
+    } else if (difficulty === 'hard') {
+      // Hard should demand a fast response, not fail while the player is still
+      // flying the ingress leg. Give the strike a little more setup time and
+      // keep the loss zone tight enough to leave a readable rescue window.
+      tuned.zoneRadius = Math.round(tuned.zoneRadius * .9);
+      tuned.graceDuration *= 1.5;
+    }
   } else if (tuned.type === 'forceDefense') {
     if (difficulty === 'easy') {
       tuned.minimumFriendlyStrength = Math.max(.1, tuned.minimumFriendlyStrength - .2);

@@ -82,6 +82,7 @@ export const CAMPAIGNS = deepFreeze({
             type: 'assetDefense',
             target: { collection: 'airHostiles', index: 2 },
             zoneRadius: 7200,
+            graceDuration: 18,
           },
         },
         decisive: airSuccess('relay-saved', 9),

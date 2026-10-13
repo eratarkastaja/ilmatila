@@ -43,8 +43,11 @@ describe('mission objective progression', () => {
 
   it('resolves asset and force defense as success or setback at authored thresholds', () => {
     expect(evaluateMissionObjective({ type: 'assetDefense' }, {
-      priorityTargetsRemaining: 0,
+      priorityTargetsRemaining: 0, airRemaining: 0,
     })).toBe(MISSION_OUTCOME.COMPLETE);
+    expect(evaluateMissionObjective({ type: 'assetDefense' }, {
+      priorityTargetsRemaining: 0, airRemaining: 1,
+    })).toBe(MISSION_OUTCOME.ACTIVE);
     expect(evaluateMissionObjective({ type: 'assetDefense' }, {
       priorityTargetsRemaining: 1,
       protectedAssetLost: true,

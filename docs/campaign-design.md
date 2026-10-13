@@ -133,10 +133,13 @@ the hostile arrival.
 
 **Broken Silence** is the first combat sortie. A Sweep element tries to occupy
 the player and wingmen while Strike aircraft route toward a fictional relay.
-The primary objective is to keep the relay operational until the attackers are
-destroyed or driven away. Air kills alone are insufficient if the Strike element
-reaches the site. The transition from identification to combat is announced by a
-clear hostile act and weapons-free radio call.
+The primary objective is to keep the relay operational until every attacker is
+destroyed or driven away. Air kills alone are insufficient if any hostile flight
+remains; the objective readout shows both the protected strike target and the
+remaining hostile aircraft. Hard gives the player a short recovery window after
+ingress before a target that has already reached the relay becomes a setback.
+The transition from identification to combat is announced by a clear hostile act
+and weapons-free radio call.
 
 ### Act II: survive the opening blow, sorties 3-5
 
@@ -282,7 +285,7 @@ difficulty records are comparable.
 | Hostile force scale | About 60-70% of Standard; no surprise reinforcements during recovery | Authored baseline | About 120-135%; added units serve distinct roles rather than forming one blob |
 | Immediate complications | One; the next waits for a clear recovery window | One, with shorter recovery windows | Up to two, announced and normally separated by at least three seconds |
 | Player resilience | High hull, low incoming damage, and one weapon-hit grace per sortie | Current baseline | Lower hull and greater incoming damage; no grace |
-| Stores | Generous air and ground missiles, unlimited cannon, unlimited fuel | Baseline stores and a forgiving tactical fuel budget | Six or fewer missiles per role where mission-feasible, limited cannon and a meaningful tactical fuel budget |
+| Stores | Generous air and ground missiles, unlimited cannon, unlimited fuel | Baseline stores and a forgiving tactical fuel budget | Eight missiles per role, limited cannon and a meaningful tactical fuel budget |
 | Enemy reaction | Long detection/reaction delay, poor coordination, rare second countermeasure attempt | Baseline | Fast reaction, coordinated Sweep/Strike tasks, energy-aware focus, disciplined countermeasures |
 | Wingmen | Durable, accurate, proactive, and quick to obey | Baseline | Useful but unable to win the mission unattended; orders are essential |
 | Objective tolerance | Low protected-force threshold, generous timers, full route and target prompts | Authored baseline | Higher survival thresholds, tighter timers, fewer predictive prompts |

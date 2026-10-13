@@ -73,6 +73,23 @@ describe('MissionFlowSystem', () => {
     expect(onRtb).toHaveBeenCalledOnce();
   });
 
+  it('accepts a fast ingress pass that crosses the waypoint between frames', () => {
+    const { flow, player, onIngress } = createFlow({
+      hostiles: 0,
+      departureDuration: 0,
+      navigationDistance: 4000,
+      navigationRadius: 100,
+    });
+    flow.update(0.1);
+    player.position.set(flow.ingress.x - 500, flow.ingress.y, flow.ingress.z);
+    flow.update(0.1);
+    expect(flow.phase).toBe(MISSION_PHASE.NAVIGATION);
+    player.position.set(flow.ingress.x + 500, flow.ingress.y, flow.ingress.z);
+    flow.update(0.1);
+    expect(flow.phase).toBe(MISSION_PHASE.OBJECTIVE);
+    expect(onIngress).toHaveBeenCalledOnce();
+  });
+
   it('ends a destroyed aircraft sortie as failed', () => {
     const { flow, onEnd } = createFlow();
 
