@@ -2111,6 +2111,11 @@
 
 .report-issue-actions a,
 .report-issue-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 35px;
   min-height: 35px;
   padding: 0 11px;
   border: 1px solid #759d81aa;
@@ -2118,6 +2123,7 @@
   background: #10251bd9;
   font: 700 11px Rajdhani,sans-serif;
   letter-spacing: .08em;
+  line-height: 1;
   text-decoration: none;
   cursor: pointer;
 }
