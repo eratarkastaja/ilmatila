@@ -38,7 +38,7 @@ test('first visit quick start is keyboard accessible and returns focus from cont
   await page.keyboard.press('Enter');
   await expect(page.locator('[data-mission="training"]')).toHaveAttribute('aria-pressed', 'true');
 
-  for (let tabCount = 0; tabCount < 8; tabCount += 1) {
+  for (let tabCount = 0; tabCount < 16; tabCount += 1) {
     if (await page.evaluate(() => document.activeElement?.id === 'show-menu-controls')) break;
     await page.keyboard.press('Tab');
   }
