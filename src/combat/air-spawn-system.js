@@ -178,6 +178,7 @@ export class AirSpawnSystem {
         radarTeam: nonCombatant ? 'unknown' : 'hostile',
         identificationProgress: 0,
         missionRole,
+        missionTargetRoleKey: missionRole === 'strike' ? 'combat.airTargetRole.strike' : null,
         hp: maxHp,
         maxHp,
         heading: initialHeading,

@@ -119,6 +119,11 @@ const difficultySchema = object({
         life: number(.1, 120), coastDrag: number(0, 3), damage: number(0, 500),
         proximityRadius: number(0, 500),
       }),
+      helicopter: object({
+        speed: number(1, 3000), turnRate: number(.01, 10), burnTime: number(0, 60),
+        life: number(.1, 120), coastDrag: number(0, 3), damage: number(0, 500),
+        proximityRadius: number(0, 500),
+      }),
     }),
   }),
   wingman: object({

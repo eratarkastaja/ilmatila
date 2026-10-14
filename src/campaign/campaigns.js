@@ -162,7 +162,7 @@ export const CAMPAIGNS = deepFreeze({
         },
       }),
       chapter({
-        id: 'northern-feint', day: 3, timeOfDay: 16.5, areaId: 'ilomantsi', baseMissionId: 'intercept',
+        id: 'northern-feint', day: 3, timeOfDay: 20.5, areaId: 'ilomantsi', baseMissionId: 'intercept',
         decisiveObjectiveId: 'time-limit',
         missionOverrides: {
           objective: { type: 'clearAir', setback: { type: 'deadline', duration: 360 } },
@@ -219,7 +219,7 @@ export const CAMPAIGNS = deepFreeze({
         },
       }),
       chapter({
-        id: 'hold-e18', day: 6, timeOfDay: 16.5, areaId: 'virolahti', baseMissionId: 'support',
+        id: 'hold-e18', day: 6, timeOfDay: 20.5, areaId: 'virolahti', baseMissionId: 'support',
         decisiveObjectiveId: 'protect-friendly',
         missionOverrides: {
           objective: { type: 'holdPosition', duration: 300, setback: { type: 'friendlyStrength', minimum: 0.5 } },

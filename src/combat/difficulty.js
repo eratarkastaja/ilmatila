@@ -100,6 +100,10 @@ export const DIFFICULTY_PRESETS = deepFreeze({
           coastDrag: 0.1,
           damage: 44,
           proximityRadius: 16
+        },
+        helicopter: {
+          speed: 455, turnRate: 1.0, burnTime: 4.2, life: 10,
+          coastDrag: .12, damage: 37, proximityRadius: 25
         }
       }
     },
@@ -231,6 +235,10 @@ export const DIFFICULTY_PRESETS = deepFreeze({
           coastDrag: 0.075,
           damage: 58,
           proximityRadius: 27
+        },
+        helicopter: {
+          speed: 455, turnRate: .88, burnTime: 4.2, life: 9.5,
+          coastDrag: .12, damage: 33, proximityRadius: 21
         }
       }
     },
@@ -368,6 +376,10 @@ export const DIFFICULTY_PRESETS = deepFreeze({
           coastDrag: 0.055,
           damage: 61,
           proximityRadius: 31
+        },
+        helicopter: {
+          speed: 455, turnRate: .72, burnTime: 4.0, life: 8.5,
+          coastDrag: .13, damage: 28, proximityRadius: 18
         }
       }
     },

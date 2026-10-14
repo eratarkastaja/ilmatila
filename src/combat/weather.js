@@ -1,5 +1,10 @@
 import * as THREE from 'three';
 
+// Sortie time follows the local clock at real-time speed: one game hour per
+// hour of flight. This keeps authored dawn/dusk atmosphere stable during a
+// normal sortie instead of making the sun jump several hours in minutes.
+export const REAL_TIME_HOURS_PER_SECOND = 1 / 3600;
+
 // Weather is authored per mission, then normalized once when a sortie starts.
 // The modifiers are intentionally small and readable: radar remains useful in
 // poor weather, while visual identification and unguided fire demand more
@@ -19,7 +24,7 @@ export const WEATHER_PRESETS = Object.freeze({
     contrailBaseAltitude: 5200,
     contrailFullAltitude: 6800,
     timeOfDay: 13.4,
-    timeAdvanceHoursPerSecond: .012,
+    timeAdvanceHoursPerSecond: REAL_TIME_HOURS_PER_SECOND,
     wind: Object.freeze({ x: 5, y: .15, z: -3 }),
   }),
   fog: Object.freeze({
@@ -35,7 +40,7 @@ export const WEATHER_PRESETS = Object.freeze({
     cloudBaseAltitude: 1800,
     contrailBaseAltitude: 2200,
     contrailFullAltitude: 4200,
-    timeAdvanceHoursPerSecond: .012,
+    timeAdvanceHoursPerSecond: REAL_TIME_HOURS_PER_SECOND,
     wind: Object.freeze({ x: 4, y: .1, z: -5 }),
   }),
   night: Object.freeze({
@@ -52,7 +57,7 @@ export const WEATHER_PRESETS = Object.freeze({
     contrailBaseAltitude: 4200,
     contrailFullAltitude: 6000,
     timeOfDay: 23.1,
-    timeAdvanceHoursPerSecond: .012,
+    timeAdvanceHoursPerSecond: REAL_TIME_HOURS_PER_SECOND,
     wind: Object.freeze({ x: 6, y: .1, z: -4 }),
   }),
   'low-cloud': Object.freeze({
@@ -69,7 +74,7 @@ export const WEATHER_PRESETS = Object.freeze({
     contrailBaseAltitude: 900,
     contrailFullAltitude: 1800,
     timeOfDay: 10.2,
-    timeAdvanceHoursPerSecond: .012,
+    timeAdvanceHoursPerSecond: REAL_TIME_HOURS_PER_SECOND,
     wind: Object.freeze({ x: 8, y: .15, z: -9 }),
   }),
   headwind: Object.freeze({
@@ -86,7 +91,7 @@ export const WEATHER_PRESETS = Object.freeze({
     contrailBaseAltitude: 5000,
     contrailFullAltitude: 6600,
     timeOfDay: 17.3,
-    timeAdvanceHoursPerSecond: .012,
+    timeAdvanceHoursPerSecond: REAL_TIME_HOURS_PER_SECOND,
     wind: Object.freeze({ x: 3, y: .12, z: -34 }),
   }),
 });

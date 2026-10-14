@@ -21,6 +21,8 @@ function makeState() {
     weapons: {
       gunAmmoRemaining: 100,
       missiles: { air: 4, ground: 2 },
+      airMissileType: 'amraam',
+      groundMissileType: 'maverick',
       cooldown: 0,
       feedbackKey: null,
       feedbackTimer: 0,
@@ -51,6 +53,27 @@ function makeState() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('CombatHud Support force status', () => {
+  it('shows the selected air-to-air and air-to-ground weapon variants', () => {
+    const nodes = new Map();
+    vi.stubGlobal('document', {
+      querySelector(selector) {
+        if (!nodes.has(selector)) nodes.set(selector, makeElement());
+        return nodes.get(selector);
+      },
+    });
+    const hud = new CombatHud();
+    const state = makeState();
+
+    state.weapons.airMissileType = 'sidewinder';
+    hud.update(state);
+    expect(hud.missileType.textContent).toBe('AIM-9X · SIDEWINDER');
+
+    state.radar.mode = 'ground';
+    state.weapons.groundMissileType = 'aargm';
+    hud.update(state);
+    expect(hud.missileType.textContent).toBe('AGM-88G · AARGM-ER');
+  });
+
   it('shows live defender integrity and hides the meter outside Support', () => {
     const nodes = new Map();
     vi.stubGlobal('document', {

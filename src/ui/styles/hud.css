@@ -1402,6 +1402,13 @@ canvas.night-vision-scene {
   filter: drop-shadow(0 0 4px #f2cf73);
 }
 
+.radar-contact.mission-target:before {
+  inset: -2px;
+  background: #f2cf73;
+  clip-path: polygon(50% 0%,61% 36%,98% 35%,68% 57%,79% 94%,50% 72%,21% 94%,32% 57%,2% 35%,39% 36%);
+  filter: drop-shadow(0 0 3px #f2cf73);
+}
+
 .selected-track-panel {
   --radar-size: 200px;
   --radar-bottom: 32px;

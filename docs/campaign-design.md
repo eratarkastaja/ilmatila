@@ -161,7 +161,10 @@ aim, detection, missile behavior, weapon stores, fuel, countermeasures,
 wingmen, and ground air-defense behavior.
 
 Campaign chapter times are fixed in production for atmosphere: 05:30, 23:30,
-08:00, 16:30, 05:30, 08:00, 16:30, 20:30, 20:30, and 12:00. Development mode
+08:00, 20:30, 05:30, 08:00, 20:30, 20:30, 20:30, and 12:00. Key dawn,
+sunset, and night sorties are intentional dramatic beats. The local sortie
+clock advances at 1:1 real time, so a normal flight does not jump several
+hours during its engagement. Development mode
 can override a chapter time without changing campaign state. Standalone
 sorties expose the time selector in the normal menu.
 

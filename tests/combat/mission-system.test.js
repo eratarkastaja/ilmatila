@@ -48,6 +48,16 @@ describe('MissionSystem', () => {
     expect(nodes.status.classList.add).toHaveBeenCalledWith('complete');
   });
 
+  it('identifies pending air reinforcements while the primary wave is clear', () => {
+    const { system, nodes, setRemaining } = makeMissionSystem({ type: 'clearAir' });
+
+    setRemaining({ airRemaining: 2, pendingAirRemaining: 2, groundRemaining: 0 });
+    system.update(1);
+
+    expect(system.outcome).toBe(MISSION_OUTCOME.ACTIVE);
+    expect(nodes.objectiveProgress.textContent).toBe('2 HOSTILE AIRCRAFT REMAIN · 2 INBOUND');
+  });
+
   it('requires both air and armed ground threats for support completion', () => {
     const { system, setRemaining } = makeMissionSystem({ type: 'support' });
     setRemaining({ airRemaining: 0, groundRemaining: 1 });

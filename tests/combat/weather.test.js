@@ -34,7 +34,7 @@ describe('mission weather', () => {
     const later = getWeatherTimeOfDay(weather, 300);
 
     expect(formatTimeOfDay(start)).toBe('23:06');
-    expect(formatTimeOfDay(later)).toBe('02:42');
+    expect(formatTimeOfDay(later)).toBe('23:11');
     expect(daylightFactor(12)).toBe(1);
     expect(isNightTime(23)).toBe(true);
     expect(isNightTime(12)).toBe(false);

@@ -193,9 +193,17 @@ export class CombatWorld {
     };
     this.radioPressureReported=false;
     this.encounterDirector=new EncounterDirector(this.encounters,{
-      onWarning:event=>this.radio.emit(event.warningEvent,{scope:event.id,params:{
-        minimum:String(event.delayRangeSeconds.min),maximum:String(event.delayRangeSeconds.max),
-      }}),
+      onWarning:event=>{
+        const response=event.response??{};
+        const bearing=THREE.MathUtils.euclideanModulo(response.bearingDegrees??0,360);
+        const range=response.spawnDistance??missionConfig.hostileSpawnDistance??0;
+        this.radio.emit(event.warningEvent,{scope:event.id,params:{
+          minimum:String(event.delayRangeSeconds.min),
+          maximum:String(event.delayRangeSeconds.max),
+          bearing:String(Math.round(bearing)%360).padStart(3,'0'),
+          range:formatNumber(range/1000,{minimumFractionDigits:1,maximumFractionDigits:1}),
+        }});
+      },
       onExecute:event=>this.airBattle.spawnEncounter(event),
     });
     this.baseObjectiveAirTotal=missionConfig.hostiles + (missionConfig.hostileHelicopters ?? 0);
@@ -280,7 +288,8 @@ export class CombatWorld {
         state.airRemaining=this.airBattle.hostilesSpawned
           ? 0
           : missionConfig.hostiles+(missionConfig.hostileHelicopters??0);
-        state.airRemaining += this.encounterDirector.getPendingHostileCount();
+        state.pendingAirRemaining=this.encounterDirector.getPendingHostileCount();
+        state.airRemaining += state.pendingAirRemaining;
         state.groundRemaining=0;
         if(this.airBattle.hostilesSpawned){
           for(const enemy of this.enemies)if(!enemy.dead)state.airRemaining++;
@@ -457,7 +466,15 @@ export class CombatWorld {
         hasLastKnownPosition:false,targetInSensorRange:false,inLockEnvelope:false,
         lockCueConfirmed:false,lockCueTarget:false,lock:0,
       },
-      weapons:{missiles:this.weaponSystem.missiles,gunAmmoRemaining:this.weaponSystem.gunAmmoRemaining,cooldown:0,feedbackKey:null,feedbackTimer:0},
+      weapons:{
+        missiles:this.weaponSystem.missiles,
+        airMissileType:this.weaponSystem.airMissileType,
+        groundMissileType:this.weaponSystem.groundMissileType,
+        gunAmmoRemaining:this.weaponSystem.gunAmmoRemaining,
+        cooldown:0,
+        feedbackKey:null,
+        feedbackTimer:0,
+      },
       fuel:{unlimited:this.fuelSystem.unlimited,fraction:this.fuelSystem.fraction},
       countermeasures:{flares:0,chaff:0},
       environment:{timeOfDay:this.weather.timeOfDay,night:false,nightVision:false},

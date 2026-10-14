@@ -24,6 +24,15 @@ export class AirWeaponAI {
   }
 
   fireHelicopterAirMissile(battle, enemy) {
+    const profile = battle.difficulty?.fighter?.missile?.helicopter ?? {
+      speed: 455,
+      turnRate: 1.0,
+      burnTime: 4.2,
+      life: 10,
+      coastDrag: .12,
+      damage: 37,
+      proximityRadius: 25,
+    };
     const stores = enemy.mesh.userData.airToAirStores ?? [];
     const start = this._helicopterMissileStart;
     let foundStore = false;
@@ -35,7 +44,7 @@ export class AirWeaponAI {
       break;
     }
     if (!foundStore) enemy.mesh.localToWorld(start.set(0, -0.2, -0.7));
-    const speed = 455;
+    const speed = profile.speed;
     const predicted = leadPoint(start, battle.player.position, battle.playerVelocity, speed, 8,
       enemy.lead, enemy.leadOffset);
     const aim = predicted.sub(start).normalize();
@@ -53,17 +62,17 @@ export class AirWeaponAI {
       mesh,
       velocity: aim.multiplyScalar(speed),
       speed,
-      burnRemaining: 4.2,
-      coastDrag: .12,
+      burnRemaining: profile.burnTime,
+      coastDrag: profile.coastDrag,
       motorBurning: true,
       guidanceActive: true,
       guidanceAfterBurnout: true,
       interceptLeadTime: 8,
-      turnRate: 1.0,
+      turnRate: profile.turnRate,
       coastTurnScale: .62,
-      life: 10,
-      damage: 37,
-      proximityRadius: 25,
+      life: profile.life,
+      damage: profile.damage,
+      proximityRadius: profile.proximityRadius,
       warningClock: 0,
       decoyTarget: null,
       target: battle.player,

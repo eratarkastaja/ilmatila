@@ -1,4 +1,4 @@
-import { MISSILE_PROFILES } from '../combat/projectiles.js';
+import { getPlayerMissileProfile } from '../combat/projectiles.js';
 import { formatNumber, t } from './i18n.js';
 import { formatTimeOfDay } from '../combat/weather.js';
 
@@ -239,7 +239,9 @@ export class CombatHud {
       setClassIfChanged(this.ammo, 'ground-target', radar.targetDomain === 'ground');
     }
 
-    const profile = radar.mode === 'ground' ? MISSILE_PROFILES.playerGround : MISSILE_PROFILES.playerAir;
+    const profile = radar.mode === 'ground'
+      ? getPlayerMissileProfile('ground', weapons.groundMissileType)
+      : getPlayerMissileProfile('air', weapons.airMissileType);
     setTextIfChanged(this.missileType, profile.designation);
     setTextIfChanged(this.missileCount, String(weapons.missiles[radar.mode]).padStart(2, '0'));
     setTextIfChanged(this.score, String(state.score).padStart(5, '0'));

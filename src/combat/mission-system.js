@@ -15,7 +15,7 @@ export class MissionSystem {
       friendlyStrengthFraction:1,destroyed:false,outcome:MISSION_OUTCOME.ACTIVE,
     };
     this._progressParams={
-      elapsed:0,duration:0,remaining:0,airRemaining:0,airTotal:0,
+      elapsed:0,duration:0,remaining:0,airRemaining:0,pendingAirRemaining:0,airTotal:0,
       groundRemaining:0,groundTotal:0,identified:0,total:0,seconds:0,strength:0,
     };
     this.nodes = nodes;
@@ -136,7 +136,10 @@ export class MissionSystem {
       progressText=t('mission.progress.forceDefense',params);
     } else {
       params.remaining=remaining.airRemaining;
-      progressText = t('mission.progress.air',params);
+      params.pendingAirRemaining=remaining.pendingAirRemaining??0;
+      progressText = params.pendingAirRemaining > 0
+        ? t('mission.progress.airInbound',params)
+        : t('mission.progress.air',params);
     }
     if(objectiveProgress.textContent!==progressText)objectiveProgress.textContent=progressText;
   }
