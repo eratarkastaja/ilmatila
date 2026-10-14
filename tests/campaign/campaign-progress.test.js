@@ -91,6 +91,22 @@ describe('CampaignProgress', () => {
     expect(new CampaignProgress(createStorage()).getSave('standard')).toBeNull();
   });
 
+  it('does not restore a sustainment choice after a retry consumed its window', () => {
+    const loaded = new CampaignProgress(createStorage(JSON.stringify({
+      version: 1,
+      saves: {
+        standard: save({
+          chapterIndex: 2,
+          sustainmentChoice: 'partial-rearm',
+          sustainmentUsed: true,
+        }),
+      },
+    }))).getSave('standard');
+
+    expect(loaded.sustainmentUsed).toBe(true);
+    expect(loaded.sustainmentChoice).toBeNull();
+  });
+
   it('recovers from corrupt or unavailable storage', () => {
     const brokenStorage = {
       getItem() { throw new Error('unavailable'); },

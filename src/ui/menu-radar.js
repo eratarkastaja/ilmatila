@@ -189,7 +189,45 @@ export class MenuRadar {
     this.missionId = missionResolution.mission.id;
     this.seed = seed === undefined ? null : Number(seed) >>> 0;
 
-    for (const contact of getScenarioContacts(missionResolution, terrain, origin, heading, this.seed ?? DEFAULT_RANDOM_SEED)) {
+    this.setContacts(getScenarioContacts(missionResolution, terrain, origin, heading, this.seed ?? DEFAULT_RANDOM_SEED), origin, heading);
+  }
+
+  setIntel(intel, { origin = new THREE.Vector3(), heading = 0 } = {}) {
+    if (!intel || !this.scope) return;
+    for (const contact of this.contacts) contact.element.remove();
+    this.contacts.length = 0;
+    const count = Math.min(3, Math.max(2, Math.ceil((intel.minimumStrength + intel.maximumStrength) / 2)));
+    const sectorIndex = ['north', 'northeast', 'east', 'southeast', 'southwest', 'west', 'northwest']
+      .findIndex(sector => intel.sectorKey.endsWith(`.${sector}`));
+    const bearing = ((sectorIndex < 0 ? 0 : sectorIndex) / 7) * Math.PI * 2;
+    const contacts = Array.from({ length: count }, (_, index) => {
+      const offset = (index - (count - 1) / 2) * .08;
+      const range = 11500 + index * 420;
+      const contactBearing = bearing + offset;
+      return {
+        bearing: contactBearing,
+        range,
+        team: 'unknown',
+        domain: 'air',
+        position: origin.clone().add(new THREE.Vector3(Math.sin(contactBearing), 0, Math.cos(contactBearing)).multiplyScalar(range)),
+        reinforcement: false,
+      };
+    });
+    this.setContacts(contacts, origin, heading);
+    if (this.readout) this.readout.textContent = t('campaign.intel.radarReadout', {
+      minimum: intel.minimumStrength,
+      maximum: intel.maximumStrength,
+    });
+  }
+
+  setContacts(contacts, origin, heading) {
+    for (const contact of contacts) {
+      const dx = contact.position.x - origin.x;
+      const dz = contact.position.z - origin.z;
+      const bearing = Math.atan2(dx, dz) - heading;
+      const radius = Math.min(contact.range / AIR_RADAR_RANGE, 1) * RADAR_RADIUS_PERCENT;
+      contact.left = 50 - Math.sin(bearing) * radius;
+      contact.top = 50 - Math.cos(bearing) * radius;
       const element = document.createElement('b');
       element.className = `grid-contact contact-${contact.team} contact-air${contact.reinforcement ? ' contact-reinforcement' : ''}`;
       element.style.left = `${contact.left}%`;

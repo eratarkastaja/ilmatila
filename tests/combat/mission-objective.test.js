@@ -27,6 +27,21 @@ describe('mission objective progression', () => {
       .toBe(MISSION_OUTCOME.COMPLETE);
   });
 
+  it('supports campaign hold and logistics objectives without clearing every threat', () => {
+    expect(evaluateMissionObjective({ type: 'holdPosition', duration: 180 }, {
+      elapsed: 180, airRemaining: 4, groundRemaining: 8,
+    })).toBe(MISSION_OUTCOME.COMPLETE);
+    expect(evaluateMissionObjective({ type: 'holdPosition', duration: 180 }, {
+      elapsed: 179.9, airRemaining: 0, groundRemaining: 0,
+    })).toBe(MISSION_OUTCOME.ACTIVE);
+    expect(evaluateMissionObjective({ type: 'logisticsStrike' }, {
+      priorityTargetsRemaining: 0, airRemaining: 4, groundRemaining: 8,
+    })).toBe(MISSION_OUTCOME.COMPLETE);
+    expect(evaluateMissionObjective({ type: 'strikeDefense' }, {
+      priorityTargetsRemaining: 0, airRemaining: 3,
+    })).toBe(MISSION_OUTCOME.COMPLETE);
+  });
+
   it('completes air policing after identification and a sustained escort', () => {
     const objective = { type: 'airPolicing', requiredContacts: 2, escortDuration: 12 };
 
@@ -62,6 +77,27 @@ describe('mission objective progression', () => {
     expect(evaluateMissionObjective(forceDefense, {
       airRemaining: 0, groundRemaining: 2, friendlyStrengthFraction: 0.39,
     })).toBe(MISSION_OUTCOME.SETBACK);
+  });
+
+  it('turns authored deadlines and defensive-line losses into recoverable setbacks', () => {
+    expect(evaluateMissionObjective({
+      type: 'clearAir',
+      setback: { type: 'deadline', duration: 120 },
+    }, { elapsed: 120, airRemaining: 2 })).toBe(MISSION_OUTCOME.SETBACK);
+
+    expect(evaluateMissionObjective({
+      type: 'support',
+      setback: { type: 'friendlyStrength', minimum: .5 },
+    }, { friendlyStrengthFraction: .49, groundRemaining: 4 })).toBe(MISSION_OUTCOME.SETBACK);
+
+    expect(evaluateMissionObjective({
+      type: 'clearAir',
+      setback: { type: 'assetLost', graceDuration: 3 },
+    }, { elapsed: 2.9, protectedAssetLost: true, priorityTargetsRemaining: 1 })).toBe(MISSION_OUTCOME.ACTIVE);
+    expect(evaluateMissionObjective({
+      type: 'clearAir',
+      setback: { type: 'assetLost', graceDuration: 3 },
+    }, { elapsed: 3, protectedAssetLost: true, priorityTargetsRemaining: 1 })).toBe(MISSION_OUTCOME.SETBACK);
   });
 
   it('advances training time without exceeding its duration', () => {

@@ -589,7 +589,11 @@ describe('main game session lifecycle', () => {
 
     const { CampaignProgress } = await import('../../src/campaign/campaign-progress.js');
     const retrySave = new CampaignProgress(globalThis.localStorage).getSave('standard');
-    expect(retrySave).toMatchObject({ chapterIndex: 0, chapterRetryCount: 1 });
+    expect(retrySave).toMatchObject({
+      chapterIndex: 0,
+      chapterRetryCount: 1,
+      sortieReadiness: 67,
+    });
     expect(retrySave.currentSeed).toBe(firstWorld.seed);
     expect(retrySave.currentAttemptId).not.toBe(firstWorld.mission.campaignAttemptId);
 

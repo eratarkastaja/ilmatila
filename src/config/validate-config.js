@@ -301,6 +301,9 @@ function validateObjective(objective, path, errors) {
     clearAir: [],
     support: [],
     training: ['duration'],
+    holdPosition: ['duration'],
+    logisticsStrike: [],
+    strikeDefense: [],
     airPolicing: ['identifyRange', 'identifyDuration', 'escortRange', 'escortDuration'],
     assetDefense: ['target', 'zoneRadius', 'graceDuration'],
     forceDefense: ['minimumFriendlyStrength', 'maximumGroundRemaining'],
@@ -310,14 +313,15 @@ function validateObjective(objective, path, errors) {
     errors.push(`${path}.type is not a recognized mission objective type`);
     return;
   }
-  const keys = ['type', ...fields];
+  const keys = ['type', 'setback', ...fields];
   for (const key of keys) {
-    if (!(key in objective)) errors.push(`${path}.${key} is required`);
+    if (key !== 'setback' && !(key in objective)) errors.push(`${path}.${key} is required`);
   }
   for (const key of Object.keys(objective)) {
     if (!keys.includes(key)) errors.push(`${path}.${key} is not valid for ${objective.type}`);
   }
   if (objective.type === 'training') validateNode(objective.duration, number(1, 3600), `${path}.duration`, errors);
+  if (objective.type === 'holdPosition') validateNode(objective.duration, number(1, 3600), `${path}.duration`, errors);
   if (objective.type === 'airPolicing') {
     validateNode(objective.identifyRange, number(100, 20000), `${path}.identifyRange`, errors);
     validateNode(objective.identifyDuration, number(.1, 120), `${path}.identifyDuration`, errors);
@@ -335,6 +339,46 @@ function validateObjective(objective, path, errors) {
     validateNode(objective.minimumFriendlyStrength, number(0, 1), `${path}.minimumFriendlyStrength`, errors);
     validateNode(objective.maximumGroundRemaining, number(0, 200, true), `${path}.maximumGroundRemaining`, errors);
   }
+  if (objective.setback !== undefined) validateObjectiveSetback(objective.setback, `${path}.setback`, errors);
+}
+
+function validateObjectiveSetback(setback, path, errors) {
+  const conditions = Array.isArray(setback) ? setback : [setback];
+  if (conditions.length === 0) {
+    errors.push(`${path} must contain at least one condition`);
+    return;
+  }
+  conditions.forEach((condition, index) => {
+    const conditionPath = Array.isArray(setback) ? `${path}[${index}]` : path;
+    if (!condition || typeof condition !== 'object' || Array.isArray(condition)) {
+      errors.push(`${conditionPath} must be an object`);
+      return;
+    }
+    const fieldsByType = {
+      deadline: ['duration'],
+      assetLost: ['graceDuration'],
+      friendlyStrength: ['minimum'],
+      groundBreakthrough: ['maximumGroundRemaining'],
+    };
+    const fields = fieldsByType[condition.type];
+    if (!fields) {
+      errors.push(`${conditionPath}.type is not a recognized setback type`);
+      return;
+    }
+    const allowed = ['type', ...fields];
+    for (const key of Object.keys(condition)) {
+      if (!allowed.includes(key)) errors.push(`${conditionPath}.${key} is not valid for ${condition.type}`);
+    }
+    for (const key of fields) {
+      if (!(key in condition)) errors.push(`${conditionPath}.${key} is required`);
+    }
+    if (condition.type === 'deadline') validateNode(condition.duration, number(1, 3600), `${conditionPath}.duration`, errors);
+    if (condition.type === 'assetLost') validateNode(condition.graceDuration, number(0, 600), `${conditionPath}.graceDuration`, errors);
+    if (condition.type === 'friendlyStrength') validateNode(condition.minimum, number(0, 1), `${conditionPath}.minimum`, errors);
+    if (condition.type === 'groundBreakthrough') {
+      validateNode(condition.maximumGroundRemaining, number(0, 500, true), `${conditionPath}.maximumGroundRemaining`, errors);
+    }
+  });
 }
 
 function validateOptionalObjectiveTarget(target, path, expectedCollection, errors) {
@@ -844,6 +888,7 @@ export function validateCampaigns(campaigns = CAMPAIGNS, missions = MISSIONS) {
       }
       const chapterKeys = new Set([
         'id', 'day', 'timeOfDay', 'areaId', 'baseMissionId', 'titleKey', 'briefingKey',
+        'radioBriefingKey',
         'decisiveObjectiveId', 'effects', 'missionOverrides', 'sustainmentDecision',
         'optionalObjectiveEffects',
       ]);
@@ -851,6 +896,7 @@ export function validateCampaigns(campaigns = CAMPAIGNS, missions = MISSIONS) {
         if (!chapterKeys.has(key)) errors.push(`${chapterPath}.${key} is not a recognized setting`);
       }
       validateNode(chapter.id, string, `${chapterPath}.id`, errors);
+      validateNode(chapter.radioBriefingKey, string, `${chapterPath}.radioBriefingKey`, errors);
       if (chapterIds.has(chapter.id)) errors.push(`${path}.chapters contains duplicate id "${chapter.id}"`);
       chapterIds.add(chapter.id);
       validateNode(chapter.day, number(1, 365, true), `${chapterPath}.day`, errors);

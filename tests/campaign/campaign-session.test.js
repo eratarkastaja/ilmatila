@@ -32,6 +32,7 @@ describe('CampaignSession', () => {
     expect(first.preview.mission.weather.timeOfDay).toBe(5.5);
 
     expect(session.retryCurrent()).toBe(true);
+    expect(session.state.sortieReadiness).toBe(67);
     const retry = session.resolveCurrentMission();
     expect(retry.seed).toBe(first.seed);
     expect(retry.preview.variant).toEqual(first.preview.variant);
@@ -39,6 +40,72 @@ describe('CampaignSession', () => {
     expect(retry.preview.mission.hostiles).toBe(first.preview.mission.hostiles);
     expect(retry.preview.mission.weather.timeOfDay).toBe(first.preview.mission.weather.timeOfDay);
     expect(retry.attemptId).not.toBe(first.attemptId);
+  });
+
+  it('consumes a selected sustainment window when retrying and does not restore it', () => {
+    const session = new CampaignSession({
+      progress: new CampaignProgress(memoryStorage()),
+      difficulty: 'standard',
+      seedFactory: () => 321,
+    });
+    session.state.chapterIndex = 2;
+    session.state.stores = { airMissiles: 4, groundMissiles: 4, gunRounds: 1000, flares: 8, chaff: 8 };
+    expect(session.getStoresAfterChoice()).toEqual(session.getCurrentStores());
+    expect(session.selectSustainmentChoice('partial-rearm')).toBe(true);
+    expect(session.getStoresAfterChoice('partial-rearm').airMissiles)
+      .toBeGreaterThan(session.getCurrentStores().airMissiles);
+    expect(session.retryReadinessCost).toBe(7);
+
+    expect(session.retryCurrent()).toBe(true);
+
+    expect(session.state.sortieReadiness).toBe(63);
+    expect(session.state.sustainmentChoice).toBeNull();
+    expect(session.state.sustainmentUsed).toBe(true);
+    expect(session.selectSustainmentChoice('partial-rearm')).toBe(false);
+    expect(session.resolveCurrentMission().mission.campaignStores).toEqual(session.getCurrentStores());
+  });
+
+  it('authors an acceptable operational setback for every campaign chapter', () => {
+    const progress = new CampaignProgress(memoryStorage());
+    const session = new CampaignSession({ progress, seedFactory: () => 123 });
+    const setbacks = session.definition.chapters.map(chapter => {
+      const objective = chapter.missionOverrides?.objective;
+      if (objective?.setback) return objective.setback;
+      if (objective?.type === 'assetDefense') return { type: 'assetLost' };
+      if (objective?.type === 'forceDefense') return { type: 'friendlyStrength' };
+      return null;
+    });
+
+    expect(setbacks.every(Boolean)).toBe(true);
+  });
+
+  it('turns strategic metrics into mission pressure and support', () => {
+    const makeSession = () => new CampaignSession({
+      progress: new CampaignProgress(memoryStorage()),
+      difficulty: 'standard',
+      seedFactory: () => 987,
+    });
+    const low = makeSession();
+    low.state.airControl = 39;
+    low.state.defenseIntegrity = 34;
+    low.state.sortieReadiness = 34;
+    low.state.chapterIndex = 5;
+    const lowMission = low.resolveCurrentMission().mission;
+
+    const high = makeSession();
+    high.state.airControl = 75;
+    high.state.defenseIntegrity = 75;
+    high.state.sortieReadiness = 80;
+    high.state.chapterIndex = 5;
+    const highMission = high.resolveCurrentMission().mission;
+
+    expect(lowMission.campaignRadarRangeScale).toBeLessThan(highMission.campaignRadarRangeScale);
+    expect(lowMission.campaignFriendlyGroundHealthScale).toBeLessThan(highMission.campaignFriendlyGroundHealthScale);
+    expect(lowMission.groundIto90Count).toBeLessThan(highMission.groundIto90Count);
+    expect(lowMission.groundFriendlyTrucks).toBeLessThan(highMission.groundFriendlyTrucks);
+    expect(lowMission.campaignLoadoutScale).toBeLessThan(highMission.campaignLoadoutScale);
+    expect(lowMission.campaignDefenseFrontOffset).toBeLessThan(highMission.campaignDefenseFrontOffset);
+    expect(lowMission.wingmen).toBeLessThan(highMission.wingmen);
   });
 
   it('previews and commits a decisive result exactly once', () => {
@@ -160,6 +227,61 @@ describe('CampaignSession', () => {
 
     expect(resolved.mission.hostiles).toBeGreaterThan(2);
     expect(resolved.mission.wingmen).toBeGreaterThanOrEqual(1);
+  });
+
+  it('uses campaign history to branch later sorties', () => {
+    const makeSession = () => new CampaignSession({
+      progress: new CampaignProgress(memoryStorage()),
+      difficulty: 'standard',
+      seedFactory: () => 77,
+    });
+
+    const relayLost = makeSession();
+    relayLost.state.chapterIndex = 2;
+    const relayLostMission = relayLost.resolveCurrentMission();
+    const relaySaved = makeSession();
+    relaySaved.state.chapterIndex = 2;
+    relaySaved.state.flags = ['relay-protected'];
+    const relaySavedMission = relaySaved.resolveCurrentMission();
+    expect(relayLostMission.mission.campaignRadarRangeScale)
+      .toBeLessThan(relaySavedMission.mission.campaignRadarRangeScale);
+
+    const northernFailure = makeSession();
+    northernFailure.state.chapterIndex = 4;
+    const northernFailureMission = northernFailure.resolveCurrentMission();
+    const northernSuccess = makeSession();
+    northernSuccess.state.chapterIndex = 4;
+    northernSuccess.state.flags = ['main-axis-confirmed'];
+    expect(northernFailure.resolveCurrentMission().mission.hostiles)
+      .toBeGreaterThan(northernSuccess.resolveCurrentMission().mission.hostiles);
+    expect(northernFailureMission.preview.mission.hostileRoles).toContain('strike');
+
+    const logisticsBroken = makeSession();
+    logisticsBroken.state.chapterIndex = 8;
+    logisticsBroken.state.flags = ['relay-logistics-broken'];
+    const reinforcementsBlocked = logisticsBroken.resolveCurrentMission();
+    expect(reinforcementsBlocked.preview.encounters.every(encounter => !encounter.scheduled)).toBe(true);
+
+    const stabilized = makeSession();
+    stabilized.state.chapterIndex = 9;
+    stabilized.state.flags = ['border-line-stabilized'];
+    const stabilizedMission = stabilized.resolveCurrentMission().mission;
+    const exposed = makeSession();
+    exposed.state.chapterIndex = 9;
+    const exposedMission = exposed.resolveCurrentMission().mission;
+    expect(stabilizedMission.groundFriendlyTrucks).toBeGreaterThan(exposedMission.groundFriendlyTrucks);
+    expect(stabilizedMission.campaignDefenseFrontOffset).toBeGreaterThan(exposedMission.campaignDefenseFrontOffset);
+  });
+
+  it('makes First Wave protect the strike corridor instead of clearing every aircraft', () => {
+    const session = new CampaignSession({
+      progress: new CampaignProgress(memoryStorage()),
+      difficulty: 'standard',
+      seedFactory: () => 77,
+    });
+    session.state.chapterIndex = 4;
+
+    expect(session.resolveCurrentMission().mission.objective.type).toBe('strikeDefense');
   });
 
   it('offers rare partial sustainment and carries the sortie remainder forward', () => {

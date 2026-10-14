@@ -16,6 +16,7 @@ import { scaleMissileReserveObjectives } from './mission/optional-objectives.js'
 import { CareerProgress } from './mission/progression.js';
 import { CampaignProgress } from './campaign/campaign-progress.js';
 import { CampaignSession } from './campaign/campaign-session.js';
+import { resolveCampaignIntel } from './campaign/campaign-intel.js';
 import { SortieController } from './game/sortie-controller.js';
 import { disposeMissilePool } from './combat/projectiles.js';
 import { createSortieSeed } from './combat/random.js';
@@ -82,6 +83,11 @@ const audio = new GameAudio();
 const missionCards = [...document.querySelectorAll('[data-mission]')];
 const briefingOptionalObjectiveList = document.querySelector('#briefing-optional-objective-list');
 const briefingVariant = document.querySelector('#briefing-variant');
+const campaignIntel = document.querySelector('#campaign-intel');
+const campaignIntelReliability = document.querySelector('#campaign-intel-reliability');
+const campaignIntelStrength = document.querySelector('#campaign-intel-strength');
+const campaignIntelSam = document.querySelector('#campaign-intel-sam');
+const campaignIntelReserve = document.querySelector('#campaign-intel-reserve');
 const careerProgress = new CareerProgress();
 const campaignProgress = new CampaignProgress();
 const campaignView = new CampaignView(document);
@@ -514,6 +520,7 @@ function selectMission(id) {
   selectedMissionDefinition = baseMission;
   const missionResolution = resolveMissionVariant(baseMission, plannedSortieSeed);
   selectedMissionResolution = missionResolution;
+  if (campaignIntel) campaignIntel.hidden = true;
   menuRadar?.setScenario(missionResolution, {
     seed: plannedSortieSeed,
     terrain,
@@ -578,6 +585,7 @@ function renderCampaignChapter() {
     setTimeOfDaySelector(null);
     renderOptionalObjectives(briefingOptionalObjectiveList, []);
     if (briefingVariant) briefingVariant.hidden = true;
+    if (campaignIntel) campaignIntel.hidden = true;
     return false;
   }
 
@@ -587,12 +595,17 @@ function renderCampaignChapter() {
   plannedSortieSeed = resolved.seed;
   selectedAreaId = resolved.areaId;
   menuTheater.value = selectedAreaId;
-  menuRadar?.setScenario(resolved.preview, {
-    seed: plannedSortieSeed,
-    terrain,
-    origin: getMenuRadarOrigin(resolved.preview.mission),
-    heading: controls.heading,
-  });
+  const intel = resolveCampaignIntel(resolved, campaignSession.state);
+  if (developmentMode) {
+    menuRadar?.setScenario(resolved.preview, {
+      seed: plannedSortieSeed,
+      terrain,
+      origin: getMenuRadarOrigin(resolved.preview.mission),
+      heading: controls.heading,
+    });
+  } else {
+    menuRadar?.setIntel(intel, { origin: getMenuRadarOrigin(resolved.preview.mission), heading: controls.heading });
+  }
   document.querySelector('#briefing-code').textContent = t(`mission.${selectedMissionId}.code`);
   document.querySelector('#briefing-copy').textContent = t(resolved.chapter.briefingKey);
   document.querySelector('#theater-mission-name').textContent = t(resolved.chapter.titleKey).toUpperCase();
@@ -607,11 +620,18 @@ function renderCampaignChapter() {
   );
   renderOptionalObjectives(briefingOptionalObjectiveList, optionalObjectives);
   if (briefingVariant) {
-    briefingVariant.hidden = !resolved.preview.variant;
-    briefingVariant.textContent = resolved.preview.variant
+    briefingVariant.hidden = !developmentMode || !resolved.preview.variant;
+    briefingVariant.textContent = developmentMode && resolved.preview.variant
       ? t('mission.briefing.variant', { name: t(resolved.preview.variant.labelKey) })
       : '';
   }
+  if (campaignIntel) campaignIntel.hidden = developmentMode;
+  if (campaignIntelReliability) campaignIntelReliability.textContent = t('campaign.intel.reliability', { value: intel.reliability });
+  if (campaignIntelStrength) campaignIntelStrength.textContent = t('campaign.intel.strength', {
+    sector: t(intel.sectorKey), minimum: intel.minimumStrength, maximum: intel.maximumStrength,
+  });
+  if (campaignIntelSam) campaignIntelSam.textContent = t(intel.samKey);
+  if (campaignIntelReserve) campaignIntelReserve.textContent = t(intel.reserveKey);
   const area = theaterAreas.find(candidate => candidate.id === selectedAreaId);
   updateMenuArea(area);
   return true;
@@ -822,6 +842,17 @@ devMissionSelect?.addEventListener('change', () => {
 campaignView.onSustainmentChoice = choiceId => {
   if (playMode !== 'campaign' || !campaignSession) return;
   if (campaignSession.selectSustainmentChoice(choiceId)) renderCampaignChapter();
+};
+campaignView.onNewRun = () => {
+  if (playMode !== 'campaign' || !campaignSession || !campaignSession.completed) return;
+  if (globalThis.confirm && !globalThis.confirm(t('campaign.newRunConfirm'))) return;
+  const difficulty = campaignSession.difficulty;
+  campaignProgress.clear(difficulty);
+  campaignSession = new CampaignSession({ progress: campaignProgress, difficulty });
+  pendingCampaignResult = null;
+  campaignView.hideDebrief();
+  renderCampaignChapter();
+  void loadTerrainForMenu(selectedAreaId);
 };
 campaignView.standaloneModeButton.addEventListener('click', activateStandaloneMode);
 campaignView.campaignModeButton.addEventListener('click', activateCampaignMode);

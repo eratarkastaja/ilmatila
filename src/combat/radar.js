@@ -12,10 +12,11 @@ const INITIAL_CONTACT_IDENTIFICATION_DELAY = 3.5;
 
 /** Owns radar contacts, search mode and the arcade-friendly weapon lock cue. */
 export class CombatRadar {
-  constructor(player, audio, weather = null) {
+  constructor(player, audio, weather = null, campaignSensorScale = 1) {
     this.player = player;
     this.audio = audio;
     this.weather = weather;
+    this.campaignSensorScale = campaignSensorScale;
     this.mode = 'air';
     // Search sensors reach beyond the weapon envelopes, while launch ranges
     // stay in sync with the missile profiles.
@@ -60,7 +61,7 @@ export class CombatRadar {
 
   getSensorRange(domain = this.mode) {
     const base = domain === 'air' ? this.airRange : this.groundRange;
-    return base * (this.weather?.radarRangeScale ?? 1);
+    return base * (this.weather?.radarRangeScale ?? 1) * this.campaignSensorScale;
   }
 
   updateContacts(dt, playerHeading, { airFriendly, airHostile, groundFriendly, groundHostile }) {

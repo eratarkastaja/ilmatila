@@ -62,6 +62,7 @@
           <section id="campaign-overview" class="campaign-overview" hidden aria-labelledby="campaign-title">
             <header><div><small id="campaign-progress-label"></small><h2 id="campaign-title"></h2></div><b id="campaign-day"></b></header>
             <p id="campaign-description"></p>
+            <p id="campaign-situation" class="campaign-situation"></p>
             <div id="dev-mission-picker" class="dev-mission-picker" hidden>
               <label for="dev-mission-select"><span data-i18n="menu.devMissionKicker">DEV</span><strong data-i18n="menu.devMissionLabel">CAMPAIGN MISSION</strong></label>
               <div class="select-wrap"><select id="dev-mission-select" data-i18n-aria-label="menu.devMissionAria">
@@ -78,16 +79,27 @@
               </select><i>⌄</i></div>
             </div>
             <div class="campaign-state-grid">
-              <div><span><small data-i18n="campaign.airControl">AIR CONTROL</small><b id="campaign-air-control-value">0</b></span><i><b id="campaign-air-control-fill"></b></i></div>
-              <div><span><small data-i18n="campaign.defenseIntegrity">DEFENSE INTEGRITY</small><b id="campaign-defense-integrity-value">0</b></span><i><b id="campaign-defense-integrity-fill"></b></i></div>
-              <div><span><small data-i18n="campaign.sortieReadiness">SORTIE READINESS</small><b id="campaign-sortie-readiness-value">0</b></span><i><b id="campaign-sortie-readiness-fill"></b></i></div>
+              <div><span><small data-i18n="campaign.airControl">AIR CONTROL</small><b id="campaign-air-control-value">0</b></span><em id="campaign-air-control-next"></em><i><b id="campaign-air-control-fill"></b></i></div>
+              <div><span><small data-i18n="campaign.defenseIntegrity">DEFENSE INTEGRITY</small><b id="campaign-defense-integrity-value">0</b></span><em id="campaign-defense-integrity-next"></em><i><b id="campaign-defense-integrity-fill"></b></i></div>
+              <div><span><small data-i18n="campaign.sortieReadiness">SORTIE READINESS</small><b id="campaign-sortie-readiness-value">0</b></span><em id="campaign-sortie-readiness-next"></em><i><b id="campaign-sortie-readiness-fill"></b></i></div>
             </div>
+            <section class="campaign-stores" aria-labelledby="campaign-stores-title">
+              <header><small data-i18n="campaign.stores.kicker">SORTIE LOADOUT</small><h3 id="campaign-stores-title" data-i18n="campaign.stores.title">STORES BEFORE LAUNCH</h3></header>
+              <div class="campaign-stores-head"><span></span><small data-i18n="campaign.stores.current">CURRENT</small><small data-i18n="campaign.stores.planned">PLANNED</small><small data-i18n="campaign.stores.forecast">AFTER SUPPORT</small></div>
+              <div id="campaign-stores-list" class="campaign-stores-list"></div>
+              <p id="campaign-stores-note"></p>
+            </section>
+            <section class="campaign-history" aria-labelledby="campaign-history-title">
+              <header><small data-i18n="campaign.history.kicker">FLIGHT RECORD</small><h3 id="campaign-history-title" data-i18n="campaign.history.title">CAMPAIGN HISTORY</h3></header>
+              <ol id="campaign-history-list"></ol>
+            </section>
             <section id="campaign-sustainment" class="campaign-sustainment" hidden aria-labelledby="campaign-sustainment-title">
               <header><div><small data-i18n="campaign.sustainment.kicker">FIELD SUPPORT</small><h3 id="campaign-sustainment-title" data-i18n="campaign.sustainment.title">LIMITED SUPPORT WINDOW</h3></div><b id="campaign-sustainment-status"></b></header>
               <p id="campaign-sustainment-description"></p>
               <div id="campaign-sustainment-choices" class="campaign-sustainment-choices"></div>
             </section>
             <p id="campaign-ending" class="campaign-ending" hidden></p>
+            <button id="campaign-new-run" class="campaign-new-run" type="button" hidden data-i18n="campaign.newRun">START NEW CAMPAIGN</button>
           </section>
 
           <div id="standalone-mission-selection">
@@ -168,6 +180,12 @@
             <span class="briefing-symbol" aria-hidden="true">⌖</span>
             <div><small id="briefing-code">QRA / QUICK REACTION ALERT</small><p id="briefing-copy">Four hostile fighters are approaching from the north. Intercept them with your flight. Friendly ground forces are engaging hostile units in the sector.</p><small id="briefing-variant" class="briefing-variant" hidden></small></div>
           </div>
+          <section id="campaign-intel" class="campaign-intel" hidden aria-labelledby="campaign-intel-title">
+            <header><small data-i18n="campaign.intel.kicker">INTELLIGENCE ASSESSMENT</small><b id="campaign-intel-reliability"></b></header>
+            <h2 id="campaign-intel-title" data-i18n="campaign.intel.title">AIR PICTURE · ESTIMATE</h2>
+            <p id="campaign-intel-strength"></p>
+            <ul><li id="campaign-intel-sam"></li><li id="campaign-intel-reserve"></li></ul>
+          </section>
           <section id="briefing-optional-objectives" class="briefing-optional-objectives" data-optional-objectives aria-labelledby="briefing-optional-objectives-title" hidden>
             <h2 id="briefing-optional-objectives-title" data-i18n="mission.optionalObjectives.title">OPTIONAL OBJECTIVES</h2>
             <ul id="briefing-optional-objective-list" class="optional-objective-list"></ul>
@@ -370,6 +388,7 @@
         <section id="campaign-debrief-actions" class="campaign-debrief-actions" hidden aria-labelledby="campaign-debrief-title">
           <div><small data-i18n="campaign.debrief.kicker">CAMPAIGN EFFECT</small><h3 id="campaign-debrief-title"></h3></div>
           <p id="campaign-debrief-changes"></p>
+          <p id="campaign-debrief-narrative" class="campaign-debrief-narrative"></p>
           <ul id="campaign-debrief-objective-effects" class="campaign-debrief-objective-effects"></ul>
           <div>
             <button id="campaign-retry-sortie" type="button"><span data-i18n="campaign.debrief.retry">RETRY SORTIE</span><b>↻</b></button>

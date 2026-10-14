@@ -6,6 +6,29 @@ export const MISSION_OUTCOME = Object.freeze({
   ABORTED: 'aborted',
 });
 
+function setbackConditionTriggered(condition, elapsed, protectedAssetLost, friendlyStrengthFraction, groundRemaining) {
+  if (condition?.type === 'deadline' && elapsed >= condition.duration) return true;
+  if (condition?.type === 'assetLost'
+    && protectedAssetLost
+    && elapsed >= (condition.graceDuration ?? 0)) return true;
+  if (condition?.type === 'friendlyStrength'
+    && friendlyStrengthFraction < condition.minimum) return true;
+  if (condition?.type === 'groundBreakthrough'
+    && groundRemaining > condition.maximumGroundRemaining) return true;
+  return false;
+}
+
+function setbackTriggered(setback, elapsed, protectedAssetLost, friendlyStrengthFraction, groundRemaining) {
+  if (!setback) return false;
+  if (!Array.isArray(setback)) {
+    return setbackConditionTriggered(setback, elapsed, protectedAssetLost, friendlyStrengthFraction, groundRemaining);
+  }
+  for (const condition of setback) {
+    if (setbackConditionTriggered(condition, elapsed, protectedAssetLost, friendlyStrengthFraction, groundRemaining)) return true;
+  }
+  return false;
+}
+
 export function evaluateMissionObjective(objective, {
   elapsed = 0,
   airRemaining = Infinity,
@@ -22,6 +45,14 @@ export function evaluateMissionObjective(objective, {
   if (outcome !== MISSION_OUTCOME.ACTIVE) return outcome;
   if (destroyed) return MISSION_OUTCOME.FAILED;
 
+  if (setbackTriggered(
+    objective.setback,
+    elapsed,
+    protectedAssetLost,
+    friendlyStrengthFraction,
+    groundRemaining,
+  )) return MISSION_OUTCOME.SETBACK;
+
   if (objective.type === 'assetDefense'
     && protectedAssetLost
     && elapsed >= (objective.graceDuration ?? 0)) return MISSION_OUTCOME.SETBACK;
@@ -32,16 +63,22 @@ export function evaluateMissionObjective(objective, {
 
   const complete = objective.type === 'training'
     ? elapsed >= (objective.duration ?? 90)
+    : objective.type === 'holdPosition'
+      ? elapsed >= (objective.duration ?? 180)
+      : objective.type === 'logisticsStrike'
+        ? priorityTargetsRemaining <= 0
+      : objective.type === 'strikeDefense'
+        ? priorityTargetsRemaining <= 0
     : objective.type === 'support'
       ? airRemaining <= 0 && groundRemaining <= 0
       : objective.type === 'airPolicing'
         ? identifiedCount >= Math.min(contactCount, objective.requiredContacts ?? contactCount)
           && escortElapsed >= (objective.escortDuration ?? 15)
-        : objective.type === 'assetDefense'
-          ? priorityTargetsRemaining <= 0 && airRemaining <= 0
-          : objective.type === 'forceDefense'
-            ? airRemaining <= 0 && groundRemaining <= (objective.maximumGroundRemaining ?? 0)
-            : airRemaining <= 0;
+          : objective.type === 'assetDefense'
+            ? priorityTargetsRemaining <= 0 && airRemaining <= 0
+            : objective.type === 'forceDefense'
+              ? airRemaining <= 0 && groundRemaining <= (objective.maximumGroundRemaining ?? 0)
+              : airRemaining <= 0;
 
   return complete ? MISSION_OUTCOME.COMPLETE : MISSION_OUTCOME.ACTIVE;
 }

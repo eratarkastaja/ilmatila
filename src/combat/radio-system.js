@@ -19,6 +19,7 @@ export const WINGMAN_COMMAND_EVENTS = Object.freeze({
 /** Message catalog: gameplay emits event names; this layer owns priority and pacing. */
 export const RADIO_EVENTS = Object.freeze({
   'mission.departure': { messageKey: 'radio.phase.departure', crew: 'flightLead', priority: 1, duration: 3 },
+  'campaign.chapterBriefing': { messageKey: 'campaign.radio.generic', crew: 'groundControl', priority: 3, duration: 4.2 },
   'mission.controlIngress': { messageKey: 'radio.control.ingress', crew: 'groundControl', priority: 2, duration: 3.2, cooldown: 10 },
   'mission.controlContact': { messageKey: 'radio.control.contact', crew: 'groundControl', priority: 2, duration: 3.4, cooldown: 8 },
   'mission.controlEngagement': { messageKey: 'radio.control.engagement', crew: 'groundControl', priority: 2, duration: 3.4, cooldown: 8 },
@@ -81,7 +82,7 @@ export class RadioSystem {
 
     const identity = event.cooldownScope === 'flight' ? 'flight' : wingmanId ?? event.crew;
     const cooldownKey = `${eventName}:${identity}:${scope}`;
-    return this.announce(event.messageKey, {
+    return this.announce(params.messageKey ?? event.messageKey, {
       callsignKey: crew.callsignKey,
       params,
       priority: priority ?? event.priority,

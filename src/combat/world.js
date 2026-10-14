@@ -80,11 +80,19 @@ export class CombatWorld {
     const missionConfig={hostiles:4,wingmen:2,groundBattle:true,groundPairs:6,groundTrucks:12,...missionResolution.mission};
     this.weather = resolveWeather(missionConfig.weather);
     const campaignStores=missionConfig.campaignStores ?? {};
+    const loadoutScale=missionConfig.campaignLoadoutScale ?? 1;
+    const scaleLoadout=value=>Number.isFinite(value)?Math.max(0,Math.floor(value*loadoutScale)):value;
     const effectiveWeapons={
       ...this.difficulty.player.weapons,
-      ...(Number.isFinite(campaignStores.airMissiles) ? { airMissiles: campaignStores.airMissiles } : {}),
-      ...(Number.isFinite(campaignStores.groundMissiles) ? { groundMissiles: campaignStores.groundMissiles } : {}),
-      ...(campaignStores.gunRounds !== undefined ? { gunRounds: campaignStores.gunRounds } : {}),
+      airMissiles:scaleLoadout(Number.isFinite(campaignStores.airMissiles)
+        ? campaignStores.airMissiles
+        : this.difficulty.player.weapons.airMissiles),
+      groundMissiles:scaleLoadout(Number.isFinite(campaignStores.groundMissiles)
+        ? campaignStores.groundMissiles
+        : this.difficulty.player.weapons.groundMissiles),
+      gunRounds:scaleLoadout(campaignStores.gunRounds !== undefined
+        ? campaignStores.gunRounds
+        : this.difficulty.player.weapons.gunRounds),
     };
     missionConfig.optionalObjectives=scaleMissileReserveObjectives(
       missionConfig.optionalObjectives,
@@ -104,13 +112,19 @@ export class CombatWorld {
         flare: document.querySelector('.flare-row'),
         chaff: document.querySelector('.chaff-row'),
       },
-      maxHull:this.difficulty?.player?.hull,
+      maxHull:Math.round(this.difficulty?.player?.hull*(missionConfig.campaignAirframeHealthScale ?? 1)),
     });
     this.radio = new RadioSystem({
       node:document.querySelector('#radio-call'),
       audio,
     });
     this.radio.emit('mission.departure');
+    if (missionConfig.campaignRadioBriefingKey) {
+      this.radio.emit('campaign.chapterBriefing', {
+        params: { messageKey: missionConfig.campaignRadioBriefingKey },
+        scope: missionConfig.campaignChapterId,
+      });
+    }
     this.combatEffects=new CombatEffects({scene,player,fx,audio});
     this.destructionSystem=new DestructionSystem({
       scene,
@@ -219,14 +233,14 @@ export class CombatWorld {
       playerShots: this.projectileSystem.playerShots, hostileShots: this.projectileSystem.hostiles,
       hostileAircraft: this.airBattle.enemies,
       addTransientGlow,
-      initialCount:campaignStores.flares ?? this.difficulty?.player?.countermeasures,
-      initialChaff:campaignStores.chaff ?? this.difficulty?.player?.chaff?.count,
+      initialCount:scaleLoadout(campaignStores.flares ?? this.difficulty?.player?.countermeasures),
+      initialChaff:scaleLoadout(campaignStores.chaff ?? this.difficulty?.player?.chaff?.count),
       chaffConfig:this.difficulty?.player?.chaff,
       random:this.random,
       onInventoryChange: () => this.updateHud(),
     });
     this.projectileSystem.setDecoys(this.countermeasureSystem.decoys);
-    this.radar = new CombatRadar(player, audio, this.weather);
+    this.radar = new CombatRadar(player, audio, this.weather, missionConfig.campaignRadarRangeScale ?? 1);
     this.weaponSystem = new WeaponSystem({
       player, scene, fx, audio, radar: this.radar, playerVelocity: this.playerVelocity, weather: this.weather,
       addProjectile: shot => this.projectileSystem.addPlayerProjectile(shot),
@@ -243,6 +257,12 @@ export class CombatWorld {
     const missionCompleteNotice=document.querySelector('#mission-complete');
     const missionCompleteDetail=document.querySelector('#mission-complete-detail');
     const debriefDialog=document.querySelector('#mission-debrief');
+    const objectiveSetbacks = missionConfig.objective?.setback;
+    const objectiveSetbackConditions = Array.isArray(objectiveSetbacks)
+      ? objectiveSetbacks
+      : objectiveSetbacks ? [objectiveSetbacks] : [];
+    const tracksFriendlyStrength = missionConfig.objective?.type === 'forceDefense'
+      || objectiveSetbackConditions.some(condition => condition?.type === 'friendlyStrength');
     this.missionSystem = new MissionSystem({
       mission: missionConfig,
       objective: missionConfig.objective??{type:'clearAir'},
@@ -286,7 +306,19 @@ export class CombatWorld {
               1,
             );
           }
-        }else if(missionConfig.objective?.type==='forceDefense'){
+        }else if(missionConfig.objective?.type==='logisticsStrike'){
+          state.priorityTargetsRemaining=this.redUnits.some(unit => (
+            unit.role==='logistics' && unit.reinforcementSource && !unit.dead
+          )) ? 1 : 0;
+        }else if(missionConfig.objective?.type==='strikeDefense'){
+          if(!this.airBattle.hostilesSpawned){
+            state.priorityTargetsRemaining=(missionConfig.hostileRoles??[])
+              .filter(role=>role==='strike').length;
+          }else{
+            state.priorityTargetsRemaining=this.enemies.filter(enemy=>enemy.missionRole==='strike'&&!enemy.dead).length;
+          }
+        }
+        if(tracksFriendlyStrength){
           let health=0;
           let maximum=0;
           for(const unit of this.friends){
@@ -1053,6 +1085,7 @@ export class CombatWorld {
     const gunRounds=this.weaponSystem.gunRoundCount;
     this.debriefData={
       outcome,
+      playerRecovered: outcome===MISSION_OUTCOME.SETBACK,
       elapsed,
       missionId:this.missionSystem.mission.id,
       campaignId:this.missionSystem.mission.campaignId ?? null,

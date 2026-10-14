@@ -70,7 +70,10 @@ export function normalizeCampaignSave(value, expectedDifficulty = null) {
   const completed = chapterIndex >= definition.chapters.length || Boolean(value.completed);
   const currentChapter = definition.chapters[chapterIndex] ?? null;
   const sustainmentIds = new Set(currentChapter?.sustainmentDecision?.choices?.map(choice => choice.id) ?? []);
-  const sustainmentChoice = sustainmentIds.has(value.sustainmentChoice) ? value.sustainmentChoice : null;
+  const sustainmentUsed = Boolean(value.sustainmentUsed);
+  const sustainmentChoice = !sustainmentUsed && sustainmentIds.has(value.sustainmentChoice)
+    ? value.sustainmentChoice
+    : null;
 
   return {
     version: SAVE_VERSION,
@@ -94,6 +97,7 @@ export function normalizeCampaignSave(value, expectedDifficulty = null) {
     ending: completed && typeof value.ending === 'string' ? value.ending : null,
     stores: normalizeCampaignStores(value.stores, value.difficulty),
     sustainmentChoice,
+    sustainmentUsed,
   };
 }
 

@@ -414,6 +414,7 @@ describe('CombatWorld sortie lifecycle', () => {
       expect(onMissionEnd).toHaveBeenCalledWith('setback', expect.objectContaining({
         missionId: 'intercept',
         outcome: 'setback',
+        playerRecovered: true,
       }));
     } finally {
       world.dispose();

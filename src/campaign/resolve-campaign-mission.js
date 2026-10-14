@@ -3,6 +3,10 @@ import { resolveMissionVariant } from '../mission/mission-variants.js';
 
 const FORCE_SCALE = Object.freeze({ easy: 0.68, standard: 1, hard: 1.28 });
 
+function clamp(value, minimum, maximum) {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
 function clone(value) {
   if (Array.isArray(value)) return value.map(clone);
   if (!value || typeof value !== 'object') return value;
@@ -26,12 +30,15 @@ function tuneNumbers(config, difficulty) {
   return tuned;
 }
 
-function tuneVariant(variant, difficulty) {
+function tuneVariant(variant, difficulty, airControl) {
   const tuned = clone(variant);
   tuned.changes = tuneNumbers(tuned.changes ?? {}, difficulty);
   if (Array.isArray(tuned.encounters)) {
     tuned.encounters = tuned.encounters.map(encounter => ({
       ...encounter,
+      probability: Number.isFinite(encounter.probability)
+        ? clamp(encounter.probability + (airControl < 40 ? .12 : airControl >= 75 ? -.08 : 0), 0, 1)
+        : encounter.probability,
       responses: encounter.responses.map(response => ({
         ...response,
         hostiles: scaleCount(response.hostiles, FORCE_SCALE[difficulty] ?? 1),
@@ -53,7 +60,95 @@ function applyAirControlPressure(config, airControl, inherited = false) {
   } else if (airControl >= 75 && (!inherited || Number.isFinite(pressured.openingDelay))) {
     pressured.openingDelay = (pressured.openingDelay ?? 0) + 3;
   }
+  if (!inherited) {
+    pressured.campaignRadarRangeScale = airControl < 40 ? .88 : airControl >= 75 ? 1.1 : 1;
+    pressured.campaignWingmanDelta = airControl >= 70 ? 1 : airControl < 30 ? -1 : 0;
+  }
   return pressured;
+}
+
+function applyDefenseIntegrityPressure(config, defenseIntegrity) {
+  const pressured = { ...config };
+  if (defenseIntegrity < 35) {
+    pressured.groundFriendlyTrucks = Math.max(0, (pressured.groundFriendlyTrucks ?? 0) - 2);
+    pressured.groundIto90Count = Math.max(0, (pressured.groundIto90Count ?? 0) - 1);
+    pressured.campaignFriendlyGroundHealthScale = .82;
+    pressured.campaignDefenseFrontOffset = -800;
+  } else if (defenseIntegrity >= 75) {
+    pressured.groundFriendlyTrucks = (pressured.groundFriendlyTrucks ?? 0) + 2;
+    pressured.groundIto90Count = (pressured.groundIto90Count ?? 0) + 1;
+    pressured.campaignFriendlyGroundHealthScale = 1.12;
+    pressured.campaignDefenseFrontOffset = 800;
+  } else {
+    pressured.campaignFriendlyGroundHealthScale = 1;
+    pressured.campaignDefenseFrontOffset = 0;
+  }
+  return pressured;
+}
+
+function applyReadinessPressure(config, readiness) {
+  const pressured = { ...config };
+  if (readiness < 35) {
+    pressured.campaignLoadoutScale = .8;
+    pressured.campaignAirframeHealthScale = .88;
+  } else if (readiness >= 80) {
+    pressured.campaignLoadoutScale = 1;
+    pressured.campaignAirframeHealthScale = 1.08;
+  } else {
+    pressured.campaignLoadoutScale = 1;
+    pressured.campaignAirframeHealthScale = 1;
+  }
+  return pressured;
+}
+
+function addStrikePair(config) {
+  const next = { ...config };
+  if (Number.isInteger(next.hostiles)) next.hostiles += 2;
+  if (Array.isArray(next.hostileComposition)) {
+    next.hostileComposition = [...next.hostileComposition, 'su27', 'su27'];
+  }
+  if (Array.isArray(next.hostileRoles)) {
+    next.hostileRoles = [...next.hostileRoles, 'strike', 'strike'];
+  }
+  return next;
+}
+
+function disableReinforcements(config) {
+  return {
+    ...config,
+    encounters: Array.isArray(config.encounters)
+      ? config.encounters.map(encounter => ({ ...encounter, probability: 0 }))
+      : config.encounters,
+  };
+}
+
+function applyCampaignHistory(mission, state, chapter) {
+  const flags = new Set(state.flags ?? []);
+  let resolved = { ...mission };
+
+  if (state.chapterIndex >= 2 && !flags.has('relay-protected')) {
+    resolved.campaignRadarRangeScale *= .78;
+  }
+
+  if (chapter.id === 'first-wave' && !flags.has('main-axis-confirmed')) {
+    resolved = addStrikePair(resolved);
+    resolved.variants = (resolved.variants ?? []).map(variant => ({
+      ...variant,
+      changes: addStrikePair(variant.changes ?? {}),
+    }));
+  }
+
+  if (chapter.id === 'counterstroke' && flags.has('relay-logistics-broken')) {
+    resolved.variants = (resolved.variants ?? []).map(variant => disableReinforcements(variant));
+  }
+
+  if (chapter.id === 'border-holds' && flags.has('border-line-stabilized')) {
+    resolved.groundFriendlyTrucks = (resolved.groundFriendlyTrucks ?? 0) + 2;
+    resolved.campaignFriendlyGroundHealthScale *= 1.1;
+    resolved.campaignDefenseFrontOffset += 1000;
+  }
+
+  return resolved;
 }
 
 function tuneOperationalObjective(objective, difficulty, hostileCount) {
@@ -118,25 +213,29 @@ export function resolveCampaignMission(definition, state, { seed = state.current
     state.airControl,
   );
   mission.variants = (mission.variants ?? []).map(variant => {
-    const tuned = tuneVariant(variant, state.difficulty);
+    const tuned = tuneVariant(variant, state.difficulty, state.airControl);
     tuned.changes = applyAirControlPressure(tuned.changes, state.airControl, true);
     return tuned;
   });
   mission = applyMissionOverrides(mission, chapter.missionOverrides, state.difficulty);
+  mission = applyDefenseIntegrityPressure(mission, state.defenseIntegrity);
+  mission = applyReadinessPressure(mission, state.sortieReadiness);
+  mission = applyCampaignHistory(mission, state, chapter);
   if (Number.isFinite(chapter.timeOfDay)) {
     const weather = typeof mission.weather === 'string'
       ? { preset: mission.weather }
       : { ...(mission.weather ?? {}) };
     mission.weather = { ...weather, timeOfDay: chapter.timeOfDay };
   }
-  if (state.sortieReadiness < 35) mission.wingmen = Math.max(1, mission.wingmen - 1);
-  else if (state.sortieReadiness >= 80) mission.wingmen = Math.min(3, mission.wingmen + 1);
+  const readinessWingmanDelta = state.sortieReadiness < 35 ? -1 : state.sortieReadiness >= 80 ? 1 : 0;
+  mission.wingmen = Math.max(1, Math.min(3, mission.wingmen + readinessWingmanDelta + (mission.campaignWingmanDelta ?? 0)));
 
   Object.assign(mission, {
     campaignId: definition.id,
     campaignChapterId: chapter.id,
     campaignAttemptId: state.currentAttemptId,
     displayTitleKey: chapter.titleKey,
+    campaignRadioBriefingKey: chapter.radioBriefingKey,
   });
 
   const preview = resolveMissionVariant(mission, seed);

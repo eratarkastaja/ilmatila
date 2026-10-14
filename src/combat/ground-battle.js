@@ -45,9 +45,10 @@ export class GroundBattle {
     );
     // Leave a short setup leg between the ingress waypoint and the front.
     const battlefieldIngressOffset = Math.max(0, mission.battlefieldIngressOffset ?? 0);
+    const campaignFrontOffset = mission.campaignDefenseFrontOffset ?? 0;
     this.battleCenter = player.position.clone().addScaledVector(
       this.routeForward,
-      ingressDistance + battlefieldIngressOffset,
+      ingressDistance + battlefieldIngressOffset + campaignFrontOffset,
     );
     this.spawnSystem = new GroundSpawnSystem();
     this.unitAI = new GroundUnitAI(random);

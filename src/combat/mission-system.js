@@ -100,6 +100,16 @@ export class MissionSystem {
       params.elapsed=Math.min(duration,Math.floor(this.elapsed));
       params.duration=duration;
       progressText = t('mission.progress.training',params);
+    } else if (this.objective.type === 'holdPosition') {
+      params.elapsed = Math.min(this.objective.duration ?? 180, Math.floor(this.elapsed));
+      params.duration = this.objective.duration ?? 180;
+      progressText = t('mission.progress.holdPosition', params);
+    } else if (this.objective.type === 'logisticsStrike') {
+      params.remaining = remaining.priorityTargetsRemaining ?? 0;
+      progressText = t('mission.progress.logisticsStrike', params);
+    } else if (this.objective.type === 'strikeDefense') {
+      params.remaining = remaining.priorityTargetsRemaining ?? 0;
+      progressText = t('mission.progress.strikeDefense', params);
     } else if (this.objective.type === 'support') {
       params.airRemaining=remaining.airRemaining;
       params.airTotal=this.totals.air;

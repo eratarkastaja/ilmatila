@@ -31,6 +31,7 @@ export class GroundSpawnSystem {
     const finnishDepth = Math.min(900, finnishSideRoom);
     const russianStagger = Math.min(460, Math.max(0, (russianSideRoom - russianDepth) / 2));
     const finnishStagger = Math.min(130, Math.max(0, (finnishSideRoom - finnishDepth) / 2));
+    const friendlyHealthScale = battle.mission.campaignFriendlyGroundHealthScale ?? 1;
     for(let i=0;i<battle.mission.groundPairs;i++){
       const lane = battle.mission.groundPairs > 1 ? i / (battle.mission.groundPairs - 1) - .5 : 0;
       const alongFront = lane * frontSpan + (rnd() - .5) * 240;
@@ -56,7 +57,7 @@ export class GroundSpawnSystem {
       blue.position.set(bluePos.x,bluePos.y,bluePos.z); blue.rotation.y=heading+(supportMission?0:Math.PI);
       red.position.set(redPos.x,redPos.y,redPos.z); red.rotation.y=heading+(supportMission?Math.PI:0);
       battle.scene.add(blue,red);
-      const blueUnit={mesh:blue,hp:blueSpec.hp,maxHp:blueSpec.hp,team:'blue',role:'defender',cool:1+i*.33,phase:i*.8,armed:true,airAaCooldown:2+rnd()*5,airAaBurstClock:0,airAaBurstRemaining:0,speed:blueSpec.kind==='tracked'?10.5+rnd()*2:14+rnd()*2.5,flank:i%2===0?1:-1,velocity:new THREE.Vector3(),travel:new THREE.Vector3(),toTarget:new THREE.Vector3(),tangent:new THREE.Vector3(),waypoint:new THREE.Vector3(),separation:new THREE.Vector3(),facing:new THREE.Vector3(),pathDirection:new THREE.Vector3()};
+      const blueUnit={mesh:blue,hp:blueSpec.hp*friendlyHealthScale,maxHp:blueSpec.hp*friendlyHealthScale,team:'blue',role:'defender',cool:1+i*.33,phase:i*.8,armed:true,airAaCooldown:2+rnd()*5,airAaBurstClock:0,airAaBurstRemaining:0,speed:blueSpec.kind==='tracked'?10.5+rnd()*2:14+rnd()*2.5,flank:i%2===0?1:-1,velocity:new THREE.Vector3(),travel:new THREE.Vector3(),toTarget:new THREE.Vector3(),tangent:new THREE.Vector3(),waypoint:new THREE.Vector3(),separation:new THREE.Vector3(),facing:new THREE.Vector3(),pathDirection:new THREE.Vector3()};
       const redUnit={mesh:red,hp:redSpec.hp,maxHp:redSpec.hp,team:'red',role:'assault',missionTargetRoleKey:'combat.groundTargetRole.armor',cool:2+i*.25,phase:i*.8+1,armed:true,speed:redSpec.kind==='tracked'?10+rnd()*2:13.5+rnd()*2.5,flank:i%2===0?-1:1,velocity:new THREE.Vector3(),aaCooldown:(battle.difficulty?.groundAA?.initialDelay ?? 2)+rnd()*(battle.difficulty?.groundAA?.initialJitter ?? 5),aaBurstClock:0,aaBurstRemaining:0,aaTrackTimer:null,aaPlayerTracking:false,aaTarget:null,aaThreatTimer:0,aaFiringPause:0,assaultTarget:blue.position,travel:new THREE.Vector3(),toTarget:new THREE.Vector3(),tangent:new THREE.Vector3(),waypoint:new THREE.Vector3(),separation:new THREE.Vector3(),facing:new THREE.Vector3(),pathDirection:new THREE.Vector3()};
       battle.friends.push(blueUnit);battle.redUnits.push(redUnit);
       blueUnit.collider={type:'vehicle',mesh:blue,x:bluePos.x,y:bluePos.y,z:bluePos.z,radius:blueSpec.radius,height:blueSpec.totalHeight,velocity:blueUnit.velocity,collisionKey:'combat.collisionFriendlyVehicle',vehicle:blueSpec.name};

@@ -6,6 +6,7 @@ import { resolveCampaignMission } from './resolve-campaign-mission.js';
 const STATE_KEYS = ['airControl', 'defenseIntegrity', 'sortieReadiness'];
 const STORE_KEYS = ['airMissiles', 'groundMissiles', 'gunRounds', 'flares', 'chaff'];
 const clamp = value => Math.max(0, Math.min(100, value));
+export const CAMPAIGN_RETRY_READINESS_COST = 3;
 
 function restoreStores(stores, restore, difficulty) {
   const caps = getCampaignStoreCaps(difficulty);
@@ -46,6 +47,7 @@ function createState(definition, difficulty, seedFactory) {
     ending: null,
     stores: null,
     sustainmentChoice: null,
+    sustainmentUsed: false,
   };
 }
 
@@ -120,14 +122,24 @@ export class CampaignSession {
     const choices = this.currentSustainmentDecision?.choices ?? [];
     return choices.find(choice => choice.id === this.state.sustainmentChoice) ?? null;
   }
+  get retryReadinessCost() {
+    return CAMPAIGN_RETRY_READINESS_COST + (this.selectedSustainmentChoice?.readinessCost ?? 0);
+  }
 
   getCurrentStores() {
     const caps = getCampaignStoreCaps(this.difficulty);
     return normalizeCampaignStores(this.state.stores ?? caps, this.difficulty) ?? caps;
   }
 
+  getStoresAfterChoice(choiceId = null) {
+    if (!choiceId) return this.getCurrentStores();
+    const choice = this.currentSustainmentDecision?.choices?.find(item => item.id === choiceId);
+    return choice ? restoreStores(this.getCurrentStores(), choice.restore, this.difficulty) : this.getCurrentStores();
+  }
+
   selectSustainmentChoice(choiceId) {
     if (choiceId !== null && typeof choiceId !== 'string') return false;
+    if (choiceId !== null && this.state.sustainmentUsed) return false;
     const choices = this.currentSustainmentDecision?.choices ?? [];
     const choice = choices.find(item => item.id === choiceId);
     if (choiceId !== null && (!choice || this.state.sortieReadiness < choice.readinessCost)) return false;
@@ -152,6 +164,7 @@ export class CampaignSession {
       completed: false,
       ending: null,
       sustainmentChoice: null,
+      sustainmentUsed: false,
     };
     this.developmentSelection = true;
     return true;
@@ -165,9 +178,7 @@ export class CampaignSession {
     const resolved = resolveCampaignMission(this.definition, this.state);
     if (!resolved) return null;
     const choice = this.selectedSustainmentChoice;
-    const stores = choice
-      ? restoreStores(this.getCurrentStores(), choice.restore, this.difficulty)
-      : this.getCurrentStores();
+    const stores = this.getStoresAfterChoice(choice?.id);
     resolved.mission.campaignStores = stores;
     resolved.mission.campaignSustainmentChoice = choice?.id ?? null;
     resolved.stores = stores;
@@ -176,9 +187,19 @@ export class CampaignSession {
 
   previewResult(outcome, result = {}) {
     const chapter = this.currentChapter;
-    if (!chapter) return { canAccept: false, classification: null, changes: {} };
+    if (!chapter) return {
+      canAccept: false,
+      classification: null,
+      changes: {},
+      retryReadinessCost: this.retryReadinessCost,
+    };
     const classification = classifyResult(chapter, outcome, result);
-    if (!classification) return { canAccept: false, classification: null, changes: {} };
+    if (!classification) return {
+      canAccept: false,
+      classification: null,
+      changes: {},
+      retryReadinessCost: this.retryReadinessCost,
+    };
     const base = applyEffects(this.state, chapter.effects[classification]);
     const optional = applyOptionalObjectiveEffects(base.next, chapter, result.optionalObjectives);
     const next = optional.next;
@@ -195,10 +216,12 @@ export class CampaignSession {
     return {
       canAccept: true,
       classification,
+      narrativeKey: `campaign.debrief.narrative.${classification}`,
       changes,
       optionalObjectiveChanges: optional.applied,
       nextState: next,
       sustainmentChoice: choice?.id ?? null,
+      retryReadinessCost: this.retryReadinessCost,
     };
   }
 
@@ -223,18 +246,26 @@ export class CampaignSession {
         ? result.optionalObjectives.map(objective => ({ ...objective }))
         : [],
       sustainmentChoice: preview.sustainmentChoice,
+      wingmen: Number.isFinite(result.wingmenSurvived) || Number.isFinite(result.wingmenTotal)
+        ? { survived: result.wingmenSurvived ?? 0, total: result.wingmenTotal ?? 0 }
+        : null,
       stores: result.remainingStores ? normalizeCampaignStores(result.remainingStores, state.difficulty) : state.stores,
       score: Number.isFinite(result.score) ? Math.max(0, Math.round(result.score)) : 0,
     }];
     if (result.remainingStores) state.stores = normalizeCampaignStores(result.remainingStores, state.difficulty);
     state.sustainmentChoice = null;
+    state.sustainmentUsed = false;
     state.chapterIndex += 1;
     state.chapterRetryCount = 0;
     if (state.chapterIndex >= this.definition.chapters.length) {
       state.completed = true;
       state.ending = preview.classification === 'setback'
         ? 'unresolved-front'
-        : state.defenseIntegrity >= 60 ? 'border-secured' : 'invasion-contained';
+        : state.defenseIntegrity >= 60
+          && state.flags.includes('border-line-stabilized')
+          && state.flags.includes('local-air-defense-breached')
+          ? 'border-secured'
+          : 'invasion-contained';
     } else {
       state.attemptSequence += 1;
       state.currentAttemptId = createAttemptId(this.definition, state.difficulty, state.attemptSequence);
@@ -247,11 +278,16 @@ export class CampaignSession {
 
   retryCurrent() {
     if (this.state.completed) return false;
+    const sustainmentChoice = this.selectedSustainmentChoice;
+    const retryReadinessCost = this.retryReadinessCost;
     this.state = {
       ...this.state,
+      sortieReadiness: clamp(this.state.sortieReadiness - retryReadinessCost),
       attemptSequence: this.state.attemptSequence + 1,
       retryCount: this.state.retryCount + 1,
       chapterRetryCount: this.state.chapterRetryCount + 1,
+      sustainmentChoice: null,
+      sustainmentUsed: Boolean(sustainmentChoice),
     };
     this.state.currentAttemptId = createAttemptId(
       this.definition,
