@@ -216,7 +216,10 @@ class MockElement {
     if (children[0]?.value !== undefined) this.options.push(...children);
   }
   appendChild(child) { this.children.push(child); return child; }
-  replaceChildren(...children) { this.children = children; }
+  replaceChildren(...children) {
+    this.children = children;
+    this.options = children.filter(child => child?.value !== undefined);
+  }
   cloneNode() { return new MockElement(); }
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
   getAttribute(name) { return this.attributes.get(name) ?? null; }
@@ -410,6 +413,23 @@ describe('main game session lifecycle', () => {
     const { MISSIONS } = await import('../../src/mission/missions.js');
     expect(harness.worlds.at(-1).mission).toBe(MISSIONS.training);
     expect(quickStart.open).toBe(false);
+  });
+
+  it('lets standalone sorties choose time independently from weather', async () => {
+    const document = await loadMain('patrol');
+    const timeOfDay = document.querySelector('#menu-time-of-day');
+    const weather = document.querySelector('#menu-weather');
+
+    expect(timeOfDay.hidden).toBe(false);
+    expect(timeOfDay.options).toHaveLength(6);
+    weather.value = 'fog';
+    weather.dispatch('change');
+    timeOfDay.value = '16.5';
+    timeOfDay.dispatch('change');
+
+    await launch(document);
+
+    expect(harness.worlds[0].mission.weather).toMatchObject({ preset: 'fog', timeOfDay: 16.5 });
   });
 
   it('completes a sortie, saves career progress, returns to menu, and launches again cleanly', async () => {

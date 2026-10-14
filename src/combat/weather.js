@@ -35,7 +35,6 @@ export const WEATHER_PRESETS = Object.freeze({
     cloudBaseAltitude: 1800,
     contrailBaseAltitude: 2200,
     contrailFullAltitude: 4200,
-    timeOfDay: 5.8,
     timeAdvanceHoursPerSecond: .012,
     wind: Object.freeze({ x: 4, y: .1, z: -5 }),
   }),

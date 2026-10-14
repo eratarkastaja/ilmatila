@@ -32,6 +32,7 @@ import {
   getWeatherTimeOfDay,
   isNightTime,
   resolveWeather,
+  TIME_OF_DAY_OPTIONS,
   WEATHER_PRESETS,
   weatherLabelKey,
 } from './combat/weather.js';
@@ -61,6 +62,7 @@ const devMissionSelect = document.querySelector('#dev-mission-select');
 const launchButton = document.querySelector('#launch-mission');
 const menuWeather = document.querySelector('[data-i18n="menu.weather"]');
 const menuWeatherSelector = document.querySelector('#menu-weather');
+const menuTimeOfDaySelector = document.querySelector('#menu-time-of-day');
 const menuDifficultyIndex = document.querySelector('#menu-difficulty-index');
 const launchErrorDialog = document.querySelector('#launch-error-dialog');
 const launchErrorTitle = document.querySelector('#launch-error-title');
@@ -116,6 +118,7 @@ let playMode = 'standalone';
 let campaignSession = null;
 let pendingCampaignResult = null;
 let standaloneWeatherPreset = null;
+let standaloneTimeOfDay = null;
 let standaloneKitSelection = null;
 let menuRadar = null;
 const theaterAreas = TERRAIN_AREAS;
@@ -208,7 +211,10 @@ function getSelectedDifficulty() {
 
 function selectedWeatherConfig(mission = selectedMissionResolution?.mission ?? selectedMissionDefinition) {
   if (playMode === 'campaign') return mission?.weather;
-  return { preset: standaloneWeatherPreset ?? 'clear' };
+  return {
+    preset: standaloneWeatherPreset ?? 'clear',
+    ...(Number.isFinite(standaloneTimeOfDay) ? { timeOfDay: standaloneTimeOfDay } : {}),
+  };
 }
 
 function getStandaloneKitState(mission = selectedMissionResolution?.mission ?? selectedMissionDefinition) {
@@ -235,6 +241,16 @@ function setWeatherSelector(mission = selectedMissionResolution?.mission ?? sele
   const campaign = playMode === 'campaign';
   const weatherRow = menuWeatherSelector.closest('.weather-select-row');
   if (weatherRow) weatherRow.hidden = campaign;
+  if (menuTimeOfDaySelector) {
+    const timeRow = menuTimeOfDaySelector.closest('.time-select-row');
+    if (timeRow) timeRow.hidden = campaign;
+    menuTimeOfDaySelector.replaceChildren(...TIME_OF_DAY_OPTIONS.map(option => {
+      const element = document.createElement('option');
+      element.value = String(option.hours);
+      element.textContent = t(option.labelKey);
+      return element;
+    }));
+  }
   const selected = resolveWeather(selectedWeatherConfig(mission));
   menuPreviewWeather = selected;
   setMenuWeather(selected);
@@ -252,6 +268,15 @@ function setWeatherSelector(mission = selectedMissionResolution?.mission ?? sele
   }));
   menuWeatherSelector.value = selected.id;
   menuWeatherSelector.disabled = Boolean(sortie?.launchInProgress) || campaign;
+  if (menuTimeOfDaySelector) {
+    const selectedTime = TIME_OF_DAY_OPTIONS.reduce((closest, option) => (
+      Math.abs(option.hours - selected.timeOfDay) < Math.abs(closest.hours - selected.timeOfDay)
+        ? option
+        : closest
+    ), TIME_OF_DAY_OPTIONS[0]);
+    menuTimeOfDaySelector.value = String(selectedTime.hours);
+    menuTimeOfDaySelector.disabled = Boolean(sortie?.launchInProgress) || campaign;
+  }
   needsMenuRender = true;
 }
 
@@ -262,7 +287,7 @@ function missionWithSelectedWeather(mission) {
   if (selected.id === authored.id && selected.timeOfDay === authored.timeOfDay) return mission;
   return {
     ...mission,
-    weather: { preset: selected.id },
+    weather: { preset: selected.id, timeOfDay: selected.timeOfDay },
   };
 }
 
@@ -560,6 +585,7 @@ function selectMission(id) {
     || (!developmentMode && !careerProgress.isUnlocked(id))) return false;
   if (playMode === 'standalone' && selectedMissionId !== id) {
     standaloneWeatherPreset = null;
+    standaloneTimeOfDay = null;
     standaloneKitSelection = null;
   }
   if (selectedMissionId !== id || plannedSortieSeed === null) plannedSortieSeed = createSortieSeed();
@@ -722,6 +748,7 @@ function activateStandaloneMode() {
   campaignSession = null;
   pendingCampaignResult = null;
   standaloneWeatherPreset = null;
+  standaloneTimeOfDay = null;
   standaloneKitSelection = null;
   menuDifficulty.value = careerProgress.difficulty;
   campaignView.setMode(playMode);
@@ -868,6 +895,15 @@ menuWeatherSelector?.addEventListener('change', () => {
     setWeatherSelector();
   } else {
     standaloneWeatherPreset = menuWeatherSelector.value;
+    setWeatherSelector();
+  }
+});
+
+menuTimeOfDaySelector?.addEventListener('change', () => {
+  if (playMode === 'campaign') {
+    setWeatherSelector();
+  } else {
+    standaloneTimeOfDay = Number(menuTimeOfDaySelector.value);
     setWeatherSelector();
   }
 });
