@@ -99,7 +99,10 @@ test('menu diagnostics copy the version, selected sortie seed, and environment',
   await page.goto('./');
   await page.locator('#quick-start-menu').click();
   await expect(page.locator('#menu-version')).not.toBeEmpty();
-  const copyButton = page.locator('#copy-diagnostics-menu');
+  await page.locator('#open-report-issue').click();
+  const reportDialog = page.locator('#report-issue-dialog');
+  await expect(reportDialog).toBeVisible();
+  const copyButton = page.locator('#copy-diagnostics-report');
   await expect(copyButton).toBeVisible();
   await copyButton.click();
   await expect(copyButton.locator('xpath=ancestor::div[@data-diagnostics-tools]').locator('[data-diagnostics-status]'))
@@ -117,4 +120,6 @@ test('menu diagnostics copy the version, selected sortie seed, and environment',
   expect(diagnostics.lastLoad).toBeTruthy();
   expect(diagnostics.lastState).toMatch(/^menu:/);
   expect(JSON.stringify(diagnostics)).not.toContain('Mozilla/5.0');
+  await page.locator('#close-report-issue').click();
+  await expect(reportDialog).toBeHidden();
 });
