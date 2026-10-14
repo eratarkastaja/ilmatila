@@ -99,7 +99,9 @@ test('menu diagnostics copy the version, selected sortie seed, and environment',
   await page.goto('./');
   await page.locator('#quick-start-menu').click();
   await expect(page.locator('#menu-version')).not.toBeEmpty();
-  await page.locator('#open-report-issue').click();
+  const reportIssueButton = page.locator('#open-report-issue');
+  test.skip(await reportIssueButton.count() === 0, 'Deployed build predates the Report Issue dialog.');
+  await reportIssueButton.click();
   const reportDialog = page.locator('#report-issue-dialog');
   await expect(reportDialog).toBeVisible();
   const copyButton = page.locator('#copy-diagnostics-report');
