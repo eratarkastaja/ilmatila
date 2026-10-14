@@ -40,7 +40,7 @@ export function shouldShowTargetMarker(targetOnScreen, markerArmed) {
 }
 
 export function shouldShowWaypointMarker(onScreen, phase) {
-  return Boolean(onScreen || phase === 'rtb');
+  return Boolean(onScreen || phase === 'rtb' || phase === 'objective');
 }
 
 export class TacticalHud {
@@ -125,8 +125,10 @@ export class TacticalHud {
     if (this.missionWaypointCue && waypoint) {
       const onScreen = this.placeWorldMarker(this.missionWaypointCue, waypoint, camera);
       setHiddenIfChanged(this.missionWaypointCue, !shouldShowWaypointMarker(onScreen, state.mission.phase));
+      setClassIfChanged(this.missionWaypointCue, 'objective-route', state.mission.phase === 'objective');
     } else if (this.missionWaypointCue) {
       setHiddenIfChanged(this.missionWaypointCue, true);
+      setClassIfChanged(this.missionWaypointCue, 'objective-route', false);
     }
 
     const missileThreat = state.threats.missile;

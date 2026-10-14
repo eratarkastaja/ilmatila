@@ -27,11 +27,12 @@ const setClassIfChanged = (node, className, enabled) => {
 
 /** Sortie progression from launch through ingress, tasking, recovery, and debrief. */
 export class MissionFlowSystem {
-  constructor({ mission, player, terrain, nodes = {}, onIngress = () => {}, onObjectiveActive = () => {}, onObjectiveComplete = () => {}, onRtb = () => {}, onPhaseChange = () => {}, onEnd = () => {} }) {
+  constructor({ mission, player, terrain, nodes = {}, getObjectiveWaypoint = () => null, onIngress = () => {}, onObjectiveActive = () => {}, onObjectiveComplete = () => {}, onRtb = () => {}, onPhaseChange = () => {}, onEnd = () => {} }) {
     this.mission = mission;
     this.player = player;
     this.terrain = terrain;
     this.nodes = nodes;
+    this.getObjectiveWaypoint = getObjectiveWaypoint;
     this.onIngress = onIngress;
     this.onObjectiveActive = onObjectiveActive;
     this.onObjectiveComplete = onObjectiveComplete;
@@ -74,6 +75,9 @@ export class MissionFlowSystem {
   get waypoint() {
     if (this.phase === MISSION_PHASE.NAVIGATION) return this.ingress;
     if (this.phase === MISSION_PHASE.RTB) return this.home;
+    if (this.phase === MISSION_PHASE.OBJECTIVE && this.mission.groundBattle) {
+      return this.getObjectiveWaypoint() ?? null;
+    }
     return null;
   }
 
@@ -235,7 +239,11 @@ export class MissionFlowSystem {
       ? `${formatNumber(distance / 1000, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} KM`
       : `${formatNumber(Math.round(distance))} M`;
     const bearingText = String(Math.round(bearing) % 360).padStart(3, '0');
-    const label = t(this.phase === MISSION_PHASE.RTB ? 'mission.route.home' : 'mission.route.ingress');
+    const label = t(this.phase === MISSION_PHASE.RTB
+      ? 'mission.route.home'
+      : this.phase === MISSION_PHASE.OBJECTIVE
+        ? 'mission.route.objective'
+        : 'mission.route.ingress');
     const range = `${bearingText}° · ${distanceText}`;
     if (this.nodes.routeLabel && this.nodes.routeLabel.textContent !== label) this.nodes.routeLabel.textContent = label;
     if (this.nodes.routeRange && this.nodes.routeRange.textContent !== range) this.nodes.routeRange.textContent = range;

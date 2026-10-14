@@ -6,7 +6,7 @@ const SAVE_VERSION = 1;
 const DIFFICULTIES = new Set(['easy', 'standard', 'hard']);
 
 const clampState = value => Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
-export const CAMPAIGN_STORE_KEYS = ['airMissiles', 'groundMissiles', 'gunRounds', 'flares', 'chaff'];
+export const CAMPAIGN_STORE_KEYS = ['airMissiles', 'groundMissiles', 'gunRounds', 'flares', 'chaff', 'fuelMinutes'];
 
 export function getCampaignStoreCaps(difficulty = 'standard') {
   const preset = getDifficultyPreset(difficulty);
@@ -16,6 +16,7 @@ export function getCampaignStoreCaps(difficulty = 'standard') {
     gunRounds: preset.player.weapons.gunRounds,
     flares: preset.player.countermeasures,
     chaff: preset.player.chaff.count,
+    fuelMinutes: preset.player.fuel.enduranceMinutes,
   };
 }
 
@@ -74,6 +75,14 @@ export function normalizeCampaignSave(value, expectedDifficulty = null) {
   const sustainmentChoice = !sustainmentUsed && sustainmentIds.has(value.sustainmentChoice)
     ? value.sustainmentChoice
     : null;
+  const kitKeys = new Set([...CAMPAIGN_STORE_KEYS, 'airMissileType', 'groundMissileType']);
+  const kitSelection = value.kitSelection && typeof value.kitSelection === 'object'
+    ? Object.fromEntries(Object.entries(value.kitSelection).filter(([key, amount]) => (
+      kitKeys.has(key) && (key.endsWith('Type')
+        ? typeof amount === 'string' && amount.length <= 40
+        : amount === null || Number.isFinite(Number(amount)))
+    )).map(([key, amount]) => [key, key.endsWith('Type') ? amount : amount === null ? null : Number(amount)]))
+    : null;
 
   return {
     version: SAVE_VERSION,
@@ -98,6 +107,7 @@ export function normalizeCampaignSave(value, expectedDifficulty = null) {
     stores: normalizeCampaignStores(value.stores, value.difficulty),
     sustainmentChoice,
     sustainmentUsed,
+    kitSelection,
   };
 }
 

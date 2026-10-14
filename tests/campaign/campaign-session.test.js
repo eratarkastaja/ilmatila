@@ -62,7 +62,16 @@ describe('CampaignSession', () => {
     expect(session.state.sustainmentChoice).toBeNull();
     expect(session.state.sustainmentUsed).toBe(true);
     expect(session.selectSustainmentChoice('partial-rearm')).toBe(false);
-    expect(session.resolveCurrentMission().mission.campaignStores).toEqual(session.getCurrentStores());
+    expect(session.resolveCurrentMission().mission.campaignStores).toEqual({
+      airMissiles: 4,
+      groundMissiles: 2,
+      gunRounds: 1000,
+      flares: 8,
+      chaff: 8,
+      fuelMinutes: 240,
+      airMissileType: 'amraam',
+      groundMissileType: 'stormbreaker',
+    });
   });
 
   it('authors an acceptable operational setback for every campaign chapter', () => {
@@ -322,6 +331,7 @@ describe('CampaignSession', () => {
       gunRounds: 80,
       flares: 1,
       chaff: 2,
+      fuelMinutes: 480,
     });
     expect(session.state.sortieReadiness).toBe(72);
     expect(session.state.sustainmentChoice).toBeNull();

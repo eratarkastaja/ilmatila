@@ -2289,6 +2289,10 @@ canvas.night-vision-scene {
   --waypoint-color: #e5d28e;
 }
 
+.mission-waypoint-cue.objective-route {
+  --waypoint-color: #e7c18b;
+}
+
 .mission-waypoint-cue.offscreen i {
   display: none;
 }

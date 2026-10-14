@@ -110,9 +110,11 @@
 }
 
 .diagnostics-tools [data-copy-diagnostics],
-.diagnostics-tools a {
+.diagnostics-tools a,
+.diagnostics-report-button {
   display: inline-flex;
   width: auto;
+  min-width: 94px;
   min-height: 34px;
   align-items: center;
   justify-content: center;
@@ -121,18 +123,23 @@
   color: #c7d5ce;
   background: rgba(7, 17, 27, .56);
   font: inherit;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
   text-decoration: none;
   cursor: pointer;
 }
 
 .diagnostics-tools [data-copy-diagnostics]:hover,
-.diagnostics-tools a:hover {
+.diagnostics-tools a:hover,
+.diagnostics-report-button:hover {
   border-color: #a9e1bd;
   color: #e8f6eb;
 }
 
 .diagnostics-tools [data-copy-diagnostics]:focus-visible,
-.diagnostics-tools a:focus-visible {
+.diagnostics-tools a:focus-visible,
+.diagnostics-report-button:focus-visible {
   outline: 2px solid #a9e1bd;
   outline-offset: 3px;
 }

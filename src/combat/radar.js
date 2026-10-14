@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { t } from '../ui/i18n.js';
-import { MISSILE_PROFILES } from './projectiles.js';
+import { getPlayerMissileProfile } from './projectiles.js';
 
 const setClassIfChanged = (node, className, enabled) => {
   if (node && node.classList.contains(className) !== Boolean(enabled)) {
@@ -12,7 +12,7 @@ const INITIAL_CONTACT_IDENTIFICATION_DELAY = 3.5;
 
 /** Owns radar contacts, search mode and the arcade-friendly weapon lock cue. */
 export class CombatRadar {
-  constructor(player, audio, weather = null, campaignSensorScale = 1) {
+  constructor(player, audio, weather = null, campaignSensorScale = 1, loadout = {}) {
     this.player = player;
     this.audio = audio;
     this.weather = weather;
@@ -21,10 +21,10 @@ export class CombatRadar {
     // Search sensors reach beyond the weapon envelopes, while launch ranges
     // stay in sync with the missile profiles.
     this.airRange = 27000;
-    this.airLockRange = MISSILE_PROFILES.playerAir.maxLaunchRange;
+    this.airLockRange = getPlayerMissileProfile('air', loadout.airMissileType).maxLaunchRange;
     this.groundRange = 11000;
     this.range = this.airRange;
-    this.groundLockRange = MISSILE_PROFILES.playerGround.maxLaunchRange;
+    this.groundLockRange = getPlayerMissileProfile('ground', loadout.groundMissileType).maxLaunchRange;
     this.target = null;
     this.targetDomain = null;
     this.targetLastKnownPosition = new THREE.Vector3();

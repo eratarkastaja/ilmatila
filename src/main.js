@@ -23,13 +23,16 @@ import { createSortieSeed } from './combat/random.js';
 import { getDifficultyPreset } from './combat/difficulty.js';
 import { planAirIngressStart } from './combat/air-combat-utils.js';
 import {
+  getKitLimits,
+  getRecommendedKit,
+  validateKit,
+} from './campaign/campaign-kit.js';
+import {
   daylightFactor,
-  formatTimeOfDay,
   getWeatherTimeOfDay,
   isNightTime,
-  normalizeTimeOfDay,
   resolveWeather,
-  TIME_OF_DAY_OPTIONS,
+  WEATHER_PRESETS,
   weatherLabelKey,
 } from './combat/weather.js';
 import { renderOptionalObjectives } from './ui/optional-objectives.js';
@@ -44,6 +47,10 @@ import './ui/styles/menu.css';
 const root = document.querySelector('#game');
 const PLAYER_START_AGL = 450;
 const startMenu = document.querySelector('#start-menu');
+const menuInteractiveControls = typeof startMenu?.querySelectorAll === 'function'
+  ? [...startMenu.querySelectorAll('button, select, input, summary')]
+  : [];
+let menuLoadingControlState = null;
 document.querySelector('#menu-version').textContent = APP_VERSION;
 const flightHud = document.querySelector('#flight-hud');
 const menuStatus = document.querySelector('#menu-status');
@@ -53,7 +60,8 @@ const devMissionPicker = document.querySelector('#dev-mission-picker');
 const devMissionSelect = document.querySelector('#dev-mission-select');
 const launchButton = document.querySelector('#launch-mission');
 const menuWeather = document.querySelector('[data-i18n="menu.weather"]');
-const menuTimeOfDay = document.querySelector('#menu-time-of-day');
+const menuWeatherSelector = document.querySelector('#menu-weather');
+const menuDifficultyIndex = document.querySelector('#menu-difficulty-index');
 const launchErrorDialog = document.querySelector('#launch-error-dialog');
 const launchErrorTitle = document.querySelector('#launch-error-title');
 const launchErrorMessage = document.querySelector('#launch-error-message');
@@ -107,8 +115,8 @@ let selectedMissionResolution = null;
 let playMode = 'standalone';
 let campaignSession = null;
 let pendingCampaignResult = null;
-let standaloneTimeOfDay = null;
-let campaignTimeOfDayOverride = null;
+let standaloneWeatherPreset = null;
+let standaloneKitSelection = null;
 let menuRadar = null;
 const theaterAreas = TERRAIN_AREAS;
 if (!menuTheater.options.length) {
@@ -178,62 +186,94 @@ let launchErrorKind = null;
 let menuStatusDescriptor = { key: 'menu.statusReady', params: {}, state: 'ready' };
 let launchProgressDescriptor = { progress: 0, titleKey: 'menu.launchButton', detailKey: 'menu.launchReadyStatus', params: {} };
 
+function setMenuLoadingLock(loading) {
+  if (loading) {
+    if (menuLoadingControlState) return;
+    menuLoadingControlState = menuInteractiveControls.map(control => [control, control.disabled]);
+    for (const control of menuInteractiveControls) control.disabled = true;
+    if (startMenu?.dataset) startMenu.dataset.loading = 'true';
+    return;
+  }
+  if (!menuLoadingControlState) return;
+  for (const [control, disabled] of menuLoadingControlState) control.disabled = disabled;
+  menuLoadingControlState = null;
+  if (startMenu?.dataset) delete startMenu.dataset.loading;
+}
+
 function getSelectedDifficulty() {
   return playMode === 'campaign' && campaignSession
     ? campaignSession.difficulty
     : careerProgress.difficulty;
 }
 
-function authoredTimeOfDay(mission = selectedMissionResolution?.mission ?? selectedMissionDefinition) {
-  return resolveWeather(mission?.weather).timeOfDay;
+function selectedWeatherConfig(mission = selectedMissionResolution?.mission ?? selectedMissionDefinition) {
+  if (playMode === 'campaign') return mission?.weather;
+  return { preset: standaloneWeatherPreset ?? 'clear' };
 }
 
-function selectedTimeOfDay(mission = selectedMissionResolution?.mission ?? selectedMissionDefinition) {
-  const authored = authoredTimeOfDay(mission);
-  if (playMode === 'campaign') {
-    return developmentMode && campaignTimeOfDayOverride !== null
-      ? campaignTimeOfDayOverride
-      : authored;
-  }
-  return standaloneTimeOfDay ?? authored;
+function getStandaloneKitState(mission = selectedMissionResolution?.mission ?? selectedMissionDefinition) {
+  const difficulty = getSelectedDifficulty();
+  const preset = getDifficultyPreset(difficulty);
+  const inventory = {
+    airMissiles: preset.player.weapons.airMissiles,
+    groundMissiles: preset.player.weapons.groundMissiles,
+    gunRounds: preset.player.weapons.gunRounds,
+    flares: preset.player.countermeasures,
+    chaff: preset.player.chaff.count,
+    fuelMinutes: preset.player.fuel.enduranceMinutes,
+  };
+  const limits = getKitLimits(difficulty);
+  const recommended = getRecommendedKit(inventory, mission);
+  const selected = standaloneKitSelection && validateKit(standaloneKitSelection, inventory, limits)
+    ? { ...recommended, ...standaloneKitSelection }
+    : recommended;
+  return { inventory, recommended, selected, limits };
 }
 
-function setTimeOfDaySelector(mission = selectedMissionResolution?.mission ?? selectedMissionDefinition) {
-  if (!menuTimeOfDay) return;
-  const value = selectedTimeOfDay(mission);
-  const authoredWeather = typeof mission?.weather === 'string'
-    ? { preset: mission.weather }
-    : { ...(mission?.weather ?? {}) };
-  menuPreviewWeather = resolveWeather({ ...authoredWeather, timeOfDay: value });
-  const options = TIME_OF_DAY_OPTIONS.map(option => ({
-    value: option.hours,
-    label: `${formatTimeOfDay(option.hours)} · ${t(option.labelKey)}`,
-  }));
-  if (!options.some(option => option.value === value)) {
-    options.push({ value, label: `${formatTimeOfDay(value)} · ${t('menu.authoredTime')}` });
-  }
-  menuTimeOfDay.replaceChildren(...options.map(option => {
+function setWeatherSelector(mission = selectedMissionResolution?.mission ?? selectedMissionDefinition) {
+  if (!menuWeatherSelector) return;
+  const campaign = playMode === 'campaign';
+  const weatherRow = menuWeatherSelector.closest('.weather-select-row');
+  if (weatherRow) weatherRow.hidden = campaign;
+  const selected = resolveWeather(selectedWeatherConfig(mission));
+  menuPreviewWeather = selected;
+  setMenuWeather(selected);
+  const options = Object.values(WEATHER_PRESETS)
+    .filter(preset => preset.id !== 'night')
+    .map(preset => ({
+    value: preset.id,
+    label: t(preset.labelKey),
+    }));
+  menuWeatherSelector.replaceChildren(...options.map(option => {
     const element = document.createElement('option');
     element.value = String(option.value);
     element.textContent = option.label;
     return element;
   }));
-  menuTimeOfDay.value = String(value);
-  menuTimeOfDay.disabled = Boolean(sortie?.launchInProgress)
-    || (playMode === 'campaign' && !developmentMode);
+  menuWeatherSelector.value = selected.id;
+  menuWeatherSelector.disabled = Boolean(sortie?.launchInProgress) || campaign;
   needsMenuRender = true;
 }
 
-function missionWithSelectedTimeOfDay(mission) {
+function missionWithSelectedWeather(mission) {
   if (!mission) return mission;
-  const timeOfDay = selectedTimeOfDay(mission);
-  if (timeOfDay === authoredTimeOfDay(mission)) return mission;
-  const weather = typeof mission.weather === 'string'
-    ? { preset: mission.weather }
-    : { ...(mission.weather ?? {}) };
+  const selected = resolveWeather(selectedWeatherConfig(mission));
+  const authored = resolveWeather(mission.weather);
+  if (selected.id === authored.id && selected.timeOfDay === authored.timeOfDay) return mission;
   return {
     ...mission,
-    weather: { ...weather, timeOfDay },
+    weather: { preset: selected.id },
+  };
+}
+
+function missionForLaunch(mission, { preserveAuthoredWeather = false } = {}) {
+  const weatherMission = preserveAuthoredWeather ? mission : missionWithSelectedWeather(mission);
+  if (playMode === 'campaign' || !standaloneKitSelection) return weatherMission;
+  const kit = getStandaloneKitState(mission).selected;
+  return {
+    ...weatherMission,
+    campaignStores: kit,
+    campaignKit: kit,
   };
 }
 
@@ -244,13 +284,17 @@ function updateMenuControlLocks() {
   // selectors are still frozen once terrain/aircraft preparation begins.
   menuDifficulty.disabled = Boolean(sortie?.launchInProgress);
   menuTheater.disabled = campaignLocked || Boolean(sortie?.launchInProgress);
+  const areaRow = menuTheater.closest('.theater-select-row');
+  if (areaRow) areaRow.hidden = campaignLocked;
+  if (menuDifficultyIndex) menuDifficultyIndex.textContent = campaignLocked ? '02' : '03';
   if (devMissionSelect) {
     devMissionSelect.disabled = !developmentMode || Boolean(sortie?.launchInProgress || sortie?.started);
   }
-  setTimeOfDaySelector();
+  setWeatherSelector();
 }
 
 function restoreMenuControls() {
+  setMenuLoadingLock(false);
   launchButton.disabled = !selectedMissionDefinition;
   launchButton.setAttribute('aria-busy', 'false');
   updateMenuControlLocks();
@@ -389,7 +433,7 @@ if (frameProfiler) {
       const selectedArea = theaterAreas.find(area => area.id === selectedAreaId) ?? theaterAreas[0];
       const prepared = await sortie.prepare({
         missionId: selectedMissionId,
-        mission: missionWithSelectedTimeOfDay(selectedMissionDefinition),
+        mission: missionForLaunch(selectedMissionDefinition),
         areaId: selectedArea.id,
         area: selectedArea,
         difficulty: getSelectedDifficulty(),
@@ -423,6 +467,7 @@ document.addEventListener('ilmatila:languagechange', () => {
 });
 
 function renderMenuStatus() {
+  if (!menuStatus) return;
   const dot = document.createElement('i');
   menuStatus.replaceChildren(dot, document.createTextNode(t(menuStatusDescriptor.key, menuStatusDescriptor.params)));
   menuStatus.dataset.state = menuStatusDescriptor.state;
@@ -513,7 +558,10 @@ function renderMissionProgress() {
 function selectMission(id) {
   if (!Object.hasOwn(MISSIONS, id)
     || (!developmentMode && !careerProgress.isUnlocked(id))) return false;
-  if (playMode === 'standalone' && selectedMissionId !== id) standaloneTimeOfDay = null;
+  if (playMode === 'standalone' && selectedMissionId !== id) {
+    standaloneWeatherPreset = null;
+    standaloneKitSelection = null;
+  }
   if (selectedMissionId !== id || plannedSortieSeed === null) plannedSortieSeed = createSortieSeed();
   selectedMissionId = id;
   const baseMission = stressMode ? { ...MISSIONS[id], variants: [] } : MISSIONS[id];
@@ -536,10 +584,7 @@ function selectMission(id) {
   document.querySelector('#briefing-copy').textContent = t(`mission.${id}.briefing`);
   document.querySelector('#theater-mission-name').textContent = t(`mission.${id}.title`).toUpperCase();
   setMenuWeather(missionResolution.mission.weather);
-  if (standaloneTimeOfDay === null && playMode === 'standalone') {
-    standaloneTimeOfDay = authoredTimeOfDay(missionResolution.mission);
-  }
-  setTimeOfDaySelector(missionResolution.mission);
+  setWeatherSelector(missionResolution.mission);
   const standardWeapons = getDifficultyPreset('standard').player.weapons;
   const selectedWeapons = getDifficultyPreset(careerProgress.difficulty).player.weapons;
   const optionalObjectives = scaleMissileReserveObjectives(
@@ -582,7 +627,7 @@ function renderCampaignChapter() {
       : '';
     document.querySelector('#theater-mission-name').textContent = t(campaignSession.definition.titleKey).toUpperCase();
     setMenuWeather('clear');
-    setTimeOfDaySelector(null);
+    setWeatherSelector(null);
     renderOptionalObjectives(briefingOptionalObjectiveList, []);
     if (briefingVariant) briefingVariant.hidden = true;
     if (campaignIntel) campaignIntel.hidden = true;
@@ -610,7 +655,7 @@ function renderCampaignChapter() {
   document.querySelector('#briefing-copy').textContent = t(resolved.chapter.briefingKey);
   document.querySelector('#theater-mission-name').textContent = t(resolved.chapter.titleKey).toUpperCase();
   setMenuWeather(resolved.preview.mission.weather);
-  setTimeOfDaySelector(resolved.preview.mission);
+  setWeatherSelector(resolved.preview.mission);
   const standardWeapons = getDifficultyPreset('standard').player.weapons;
   const selectedWeapons = getDifficultyPreset(campaignSession.difficulty).player.weapons;
   const optionalObjectives = scaleMissileReserveObjectives(
@@ -641,7 +686,6 @@ function selectDevelopmentCampaignChapter(chapterId) {
   if (!developmentMode || playMode !== 'campaign' || !campaignSession) return false;
   const chapterIndex = campaignSession.definition.chapters.findIndex(chapter => chapter.id === chapterId);
   if (!campaignSession.selectDevelopmentChapter(chapterIndex)) return false;
-  campaignTimeOfDayOverride = null;
   pendingCampaignResult = null;
   campaignView.hideDebrief();
   renderCampaignChapter();
@@ -652,7 +696,6 @@ function selectDevelopmentCampaignChapter(chapterId) {
 function activateCampaignMode() {
   if (sortie?.started || sortie?.launchInProgress) return;
   playMode = 'campaign';
-  campaignTimeOfDayOverride = null;
   const difficulty = ['easy', 'standard', 'hard'].includes(menuDifficulty.value)
     ? menuDifficulty.value
     : careerProgress.difficulty;
@@ -676,9 +719,10 @@ function activateCampaignMode() {
 function activateStandaloneMode() {
   if (sortie?.started || sortie?.launchInProgress) return;
   playMode = 'standalone';
-  campaignTimeOfDayOverride = null;
   campaignSession = null;
   pendingCampaignResult = null;
+  standaloneWeatherPreset = null;
+  standaloneKitSelection = null;
   menuDifficulty.value = careerProgress.difficulty;
   campaignView.setMode(playMode);
   plannedSortieSeed = null;
@@ -744,6 +788,7 @@ async function loadTerrainForMenu(requestedId) {
   const controller = new AbortController();
   menuTerrainController = controller;
   if (!sortie?.launchInProgress) {
+    setMenuLoadingLock(true);
     launchButton.disabled = true;
     launchButton.setAttribute('aria-busy', 'true');
     setLaunchProgress(1, 'menu.loadingAreaTitle', 'terrain.fetchingArea');
@@ -803,7 +848,6 @@ menuDifficulty.addEventListener('change', () => {
       difficulty,
     });
     pendingCampaignResult = null;
-    campaignTimeOfDayOverride = null;
     campaignView.hideDebrief();
     renderCampaignChapter();
     updateMenuControlLocks();
@@ -819,20 +863,13 @@ menuDifficulty.addEventListener('change', () => {
   selectMission(selectedMissionId);
 });
 
-menuTimeOfDay?.addEventListener('change', () => {
-  const value = Number(menuTimeOfDay.value);
-  if (!Number.isFinite(value)) return;
-  const normalized = normalizeTimeOfDay(value);
+menuWeatherSelector?.addEventListener('change', () => {
   if (playMode === 'campaign') {
-    if (!developmentMode) {
-      setTimeOfDaySelector();
-      return;
-    }
-    campaignTimeOfDayOverride = normalized;
+    setWeatherSelector();
   } else {
-    standaloneTimeOfDay = normalized;
+    standaloneWeatherPreset = menuWeatherSelector.value;
+    setWeatherSelector();
   }
-  setTimeOfDaySelector();
 });
 
 for (const card of missionCards) card.addEventListener('click', () => selectMission(card.dataset.mission));
@@ -842,6 +879,21 @@ devMissionSelect?.addEventListener('change', () => {
 campaignView.onSustainmentChoice = choiceId => {
   if (playMode !== 'campaign' || !campaignSession) return;
   if (campaignSession.selectSustainmentChoice(choiceId)) renderCampaignChapter();
+};
+campaignView.onKitChange = kit => {
+  if (playMode !== 'campaign' || !campaignSession) return;
+  if (campaignSession.selectKit(kit)) renderCampaignChapter();
+};
+campaignView.onStandaloneKitOpen = () => {
+  if (playMode !== 'standalone' || sortie?.started || sortie?.launchInProgress) return;
+  const state = getStandaloneKitState();
+  standaloneKitSelection = { ...state.selected };
+  campaignView.showStandaloneKit(state, nextKit => {
+    const current = getStandaloneKitState();
+    if (!validateKit(nextKit, current.inventory, current.limits)) return;
+    standaloneKitSelection = { ...nextKit };
+    campaignView.renderStandaloneKit(getStandaloneKitState());
+  });
 };
 campaignView.onNewRun = () => {
   if (playMode !== 'campaign' || !campaignSession || !campaignSession.completed) return;
@@ -858,6 +910,7 @@ campaignView.standaloneModeButton.addEventListener('click', activateStandaloneMo
 campaignView.campaignModeButton.addEventListener('click', activateCampaignMode);
 
 const creditsDialog = document.querySelector('#credits-dialog');
+const reportIssueDialog = document.querySelector('#report-issue-dialog');
 const pauseDialog = document.querySelector('#pause-dialog');
 const pauseMainPanel = document.querySelector('#pause-main-panel');
 const pauseConfirmPanel = document.querySelector('#pause-confirm-panel');
@@ -872,10 +925,15 @@ const cancelQuitToMenuButton = document.querySelector('#cancel-quit-to-menu');
 const confirmQuitToMenuButton = document.querySelector('#confirm-quit-to-menu');
 const missionDebriefReturnButton = document.querySelector('#mission-debrief-return');
 document.querySelector('#open-credits').addEventListener('click', () => creditsDialog.showModal());
+document.querySelector('#open-report-issue').addEventListener('click', () => reportIssueDialog.showModal());
 document.querySelector('#close-credits').addEventListener('click', () => creditsDialog.close());
 document.querySelector('#credits-back').addEventListener('click', () => creditsDialog.close());
+document.querySelector('#close-report-issue').addEventListener('click', () => reportIssueDialog.close());
 creditsDialog.addEventListener('click', event => {
   if (event.target === creditsDialog) creditsDialog.close();
+});
+reportIssueDialog.addEventListener('click', event => {
+  if (event.target === reportIssueDialog) reportIssueDialog.close();
 });
 function openMenuControls() {
   menuControlsDialog.showModal();
@@ -1154,7 +1212,7 @@ document.addEventListener('keydown', event => {
   else pauseFlight();
 }, { capture: true });
 
-async function launchMissionFromGesture({ allowDuringMenuTerrainLoad = false } = {}) {
+async function launchMissionFromGesture({ allowDuringMenuTerrainLoad = false, preserveAuthoredWeather = false } = {}) {
   if (sortie?.started || sortie?.launchInProgress || (launchButton.disabled && !allowDuringMenuTerrainLoad)) return;
   const launchAttemptId = ++launchAttempt;
   if (plannedSortieSeed === null) {
@@ -1172,7 +1230,7 @@ async function launchMissionFromGesture({ allowDuringMenuTerrainLoad = false } =
   const selectedArea = theaterAreas.find(area => area.id === selectedAreaId) ?? theaterAreas[0];
   const prepared = await sortie.prepare({
     missionId: selectedMissionId,
-    mission: missionWithSelectedTimeOfDay(selectedMissionDefinition),
+    mission: missionForLaunch(selectedMissionDefinition, { preserveAuthoredWeather }),
     areaId: selectedArea.id,
     area: selectedArea,
     difficulty: getSelectedDifficulty(),
@@ -1206,7 +1264,7 @@ quickStartTrainingButton.addEventListener('click', () => {
   if (playMode === 'campaign') activateStandaloneMode();
   selectMission('training');
   dismissQuickStart();
-  void launchMissionFromGesture({ allowDuringMenuTerrainLoad: true });
+  void launchMissionFromGesture({ allowDuringMenuTerrainLoad: true, preserveAuthoredWeather: true });
 });
 
 function openQuickStartForFirstVisit() {
@@ -1498,11 +1556,13 @@ function animate() {
     clouds.position.y = (activeWeather.cloudBaseAltitude ?? 3500) - 3500;
     clouds.position.z = activeWeather.wind.z * clock.elapsedTime;
   } else if (!sortie.paused && combat) {
-    // Let the cloud field drift across the camera slowly with the wind instead
-    // of locking it in place during flight.
-    clouds.position.x = player.position.x * 0.98 + activeWeather.wind.x * clock.elapsedTime;
+    // Clouds are world scenery, not a camera/aircraft overlay. Following the
+    // player here makes low decks visibly chase the aircraft and exposes their
+    // billboard nature; the fixed seeded field and wind drift provide enough
+    // coverage for a sortie without that artifact.
+    clouds.position.x = activeWeather.wind.x * clock.elapsedTime;
     clouds.position.y = (activeWeather.cloudBaseAltitude ?? 3500) - 3500;
-    clouds.position.z = player.position.z * 0.98 + activeWeather.wind.z * clock.elapsedTime;
+    clouds.position.z = activeWeather.wind.z * clock.elapsedTime;
   }
   if (sortie.started || needsMenuRender) {
     sunEffects.update(camera);

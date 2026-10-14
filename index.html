@@ -83,24 +83,48 @@
               <div><span><small data-i18n="campaign.defenseIntegrity">DEFENSE INTEGRITY</small><b id="campaign-defense-integrity-value">0</b></span><em id="campaign-defense-integrity-next"></em><i><b id="campaign-defense-integrity-fill"></b></i></div>
               <div><span><small data-i18n="campaign.sortieReadiness">SORTIE READINESS</small><b id="campaign-sortie-readiness-value">0</b></span><em id="campaign-sortie-readiness-next"></em><i><b id="campaign-sortie-readiness-fill"></b></i></div>
             </div>
-            <section class="campaign-stores" aria-labelledby="campaign-stores-title">
-              <header><small data-i18n="campaign.stores.kicker">SORTIE LOADOUT</small><h3 id="campaign-stores-title" data-i18n="campaign.stores.title">STORES BEFORE LAUNCH</h3></header>
-              <div class="campaign-stores-head"><span></span><small data-i18n="campaign.stores.current">CURRENT</small><small data-i18n="campaign.stores.planned">PLANNED</small><small data-i18n="campaign.stores.forecast">AFTER SUPPORT</small></div>
-              <div id="campaign-stores-list" class="campaign-stores-list"></div>
-              <p id="campaign-stores-note"></p>
-            </section>
-            <section class="campaign-history" aria-labelledby="campaign-history-title">
-              <header><small data-i18n="campaign.history.kicker">FLIGHT RECORD</small><h3 id="campaign-history-title" data-i18n="campaign.history.title">CAMPAIGN HISTORY</h3></header>
-              <ol id="campaign-history-list"></ol>
-            </section>
-            <section id="campaign-sustainment" class="campaign-sustainment" hidden aria-labelledby="campaign-sustainment-title">
-              <header><div><small data-i18n="campaign.sustainment.kicker">FIELD SUPPORT</small><h3 id="campaign-sustainment-title" data-i18n="campaign.sustainment.title">LIMITED SUPPORT WINDOW</h3></div><b id="campaign-sustainment-status"></b></header>
-              <p id="campaign-sustainment-description"></p>
-              <div id="campaign-sustainment-choices" class="campaign-sustainment-choices"></div>
-            </section>
+            <button id="campaign-history-open" class="campaign-history-open" type="button" data-i18n="campaign.history.open">OPEN CAMPAIGN HISTORY</button>
+            <button id="campaign-sustainment-open" class="campaign-sustainment-open" type="button" hidden data-i18n="campaign.sustainment.open">OPEN SUPPORT WINDOW</button>
             <p id="campaign-ending" class="campaign-ending" hidden></p>
             <button id="campaign-new-run" class="campaign-new-run" type="button" hidden data-i18n="campaign.newRun">START NEW CAMPAIGN</button>
           </section>
+
+          <dialog id="campaign-sustainment-dialog" class="campaign-sustainment-dialog" aria-labelledby="campaign-sustainment-title">
+            <section id="campaign-sustainment" class="campaign-sustainment">
+              <header><div><small data-i18n="campaign.sustainment.kicker">FIELD SUPPORT</small><h3 id="campaign-sustainment-title" data-i18n="campaign.sustainment.title">LIMITED SUPPORT WINDOW</h3></div><b id="campaign-sustainment-status"></b></header>
+              <p id="campaign-sustainment-description"></p>
+              <section class="campaign-kit" aria-labelledby="campaign-kit-title">
+                <header><div><small data-i18n="campaign.kit.kicker">LOADOUT PLANNER</small><h4 id="campaign-kit-title" data-i18n="campaign.kit.title">SELECT KIT</h4></div><button id="campaign-kit-recommended" type="button" data-i18n="campaign.kit.recommended">USE RECOMMENDED</button></header>
+                <div id="campaign-kit-form" class="campaign-kit-form"></div>
+                <p id="campaign-kit-limits" class="campaign-kit-limits"></p>
+                <section class="campaign-kit-capacity" aria-labelledby="campaign-kit-mass-title">
+                  <header><small id="campaign-kit-mass-title" data-i18n="campaign.kit.massTitle">AIRCRAFT MASS</small><b id="campaign-kit-mass-readout"></b></header>
+                  <div class="campaign-kit-mass-bar"><i id="campaign-kit-mass-fill"></i></div>
+                </section>
+                <section class="campaign-kit-hardpoints" aria-labelledby="campaign-kit-hardpoints-title">
+                  <header><small id="campaign-kit-hardpoints-title" data-i18n="campaign.kit.hardpointsTitle">WEAPON STATIONS</small><b id="campaign-kit-hardpoints-readout"></b></header>
+                  <div id="campaign-kit-hardpoints" class="campaign-kit-hardpoint-list"></div>
+                  <div class="campaign-kit-hardpoint-legend"><span><i class="air"></i><small data-i18n="campaign.kit.legendAir">A-A MISSILE</small></span><span><i class="ground"></i><small data-i18n="campaign.kit.legendGround">A-G MISSILE</small></span><span><i class="empty"></i><small data-i18n="campaign.kit.legendEmpty">EMPTY</small></span></div>
+                </section>
+              </section>
+              <section class="campaign-stores" aria-labelledby="campaign-stores-title">
+                <header><small data-i18n="campaign.stores.kicker">SORTIE LOADOUT</small><h3 id="campaign-stores-title" data-i18n="campaign.stores.title">STORES BEFORE LAUNCH</h3></header>
+                <div class="campaign-stores-head"><span></span><small data-i18n="campaign.stores.current">CURRENT</small><small data-i18n="campaign.stores.planned">PLANNED</small><small data-i18n="campaign.stores.forecast">AFTER SUPPORT</small></div>
+                <div id="campaign-stores-list" class="campaign-stores-list"></div>
+                <p id="campaign-stores-note"></p>
+              </section>
+              <div id="campaign-sustainment-choices" class="campaign-sustainment-choices"></div>
+              <button id="campaign-sustainment-close" class="campaign-sustainment-close" type="button" data-i18n="campaign.sustainment.close">CLOSE</button>
+            </section>
+          </dialog>
+
+          <dialog id="campaign-history-dialog" class="campaign-history-dialog" aria-labelledby="campaign-history-title">
+            <section class="campaign-history campaign-history-modal">
+              <header><div><small data-i18n="campaign.history.kicker">FLIGHT RECORD</small><h3 id="campaign-history-title" data-i18n="campaign.history.title">CAMPAIGN HISTORY</h3></div></header>
+              <ol id="campaign-history-list"></ol>
+              <button id="campaign-history-close" class="campaign-sustainment-close" type="button" data-i18n="campaign.history.close">CLOSE</button>
+            </section>
+          </dialog>
 
           <div id="standalone-mission-selection">
             <div class="mission-heading"><span>01</span><strong data-i18n="menu.chooseProfile">Select a mission</strong><i data-i18n="menu.missionCount">4 MISSIONS</i></div>
@@ -141,17 +165,18 @@
             <div class="select-wrap"><select id="menu-theater" data-i18n-aria-label="menu.theaterAria"><option value="paijanne">PÄIJÄNNE</option><option value="virolahti">VIROLAHTI</option><option value="ilomantsi">ILOMANTSI</option><option value="kuusamo">KUUSAMO</option></select><i>⌄</i></div>
           </div>
           <div class="theater-select-row difficulty-select-row">
-            <label for="menu-difficulty"><span class="theater-index">03</span><strong data-i18n="menu.difficultyLabel">DIFFICULTY</strong></label>
+            <label for="menu-difficulty"><span id="menu-difficulty-index" class="theater-index">03</span><strong data-i18n="menu.difficultyLabel">DIFFICULTY</strong></label>
             <div class="select-wrap"><select id="menu-difficulty" data-i18n-aria-label="menu.difficultyAria">
               <option value="easy" data-i18n="difficulty.easy">EASY</option>
               <option value="standard" data-i18n="difficulty.standard">STANDARD</option>
               <option value="hard" data-i18n="difficulty.hard">HARD</option>
             </select><i>⌄</i></div>
           </div>
-          <div class="theater-select-row time-select-row">
-            <label for="menu-time-of-day"><span class="theater-index">04</span><strong data-i18n="menu.timeOfDayLabel">TIME OF DAY</strong></label>
-            <div class="select-wrap"><select id="menu-time-of-day" data-i18n-aria-label="menu.timeOfDayAria"></select><i>⌄</i></div>
+          <div class="theater-select-row weather-select-row">
+            <label for="menu-weather"><span class="theater-index">04</span><strong data-i18n="menu.weatherLabel">WEATHER</strong></label>
+            <div class="select-wrap"><select id="menu-weather" data-i18n-aria-label="menu.weatherAria"></select><i>⌄</i></div>
           </div>
+          <button id="standalone-kit-open" class="campaign-sustainment-open standalone-kit-open" type="button" data-i18n="menu.kitSelection">OPEN KIT SELECTION</button>
 
           <div class="launch-actions">
             <button id="launch-mission" class="launch-button" type="button" aria-busy="false">
@@ -164,13 +189,8 @@
           </div>
           <button id="show-menu-controls" class="menu-controls-button" type="button"><span data-i18n="pause.controlsButton">SHOW CONTROLS</span><b aria-hidden="true">↗</b></button>
           <div class="diagnostics-tools" data-diagnostics-tools>
-            <button id="copy-diagnostics-menu" type="button" data-copy-diagnostics="app" data-i18n="diagnostics.copy">COPY DIAGNOSTICS</button>
-            <a href="https://github.com/eratarkastaja/ilmatila/issues" target="_blank" rel="noreferrer" data-i18n="diagnostics.reportIssue">REPORT BETA ISSUE</a>
-            <small data-diagnostics-status role="status" aria-live="polite"></small>
-            <p data-i18n="diagnostics.privacy">Only game, browser, and sortie technical details are copied; no personal data is included.</p>
-            <p data-i18n="diagnostics.reportHint">Paste the copied diagnostics into your issue report.</p>
+            <button id="open-report-issue" class="diagnostics-report-button" type="button" data-i18n="diagnostics.reportIssue">REPORT BETA ISSUE</button>
           </div>
-          <div class="menu-footnote"><span id="menu-status"><i></i> OPERATIONS READY · SELECT MISSION</span></div>
         </section>
 
         <aside class="theater-panel" data-i18n-aria-label="menu.theaterAriaLabel">
@@ -191,11 +211,34 @@
             <ul id="briefing-optional-objective-list" class="optional-objective-list"></ul>
           </section>
           <div class="theater-stats"><div><small data-i18n="menu.statMission">MISSION</small><strong id="theater-mission-name">INTERCEPT FLIGHT</strong></div><div><small data-i18n="menu.statArea">AREA</small><strong id="theater-area-name">PÄIJÄNNE</strong></div><div><small data-i18n="menu.statFlight">FRIENDLY FLIGHT</small><strong>F-35A <i>× 03</i></strong></div><div><small data-i18n="menu.statWeather">WEATHER</small><strong data-i18n="menu.weather">PARTLY CLOUDY</strong></div></div>
-          <div class="theater-caption"><span data-i18n="menu.airspaceStatus">AIR DEFENCE EXERCISE</span><i></i><b data-i18n="menu.surveillanceActive">SECTOR CONTACTS</b></div>
         </aside>
       </div>
 
     </main>
+
+    <dialog id="report-issue-dialog" class="report-issue-dialog" aria-labelledby="report-issue-title" aria-describedby="report-issue-description">
+      <section class="report-issue-card">
+        <header>
+          <small data-i18n="diagnostics.reportKicker">BETA FEEDBACK</small>
+          <h2 id="report-issue-title" data-i18n="diagnostics.reportTitle">REPORT AN ISSUE</h2>
+        </header>
+        <p id="report-issue-description" data-i18n="diagnostics.reportDescription">Copy the diagnostics, then open the issue tracker and describe what happened.</p>
+        <div class="report-issue-steps">
+          <p><b>01</b><span data-i18n="diagnostics.reportStepCopy">Copy the diagnostics below.</span></p>
+          <p><b>02</b><span data-i18n="diagnostics.reportStepDescribe">Describe the mission, steps to reproduce, and what you expected.</span></p>
+          <p><b>03</b><span data-i18n="diagnostics.reportStepPaste">Paste the diagnostics into the issue report.</span></p>
+        </div>
+        <p class="report-issue-privacy" data-i18n="diagnostics.privacy">Only game, browser, and sortie technical details are copied; no personal data is included.</p>
+        <div class="diagnostics-tools" data-diagnostics-tools>
+          <button id="copy-diagnostics-report" type="button" data-copy-diagnostics="app" data-i18n="diagnostics.copy">COPY DIAGNOSTICS</button>
+          <small data-diagnostics-status role="status" aria-live="polite"></small>
+        </div>
+        <div class="report-issue-actions">
+          <a href="https://github.com/eratarkastaja/ilmatila/issues" target="_blank" rel="noreferrer" data-i18n="diagnostics.openTracker">OPEN ISSUE TRACKER ↗</a>
+          <button id="close-report-issue" type="button" data-i18n="diagnostics.close">CLOSE</button>
+        </div>
+      </section>
+    </dialog>
 
     <dialog id="quick-start-dialog" class="pause-dialog quick-start-dialog" aria-labelledby="quick-start-title" aria-describedby="quick-start-description">
       <div class="quick-start-card">

@@ -46,13 +46,21 @@ Each run stores three visible values from 0 to 100:
   support.
 
 Accepted sorties carry the remaining air-to-air missiles, air-to-ground
-missiles, cannon rounds, flares, and chaff into the next chapter, capped by the
-selected difficulty's normal stores. The Disperse, Hold the E18, and
+missiles, cannon rounds, flares, chaff, and fuel minutes into the next chapter,
+capped by the selected difficulty's normal stores. Before launch, the campaign
+view opens a kit selector with a mission-aware recommended loadout or manual
+values. Hardpoints, payload mass, inventory, and fuel endurance validate the
+selection before it is passed to the sortie. The Disperse, Hold the E18, and
 Counterstroke chapters expose the same limited sustainment choice: a small
-partial rearm or field maintenance restoration with a readiness cost.
-Before launch, the campaign view shows the current stores, the effective sortie
-loadout after readiness scaling, and the forecast after the selected sustainment
-choice. This makes the readiness and support tradeoff visible before takeoff.
+partial rearm or field maintenance restoration with a readiness cost. The
+selector shows current inventory, post-support inventory, and the chosen kit so
+the readiness and support tradeoff is visible before takeoff.
+The selector offers AMRAAM or Sidewinder for air combat and JASSM-ER, AARGM-ER,
+StormBreaker, or JDAM for ground attack. Standard and Hard use four internal
+plus six external weapon stations; Easy exposes two additional arcade stations.
+Weapon choice changes missile behavior and mass, while the visual station row
+makes the internal/external tradeoff legible without simulating every aircraft
+integration restriction.
 The overview also carries forward a short situation report and wingman return
 status from the previous accepted sortie. During launch, each chapter adds a
 semantic radio tasking message alongside the shared phase calls.
@@ -159,9 +167,10 @@ sorties expose the time selector in the normal menu.
 
 ## Data, validation, and persistence
 
-Campaign definitions live in `src/campaign/campaigns.js`; state transitions
-and sustainment are in `campaign-session.js`; tolerant browser persistence is
-in `campaign-progress.js`; pure chapter resolution is in
+Campaign definitions live in `src/campaign/campaigns.js`; state transitions,
+sustainment, and selected kits are in `campaign-session.js`; kit limits and
+recommendations are pure functions in `campaign-kit.js`; tolerant browser
+persistence is in `campaign-progress.js`; pure chapter resolution is in
 `resolve-campaign-mission.js`. The resolver uses the sortie seed and keeps
 variant/encounter selection separate from combat random rolls. Built-in
 campaign, mission, weather, and difficulty shapes are checked by

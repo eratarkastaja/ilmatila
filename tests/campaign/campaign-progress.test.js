@@ -86,6 +86,7 @@ describe('CampaignProgress', () => {
       gunRounds: 3500,
       flares: 8,
       chaff: 4,
+      fuelMinutes: 480,
     });
     expect(loaded.sustainmentChoice).toBeNull();
     expect(new CampaignProgress(createStorage()).getSave('standard')).toBeNull();

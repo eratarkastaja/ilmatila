@@ -8,12 +8,36 @@ export const MISSILE_PROFILES = {
     designation: 'AIM-120C · AMRAAM', count: 10, damage: 5, seeker: 'radar', maxLaunchRange: 12000,
     speed: 650, burnTime: 14, life: 20, coastDrag: 0.07, turnRate: .78, proximityRadius: 24, proximityDamage: .8,
   },
+  playerAirShort: {
+    designation: 'AIM-9X · SIDEWINDER', count: 10, damage: 4.5, seeker: 'ir', maxLaunchRange: 6500,
+    speed: 590, burnTime: 9, life: 15, coastDrag: 0.09, turnRate: 1.3, proximityRadius: 21, proximityDamage: .85,
+  },
   playerGround: {
     designation: 'AGM-65D · MAVERICK', count: 10, damage: 9, seeker: 'ir', maxLaunchRange: 6800,
     speed: 440, burnTime: 14, life: 18, coastDrag: 0.11, turnRate: 1.05, proximityRadius: 17, proximityDamage: .82,
   },
+  playerGroundJassm: {
+    designation: 'AGM-158B · JASSM-ER', count: 10, damage: 14, seeker: 'radar', maxLaunchRange: 15000,
+    speed: 520, burnTime: 18, life: 35, coastDrag: 0.06, turnRate: .6, proximityRadius: 24, proximityDamage: .9,
+  },
+  playerGroundAargm: {
+    designation: 'AGM-88G · AARGM-ER', count: 10, damage: 11, seeker: 'radar', maxLaunchRange: 10500,
+    speed: 560, burnTime: 15, life: 24, coastDrag: 0.08, turnRate: .85, proximityRadius: 20, proximityDamage: .86,
+  },
+  playerGroundJdam: {
+    designation: 'GBU-31 · JDAM', count: 10, damage: 13, seeker: 'gps', maxLaunchRange: 5000,
+    speed: 330, burnTime: 7, life: 16, coastDrag: 0.16, turnRate: .7, proximityRadius: 23, proximityDamage: .9,
+  },
   hostile: { speed: 305, burnTime: 10, life: 15, coastDrag: 0.1 },
 };
+
+export function getPlayerMissileProfile(domain, type = null) {
+  if (domain === 'air') return type === 'sidewinder' ? MISSILE_PROFILES.playerAirShort : MISSILE_PROFILES.playerAir;
+  if (type === 'jassm') return MISSILE_PROFILES.playerGroundJassm;
+  if (type === 'aargm') return MISSILE_PROFILES.playerGroundAargm;
+  if (type === 'jdam') return MISSILE_PROFILES.playerGroundJdam;
+  return MISSILE_PROFILES.playerGround;
+}
 
 const MISSILE_MIN_COAST_SPEED_RATIO = .58;
 const missileForward = new THREE.Vector3();

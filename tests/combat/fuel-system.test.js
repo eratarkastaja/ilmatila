@@ -41,4 +41,16 @@ describe('FuelSystem', () => {
     expect(fuel.remainingSeconds).toBeNull();
     expect(fuel.fraction).toBe(1);
   });
+
+  it('makes a heavier campaign loadout slightly slower and sheds that penalty as fuel burns', () => {
+    const fuel = new FuelSystem({ enduranceMinutes: 10, payloadMassKg: 4200 });
+    const heavyFactor = fuel.speedFactor;
+
+    fuel.update(60, false);
+
+    expect(heavyFactor).toBeCloseTo(.94);
+    expect(fuel.currentPayloadMassKg).toBe(4192);
+    expect(fuel.speedFactor).toBeGreaterThan(heavyFactor);
+    expect(fuel.speedFactor).toBeLessThan(1);
+  });
 });

@@ -146,7 +146,8 @@ export class FlightControls {
       const flutter = boost ? Math.sin(this.elapsed * 23) * 0.018 : 0;
       plume.scale.set(1 + flutter, 1 - flutter * 0.65, pulse);
     }
-    const targetSpeed = boost ? 410 : fuelSystem && !fuelSystem.hasFuel ? 170 : 235;
+    const speedFactor = fuelSystem?.speedFactor ?? 1;
+    const targetSpeed = (boost ? 410 : fuelSystem && !fuelSystem.hasFuel ? 170 : 235) * speedFactor;
     this.speed = THREE.MathUtils.damp(this.speed, targetSpeed, 1.2, dt);
 
     // W/Up lowers the nose; S/Down raises it. Arrow keys mirror WASD.

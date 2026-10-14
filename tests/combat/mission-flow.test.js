@@ -22,6 +22,25 @@ function createFlow(mission = { hostiles: 2, departureDuration: 2, navigationDis
 }
 
 describe('MissionFlowSystem', () => {
+  it('shows the ground objective waypoint after the air phase', () => {
+    const objectiveWaypoint = new THREE.Vector3(1200, 50, -800);
+    const { flow, player } = createFlow({
+      groundBattle: true,
+      departureDuration: 0,
+      navigationDistance: 100,
+      navigationRadius: 20,
+    });
+    flow.getObjectiveWaypoint = () => objectiveWaypoint;
+    flow.update(0.1);
+    player.position.copy(flow.ingress);
+    flow.update(0.1);
+    flow.update(0.1, { detectedHostiles: 2, playerEngaged: true });
+    flow.update(0.1, { playerEngaged: true, targetDestroyed: true });
+
+    expect(flow.phase).toBe(MISSION_PHASE.OBJECTIVE);
+    expect(flow.waypoint).toBe(objectiveWaypoint);
+  });
+
   it('runs a sortie from departure through contact, engagement, objective, RTB, and debrief', () => {
     const { flow, player, onIngress, onObjectiveComplete, onRtb, onEnd } = createFlow();
 

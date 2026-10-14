@@ -43,6 +43,7 @@ tests/
 | Combat frame orchestration, system connections, combat state for presentation and debrief | `CombatWorld` | Scene, player, terrain, combat systems, stable borrowed `hudState` |
 | Mission preparation, pause/resume, and sortie resource cleanup | `SortieController` | Asset repository, terrain, combat world, controls, audio callbacks |
 | Campaign chapter progression and one-time result application | `CampaignSession` | Campaign definition, campaign save, sortie result and seed factory |
+| Campaign loadout recommendations and kit validation | `campaign/campaign-kit.js` | Campaign inventory, mission role, hardpoint and payload limits |
 | Versioned campaign persistence per difficulty | `CampaignProgress` | Browser local storage and tolerant save normalization |
 | Campaign chapter to ordinary mission resolution | `resolveCampaignMission` | Chapter, campaign state, selected difficulty, sortie seed and built-in mission definition |
 | Campaign menu and debrief presentation | `CampaignView` | Campaign session read state, translations and campaign DOM nodes |
@@ -61,7 +62,7 @@ tests/
 | Shared particles, contrails, missile trails, and vapor | `FlightFX` in `effects/fx.js` | Dynamic render buffers, aircraft and projectile state |
 | Sound effects, engine audio, radio cues and music | `GameAudio` | Web Audio/HTML audio, app-level user-gesture unlock |
 | Flight input and aircraft control | `FlightControls`, `CombatInput` | Player transform, camera, pointer/keyboard state |
-| Sortie fuel reserve and afterburner gating | `FuelSystem` in `combat/fuel-system.js`, owned by `CombatWorld` and consumed through `FlightControls` | Difficulty fuel capacity, frame time, afterburner request |
+| Sortie fuel reserve, loadout mass and afterburner gating | `FuelSystem` in `combat/fuel-system.js`, owned by `CombatWorld` and consumed through `FlightControls` | Difficulty fuel capacity, selected campaign kit mass, frame time, afterburner request |
 | Air unit spawning, hostile/wingman behavior, authored hostile roles, pop-up contact identification and single hostile missile commitment | `AirBattle` plus spawn, fighter, helicopter, wingman, and weapon helpers; `planAirFormation` is shared with the menu radar forecast | Player, terrain, units, velocity, projectile/countermeasure callbacks, radio and threat-pacing callbacks |
 | Wingman missile defense and rescue alert state | `WingmanController` | Incoming hostile projectiles, threatened wingman, firing hostile, wingman orders, radio callback |
 | Ground force spawning, movement, weapons, air defense and ownership | `GroundBattle` plus spawn, unit, movement, weapon, and air-defense helpers | Player, terrain, units, velocity, projectile callbacks |

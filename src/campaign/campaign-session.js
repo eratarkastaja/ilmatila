@@ -2,9 +2,10 @@ import { createSortieSeed } from '../combat/random.js';
 import { getCampaignStoreCaps, normalizeCampaignStores } from './campaign-progress.js';
 import { getCampaignDefinition } from './campaigns.js';
 import { resolveCampaignMission } from './resolve-campaign-mission.js';
+import { getKitLimits, getRecommendedKit, validateKit } from './campaign-kit.js';
 
 const STATE_KEYS = ['airControl', 'defenseIntegrity', 'sortieReadiness'];
-const STORE_KEYS = ['airMissiles', 'groundMissiles', 'gunRounds', 'flares', 'chaff'];
+const STORE_KEYS = ['airMissiles', 'groundMissiles', 'gunRounds', 'flares', 'chaff', 'fuelMinutes'];
 const clamp = value => Math.max(0, Math.min(100, value));
 export const CAMPAIGN_RETRY_READINESS_COST = 3;
 
@@ -48,6 +49,7 @@ function createState(definition, difficulty, seedFactory) {
     stores: null,
     sustainmentChoice: null,
     sustainmentUsed: false,
+    kitSelection: null,
   };
 }
 
@@ -137,6 +139,27 @@ export class CampaignSession {
     return choice ? restoreStores(this.getCurrentStores(), choice.restore, this.difficulty) : this.getCurrentStores();
   }
 
+  getKitState() {
+    const choice = this.selectedSustainmentChoice;
+    const inventory = this.getStoresAfterChoice(choice?.id);
+    const mission = resolveCampaignMission(this.definition, this.state)?.mission ?? {};
+    const recommended = getRecommendedKit(inventory, mission);
+    const limits = getKitLimits(this.difficulty);
+    const selected = this.state.kitSelection && validateKit(this.state.kitSelection, inventory, limits)
+      ? { ...recommended, ...this.state.kitSelection }
+      : recommended;
+    return { inventory, recommended, selected, limits };
+  }
+
+  selectKit(kit) {
+    if (!kit || typeof kit !== 'object') return false;
+    const { inventory, limits } = this.getKitState();
+    if (!validateKit(kit, inventory, limits)) return false;
+    this.state = { ...this.state, kitSelection: { ...kit } };
+    if (!this.developmentSelection) this.progress?.saveCampaign(this.state);
+    return true;
+  }
+
   selectSustainmentChoice(choiceId) {
     if (choiceId !== null && typeof choiceId !== 'string') return false;
     if (choiceId !== null && this.state.sustainmentUsed) return false;
@@ -165,6 +188,7 @@ export class CampaignSession {
       ending: null,
       sustainmentChoice: null,
       sustainmentUsed: false,
+      kitSelection: null,
     };
     this.developmentSelection = true;
     return true;
@@ -178,9 +202,11 @@ export class CampaignSession {
     const resolved = resolveCampaignMission(this.definition, this.state);
     if (!resolved) return null;
     const choice = this.selectedSustainmentChoice;
-    const stores = this.getStoresAfterChoice(choice?.id);
+    const kit = this.getKitState();
+    const stores = kit.selected;
     resolved.mission.campaignStores = stores;
     resolved.mission.campaignSustainmentChoice = choice?.id ?? null;
+    resolved.mission.campaignKit = kit.selected;
     resolved.stores = stores;
     return resolved;
   }
@@ -255,6 +281,7 @@ export class CampaignSession {
     if (result.remainingStores) state.stores = normalizeCampaignStores(result.remainingStores, state.difficulty);
     state.sustainmentChoice = null;
     state.sustainmentUsed = false;
+    state.kitSelection = null;
     state.chapterIndex += 1;
     state.chapterRetryCount = 0;
     if (state.chapterIndex >= this.definition.chapters.length) {

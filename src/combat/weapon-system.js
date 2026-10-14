@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { F35_GUN_MUZZLE_OFFSET, F35_GUN_TRACER_CLEARANCE } from '../aircraft/plane-models.js';
-import { createMissile, MISSILE_PROFILES } from './projectiles.js';
+import { createMissile, getPlayerMissileProfile, MISSILE_PROFILES } from './projectiles.js';
 import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
 import {
   GUN_PROJECTILE_GRAVITY,
@@ -35,6 +35,8 @@ export class WeaponSystem {
       air: loadout.airMissiles ?? MISSILE_PROFILES.playerAir.count,
       ground: loadout.groundMissiles ?? MISSILE_PROFILES.playerGround.count,
     };
+    this.airMissileType = loadout.airMissileType ?? 'amraam';
+    this.groundMissileType = loadout.groundMissileType ?? 'maverick';
     this.gunAmmoCapacity = loadout.gunRounds ?? null;
     this.gunAmmoRemaining = this.gunAmmoCapacity;
     this.cooldown = 0;
@@ -164,7 +166,10 @@ export class WeaponSystem {
   fireMissile() {
     if (!this.radar.target || this.radar.target.dead) return false;
     const targetDomain = this.radar.targetDomain;
-    const missileProfile = targetDomain === 'ground' ? MISSILE_PROFILES.playerGround : MISSILE_PROFILES.playerAir;
+    const missileProfile = getPlayerMissileProfile(
+      targetDomain,
+      targetDomain === 'ground' ? this.groundMissileType : this.airMissileType,
+    );
     this.missiles[targetDomain]--;
     this.missilesFired++;
     this.cooldown = 2.8;

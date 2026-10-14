@@ -29,6 +29,7 @@ import { renderOptionalObjectives } from '../ui/optional-objectives.js';
 import { formatNumber, formatPercent, t } from '../ui/i18n.js';
 import { AIR_SPAWN_LAYOUT_SEED_XOR } from './air-combat-utils.js';
 import { getWeatherTimeOfDay, isNightTime, resolveWeather } from './weather.js';
+import { getKitWeight } from '../campaign/campaign-kit.js';
 
 export { disposeCombatEffectResources };
 
@@ -69,7 +70,6 @@ export class CombatWorld {
     this.boundaryApproach=null;
     this.boundaryCritical=false;
     this.difficulty=getDifficultyPreset(difficultyId);
-    this.fuelSystem=new FuelSystem(this.difficulty.player.fuel);
     this.seed = Number(seed) >>> 0;
     this.random = createSeededRandom(this.seed);
     this.spawnRandom = createSeededRandom((this.seed ^ AIR_SPAWN_LAYOUT_SEED_XOR) >>> 0);
@@ -80,6 +80,11 @@ export class CombatWorld {
     const missionConfig={hostiles:4,wingmen:2,groundBattle:true,groundPairs:6,groundTrucks:12,...missionResolution.mission};
     this.weather = resolveWeather(missionConfig.weather);
     const campaignStores=missionConfig.campaignStores ?? {};
+    this.fuelSystem=new FuelSystem({
+      ...this.difficulty.player.fuel,
+      ...(Number.isFinite(campaignStores.fuelMinutes) ? { enduranceMinutes: campaignStores.fuelMinutes } : {}),
+      ...(missionConfig.campaignKit ? { payloadMassKg: getKitWeight(missionConfig.campaignKit) } : {}),
+    });
     const loadoutScale=missionConfig.campaignLoadoutScale ?? 1;
     const scaleLoadout=value=>Number.isFinite(value)?Math.max(0,Math.floor(value*loadoutScale)):value;
     const effectiveWeapons={
@@ -90,6 +95,8 @@ export class CombatWorld {
       groundMissiles:scaleLoadout(Number.isFinite(campaignStores.groundMissiles)
         ? campaignStores.groundMissiles
         : this.difficulty.player.weapons.groundMissiles),
+      airMissileType: campaignStores.airMissileType ?? 'amraam',
+      groundMissileType: campaignStores.groundMissileType ?? 'maverick',
       gunRounds:scaleLoadout(campaignStores.gunRounds !== undefined
         ? campaignStores.gunRounds
         : this.difficulty.player.weapons.gunRounds),
@@ -240,7 +247,7 @@ export class CombatWorld {
       onInventoryChange: () => this.updateHud(),
     });
     this.projectileSystem.setDecoys(this.countermeasureSystem.decoys);
-    this.radar = new CombatRadar(player, audio, this.weather, missionConfig.campaignRadarRangeScale ?? 1);
+    this.radar = new CombatRadar(player, audio, this.weather, missionConfig.campaignRadarRangeScale ?? 1, effectiveWeapons);
     this.weaponSystem = new WeaponSystem({
       player, scene, fx, audio, radar: this.radar, playerVelocity: this.playerVelocity, weather: this.weather,
       addProjectile: shot => this.projectileSystem.addPlayerProjectile(shot),
@@ -392,6 +399,7 @@ export class CombatWorld {
         routeAltitude:document.querySelector('#mission-route-altitude'),
         waypointCue:document.querySelector('#mission-waypoint-cue'),
       },
+      getObjectiveWaypoint:()=>this.groundBattle?.battleCenter??null,
       onIngress:()=>{
         this.airBattle.spawnHostiles();
         this.groundBattle.setAirDefenseActive(true);
@@ -1120,6 +1128,7 @@ export class CombatWorld {
         gunRounds: this.weaponSystem.gunAmmoRemaining,
         flares: this.countermeasureSystem.flares,
         chaff: this.countermeasureSystem.chaff,
+        fuelMinutes: this.fuelSystem.unlimited ? null : this.fuelSystem.remainingSeconds / 60,
       },
     };
     this.debriefData.wingmenReturned=this.debriefData.wingmenSurvived;

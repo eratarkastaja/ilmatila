@@ -2,7 +2,7 @@
 
 ## Test run
 
-The `0.2.0-beta.2` release uses the production browser matrix in the Pages
+The `0.2.0-beta.3` release uses the production browser matrix in the Pages
 workflow. Playwright 1.63.0 drives actual browser binaries against the
 Päijänne terrain assets and aircraft GLBs; no browser implementations are
 mocked in the passing runs.

@@ -29,6 +29,7 @@ describe('TacticalHud world marker visibility', () => {
   it('keeps the RTB waypoint visible off-screen while ingress remains gated', () => {
     expect(shouldShowWaypointMarker(false, 'navigation')).toBe(false);
     expect(shouldShowWaypointMarker(false, 'rtb')).toBe(true);
+    expect(shouldShowWaypointMarker(false, 'objective')).toBe(true);
     expect(shouldShowWaypointMarker(true, 'navigation')).toBe(true);
   });
 });
