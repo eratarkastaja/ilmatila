@@ -52,6 +52,7 @@ const menuInteractiveControls = typeof startMenu?.querySelectorAll === 'function
   ? [...startMenu.querySelectorAll('button, select, input, summary')]
   : [];
 let menuLoadingControlState = null;
+let menuLoadingFocus = null;
 document.querySelector('#menu-version').textContent = APP_VERSION;
 const flightHud = document.querySelector('#flight-hud');
 const menuStatus = document.querySelector('#menu-status');
@@ -192,6 +193,10 @@ let launchProgressDescriptor = { progress: 0, titleKey: 'menu.launchButton', det
 function setMenuLoadingLock(loading) {
   if (loading) {
     if (menuLoadingControlState) return;
+    const activeElement = document.activeElement;
+    menuLoadingFocus = activeElement && startMenu?.contains(activeElement)
+      ? activeElement
+      : null;
     menuLoadingControlState = menuInteractiveControls.map(control => [control, control.disabled]);
     for (const control of menuInteractiveControls) control.disabled = true;
     if (startMenu?.dataset) startMenu.dataset.loading = 'true';
@@ -201,6 +206,10 @@ function setMenuLoadingLock(loading) {
   for (const [control, disabled] of menuLoadingControlState) control.disabled = disabled;
   menuLoadingControlState = null;
   if (startMenu?.dataset) delete startMenu.dataset.loading;
+  if (menuLoadingFocus && !menuLoadingFocus.disabled && document.activeElement === document.body) {
+    menuLoadingFocus.focus({ preventScroll: true });
+  }
+  menuLoadingFocus = null;
 }
 
 function getSelectedDifficulty() {
