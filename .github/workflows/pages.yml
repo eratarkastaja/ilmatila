@@ -19,6 +19,7 @@ on:
           - beta
 
 permissions:
+  actions: read
   contents: read
   pages: write
   id-token: write
@@ -206,7 +207,7 @@ jobs:
          (startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-beta.'))) && needs.staging-preflight.result == 'success'))
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: https://eratarkastaja.github.io/ilmatila/
     runs-on: ubuntu-latest
     needs: [build, staging-preflight]
     permissions:
@@ -214,16 +215,18 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - name: Deploy Pages artifact
-        id: deployment
-        uses: actions/deploy-pages@v5
+      - name: Deploy staging Pages artifact with unique version
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'staging'
+        run: node tools/release/deploy-pages.mjs "staging-${GITHUB_RUN_ID}"
         env:
-          # Keep the staging deployment distinct from the later beta deployment
-          # of the same source commit. Pages uses GITHUB_SHA as its deployment
-          # version and otherwise may retain the staging root at the live URL.
-          GITHUB_SHA: >-
-            ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'staging' &&
-            format('staging-{0}', github.run_id) || github.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+
+      - name: Deploy beta Pages artifact
+        id: deployment
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.target != 'staging'
+        uses: actions/deploy-pages@v5
 
   staging-smoke:
     if: >-
