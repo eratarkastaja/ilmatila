@@ -1,4 +1,4 @@
-# Campaign implementation: Shadow at the Border / Rajan varjo
+# Campaign implementation: Shadow at the Border
 
 This document describes the campaign layer shipped with ILMATILA. The campaign
 is a fictional near-future crisis built around a ten-sortie escalation from an
@@ -129,16 +129,16 @@ accepted chapter's result and score and is shown in the campaign overview.
 
 | # | Chapter | Area | Base mission | Implemented objective and campaign effect |
 | ---: | --- | --- | --- | --- |
-| 1 | Unknown Track / Tuntematon maali | Virolahti | Patrol | Identify and escort two non-combatant contacts under weapons hold; a missed deadline is a recoverable setback. |
-| 2 | Broken Silence / Hiljaisuus murtuu | Virolahti | Intercept | Protect the surveillance relay from a distant Sweep/Strike package; losing the relay triggers RTB, while the lead Strike aircraft and wingmen are optional objectives. |
-| 3 | Disperse / Hajautus | Päijänne | Patrol | Hold the dispersed road-base operation together for the transfer window; the sortie completes by surviving the hold period rather than clearing the airspace. |
-| 4 | Northern Feint / Pohjoinen harhautus | Ilomantsi | Intercept | Clear the air picture and meet the authored time objective; deadline expiry triggers a recoverable setback. |
-| 5 | First Wave / Ensimmäinen aalto | Kuusamo | Intercept | Stop the Strike aircraft from breaking through the sector before the deadline; surviving sweep aircraft may remain when the corridor is secure. |
-| 6 | The Border Breaks / Raja murtuu | Virolahti | Support | Keep the friendly defensive line above its strength threshold while limiting hostile ground survivors; a line breach is a recoverable setback. |
-| 7 | Hold the E18 / Pidä E18 | Virolahti | Support | Hold the corridor through the civilian and reserve transfer window; a defensive-line breach is a recoverable setback rather than a requirement to destroy every threat. |
-| 8 | Blind the Spear / Sokaise keihäänkärki | Virolahti | Support | Destroy the marked logistics relay as the primary objective before the counterattack window closes; other threats can remain when the relay is disabled. |
-| 9 | Counterstroke / Vastaisku | Virolahti | Support | Hold the defensive line while the counterattack advances; friendly-force loss triggers RTB, and the sortie completes when the protection window is survived. |
-| 10 | The Border Holds / Raja pitää | Virolahti | Support | Hold the final defensive line through the extraction window; the campaign closes after the line survives, not only after every hostile unit is destroyed. |
+| 1 | Unknown Track | Virolahti | Patrol | Identify and escort two non-combatant contacts under weapons hold; a missed deadline is a recoverable setback. |
+| 2 | Broken Silence | Virolahti | Intercept | Protect the surveillance relay from a distant Sweep/Strike package; losing the relay triggers RTB, while the lead Strike aircraft and wingmen are optional objectives. |
+| 3 | Disperse | Päijänne | Patrol | Hold the dispersed road-base operation together for the transfer window; the sortie completes by surviving the hold period rather than clearing the airspace. |
+| 4 | Northern Feint | Ilomantsi | Intercept | Clear the air picture and meet the authored time objective; deadline expiry triggers a recoverable setback. |
+| 5 | First Wave | Kuusamo | Intercept | Stop the Strike aircraft from breaking through the sector before the deadline; surviving sweep aircraft may remain when the corridor is secure. |
+| 6 | The Border Breaks | Virolahti | Support | Keep the friendly defensive line above its strength threshold while limiting hostile ground survivors; a line breach is a recoverable setback. |
+| 7 | Hold the E18 | Virolahti | Support | Hold the corridor through the civilian and reserve transfer window; a defensive-line breach is a recoverable setback rather than a requirement to destroy every threat. |
+| 8 | Blind the Spear | Virolahti | Support | Destroy the marked logistics relay as the primary objective before the counterattack window closes; other threats can remain when the relay is disabled. |
+| 9 | Counterstroke | Virolahti | Support | Hold the defensive line while the counterattack advances; friendly-force loss triggers RTB, and the sortie completes when the protection window is survived. |
+| 10 | The Border Holds | Virolahti | Support | Hold the final defensive line through the extraction window; the campaign closes after the line survives, not only after every hostile unit is destroyed. |
 
 Chapters reuse the standalone Patrol, Intercept, and Support combat systems,
 but campaign resolution can select a campaign-specific objective. The
