@@ -193,6 +193,36 @@ describe('WingmanController air combat', () => {
     expect(fireAlly).toHaveBeenCalledWith(battle, ally, target);
   });
 
+  it('clears a pre-launch rescue alert when its locking attacker is destroyed', () => {
+    const controller = new WingmanController();
+    const ally = {
+      mesh: new THREE.Object3D(),
+      wing: 1,
+      heading: 0,
+      evasiveDirection: 1,
+      defensiveTimer: 0,
+      rescueTimer: 0,
+      rescueLockActive: false,
+      rescueMissile: null,
+      rescueAttacker: null,
+      rescueHighlight: false,
+      dead: false,
+    };
+    const attacker = { mesh: new THREE.Object3D(), label: 'MiG-29', dead: false };
+    const battle = { hostileProjectiles: [] };
+
+    controller.beginMissileLock(battle, ally, attacker);
+    expect(ally.rescueHighlight).toBe(true);
+
+    attacker.dead = true;
+    controller.updateMissileDefense(battle, ally, 0.1);
+
+    expect(ally.rescueLockActive).toBe(false);
+    expect(ally.rescueTimer).toBe(0);
+    expect(ally.rescueHighlight).toBe(false);
+    expect(ally.rescueAttacker).toBeNull();
+  });
+
   it('fires at most one air missile at the same target and preserves the reserve', () => {
     const player = { position: new THREE.Vector3(0, 300, -10000), userData: {} };
     const targetMesh = new THREE.Object3D();

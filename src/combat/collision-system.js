@@ -157,7 +157,7 @@ export class CollisionSystem {
       const impact = traceFighterHit(relativeStart, end, ally.mesh, matricesPrepared);
       if (impact && (!hitInfo || impact.t < hitInfo.t)) {
         target = ally;
-        hitInfo = impact;
+        hitInfo = { ...impact, domain: 'air' };
       }
     }
     return target ? { target, hitInfo } : null;
@@ -181,7 +181,7 @@ export class CollisionSystem {
       );
       if (impact && (!hitInfo || impact.t < hitInfo.t)) {
         target = enemy;
-        hitInfo = impact;
+        hitInfo = { ...impact, domain: 'air' };
       }
     }
     if (!ally || canHitGround) for (const unit of this.redUnits) {
@@ -191,7 +191,7 @@ export class CollisionSystem {
       const impact = traceVehicleHit(relativeStart, end, unit.mesh, ballistic ? 1.5 : undefined,matricesPrepared);
       if (impact && (!hitInfo || impact.t < hitInfo.t)) {
         target = unit;
-        hitInfo = impact;
+        hitInfo = { ...impact, domain: 'ground' };
       }
     }
     return target ? { target, hitInfo } : null;

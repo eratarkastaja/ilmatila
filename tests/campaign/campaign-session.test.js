@@ -58,6 +58,7 @@ describe('CampaignSession', () => {
     expect(session.resolveCurrentMission().mission).toMatchObject({
       wingmen: 3,
       campaignWingmanRadioId: 'varpunen',
+      campaignWingmanRadioIds: ['varpunen'],
     });
 
     expect(session.retryCurrent()).toBe(true);
@@ -119,6 +120,7 @@ describe('CampaignSession', () => {
     expect(lowMission.campaignLoadoutScale).toBeLessThan(highMission.campaignLoadoutScale);
     expect(lowMission.campaignDefenseFrontOffset).toBeLessThan(highMission.campaignDefenseFrontOffset);
     expect(lowMission.wingmen).toBeLessThan(highMission.wingmen);
+    expect(highMission.campaignWingmanRadioIds).toContain('owl');
   });
 
   it('previews and commits a decisive result exactly once', () => {

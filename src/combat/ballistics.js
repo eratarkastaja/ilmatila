@@ -5,6 +5,10 @@ export const GUN_PROJECTILE_LIFETIME = 2.2;
 export const GUN_PROJECTILE_GRAVITY = 9.81;
 export const GUN_ROUNDS_PER_SECOND = 55;
 export const GUN_PROJECTILE_DAMAGE = .48;
+// Aircraft are more vulnerable to the F-35A's cannon than ground vehicles:
+// a short, accurately placed burst should be decisive without making strafing
+// runs erase armoured targets at the same rate.
+export const GUN_PROJECTILE_AIR_DAMAGE = .60;
 
 export function estimateInterceptTime(offset, targetVelocity, projectileSpeed, maxTime = 6) {
   const a = targetVelocity.lengthSq() - projectileSpeed * projectileSpeed;

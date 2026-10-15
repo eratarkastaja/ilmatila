@@ -256,9 +256,17 @@ export function resolveCampaignMission(definition, state, { seed = state.current
       : { ...(mission.weather ?? {}) };
     mission.weather = { ...weather, timeOfDay: chapter.timeOfDay };
   }
+  const baseWingmanCount = mission.wingmen;
   const readinessWingmanDelta = state.sortieReadiness < 35 ? -1 : state.sortieReadiness >= 80 ? 1 : 0;
   const maximumWingmen = mission.campaignWingmanDelta ? 4 : 3;
   mission.wingmen = Math.max(1, Math.min(maximumWingmen, mission.wingmen + readinessWingmanDelta + (mission.campaignWingmanDelta ?? 0)));
+  const addedWingmanCount = Math.max(0, mission.wingmen - baseWingmanCount);
+  const addedWingmanRadioIds = [];
+  if (mission.campaignWingmanDelta) addedWingmanRadioIds.push('wingman3');
+  if (readinessWingmanDelta > 0) addedWingmanRadioIds.push('owl');
+  if (mission.campaignWingmanRadioId) addedWingmanRadioIds.push(mission.campaignWingmanRadioId);
+  mission.campaignBaseWingmen = baseWingmanCount;
+  mission.campaignWingmanRadioIds = addedWingmanRadioIds.slice(-addedWingmanCount);
 
   Object.assign(mission, {
     campaignId: definition.id,

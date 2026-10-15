@@ -64,6 +64,14 @@ describe('projectile hit testing', () => {
     expect(traceFighterHit(start, end, fighter, false, CANNON_PROJECTILE_HIT_ASSIST)).not.toBeNull();
   });
 
+  it('keeps a close turning-fight graze inside the cannon envelope', () => {
+    const fighter = makeFighter([{ x: 0, y: 0, z: 0, rx: 2, ry: 1, rz: 2, damage: 1 }]);
+    const start = new THREE.Vector3(-10, 1.45, 0);
+    const end = new THREE.Vector3(10, 1.45, 0);
+
+    expect(traceFighterHit(start, end, fighter, false, CANNON_PROJECTILE_HIT_ASSIST)).not.toBeNull();
+  });
+
   it('transforms aircraft hit zones into world space', () => {
     const fighter = makeFighter([{ x: 0, y: 0, z: 0, rx: 1, ry: 1, rz: 1, damage: 1 }]);
     fighter.position.set(40, 15, -8);

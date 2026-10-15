@@ -69,6 +69,18 @@ describe('RadioSystem', () => {
     expect(radio.message.textContent).toBe('On your wing.');
   });
 
+  it('supports named campaign wingman callsigns for Owl and Sparrow', () => {
+    expect(radio.radio.emit('wingman.formation', { wingmanId: 'owl', scope: 'formation-owl' })).toBe(true);
+    expect(radio.callsign.textContent).toBe('OWL');
+
+    radio.radio.update(2.3);
+    expect(radio.radio.emit('wingman.formation', {
+      wingmanId: 'varpunen',
+      scope: 'formation-sparrow',
+    })).toBe(true);
+    expect(radio.callsign.textContent).toBe('VARPUNEN / SPARROW');
+  });
+
   it('reports reaching ingress with the active language and localized callsign', () => {
     setLanguage('fi');
     expect(radio.radio.emit('wingman.ingress', { wingmanId: 'wingman2', scope: 'ingress' })).toBe(true);

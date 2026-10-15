@@ -123,6 +123,29 @@ describe('ProjectileSystem', () => {
     expect(scene.children).not.toContain(round.mesh);
   });
 
+  it('uses the stronger cannon damage profile for air targets only', () => {
+    const { system, scene, enemies } = makeSystem();
+    const aircraftMesh = new THREE.Object3D();
+    aircraftMesh.userData.hitZones = [{ x: 0, y: 0, z: 0, rx: 1, ry: 1, rz: 1, damage: 1 }];
+    scene.add(aircraftMesh);
+    const enemy = { mesh: aircraftMesh, velocity: new THREE.Vector3(), dead: false, hp: 1.08 };
+    enemies.push(enemy);
+    const round = {
+      mesh: new THREE.Object3D(),
+      velocity: new THREE.Vector3(10, 0, 0),
+      life: 2,
+      damage: .48,
+      airDamage: .60,
+    };
+    round.mesh.position.set(-5, 0, 0);
+    scene.add(round.mesh);
+    system.addPlayerProjectile(round);
+
+    system.update(1);
+
+    expect(enemy.hp).toBeCloseTo(.48, 8);
+  });
+
   it('expires hostile projectiles and removes their scene objects', () => {
     const { system, scene, hostiles } = makeSystem();
     const projectile = {

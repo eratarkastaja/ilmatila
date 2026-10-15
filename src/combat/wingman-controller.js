@@ -118,6 +118,16 @@ export class WingmanController {
       incoming = missile;
     }
 
+    // A hostile can be destroyed during the projectile phase after its AI has
+    // started a wingman lock. In that case the AI never gets another update to
+    // emit clearMissileLock, so do not leave the rescue alert in its pre-launch
+    // state. A missile already in flight remains authoritative below.
+    if (!incoming && ally.rescueLockActive && ally.rescueAttacker?.dead) {
+      ally.rescueLockActive = false;
+      ally.rescueTimer = 0;
+      this.clearRescueFocus(ally);
+    }
+
     if (incoming || ally.rescueLockActive) {
       ally.defensiveTimer = Math.max(ally.defensiveTimer, .7);
     }

@@ -5,6 +5,7 @@ import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
 import {
   GUN_PROJECTILE_GRAVITY,
   GUN_PROJECTILE_DAMAGE,
+  GUN_PROJECTILE_AIR_DAMAGE,
   GUN_PROJECTILE_LIFETIME,
   GUN_PROJECTILE_SPEED,
   GUN_ROUNDS_PER_SECOND,
@@ -145,6 +146,7 @@ export class WeaponSystem {
     shot.windScale = this.weather?.ballisticWindScale ?? 1;
     shot.life=GUN_PROJECTILE_LIFETIME;
     shot.damage=GUN_PROJECTILE_DAMAGE;
+    shot.airDamage=GUN_PROJECTILE_AIR_DAMAGE;
     shot.ally=false;
     shot.target=null;
     shot.mesh.position.copy(start);

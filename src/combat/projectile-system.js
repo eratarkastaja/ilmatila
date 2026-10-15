@@ -276,7 +276,10 @@ export class ProjectileSystem {
       }
       if (impact) {
         const { target, hitInfo } = impact;
-        const damage = shot.damage * (hitInfo.damage ?? 1);
+        const baseDamage = hitInfo.domain === 'air' && shot.airDamage !== undefined
+          ? shot.airDamage
+          : shot.damage;
+        const damage = baseDamage * (hitInfo.damage ?? 1);
         target.hp -= damage;
         if (shot.missile && shot.owner === 'player') this.onPlayerMissileHit?.();
         if (target.mesh?.userData.airframeHealthRatio !== undefined) {

@@ -14,9 +14,19 @@ export class AirSpawnSystem {
     const playerRight = rightOfHeading(heading);
     if (!battle.mission.deferredHostiles) battle.spawnHostiles(heading, playerForward, playerRight);
 
+    const campaignBaseWingmen = Number.isInteger(battle.mission.campaignBaseWingmen)
+      ? battle.mission.campaignBaseWingmen
+      : null;
+    const campaignWingmanRadioIds = Array.isArray(battle.mission.campaignWingmanRadioIds)
+      ? battle.mission.campaignWingmanRadioIds
+      : [];
     for (let i = 0; i < battle.mission.wingmen; i++) {
       const formationOffset = i === 0 ? -230 : i === 1 ? 230 : -460;
       const wing = formationOffset < 0 ? -1 : 1;
+      const extraWingmanIndex = campaignBaseWingmen === null ? -1 : i - campaignBaseWingmen;
+      const campaignRadioId = extraWingmanIndex >= 0
+        ? campaignWingmanRadioIds[extraWingmanIndex]
+        : null;
       const jet = createFighter({ friendly: true, aircraftAsset: battle.aircraftAssets?.player });
       jet.position.copy(battle.player.position)
         .addScaledVector(playerRight, formationOffset)
@@ -29,9 +39,10 @@ export class AirSpawnSystem {
       battle.allies.push({
         mesh: jet,
         role: 'wingman',
-        radioId: i === battle.mission.wingmen - 1 && battle.mission.campaignWingmanRadioId
-          ? battle.mission.campaignWingmanRadioId
-          : `wingman${i + 1}`,
+        radioId: campaignRadioId
+          ?? (i === battle.mission.wingmen - 1 && battle.mission.campaignWingmanRadioId
+            ? battle.mission.campaignWingmanRadioId
+            : `wingman${i + 1}`),
         formationOffset,
         wing,
         fireCooldown: 1.2 + i * .6,

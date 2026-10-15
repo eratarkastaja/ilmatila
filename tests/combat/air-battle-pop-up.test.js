@@ -151,6 +151,39 @@ describe('AirBattle hostile contacts', () => {
     expect(battle.wingmanController.selectAllyTarget(battle, battle.allies[0])).toBe(firstSweep);
   });
 
+  it('assigns campaign radio identities to readiness and sustainment wingmen', () => {
+    const player = new THREE.Group();
+    player.position.set(0, 300, 0);
+    battle = new AirBattle({
+      scene: new THREE.Scene(),
+      player,
+      aircraftAsset: createAircraftAsset(),
+      mission: {
+        hostiles: 0,
+        wingmen: 4,
+        campaignBaseWingmen: 2,
+        campaignWingmanRadioIds: ['owl', 'varpunen'],
+        deferredHostiles: false,
+      },
+      terrain: createTerrain(),
+      audio: null,
+      fx: null,
+      playerVelocity: new THREE.Vector3(),
+      getPlayerHeading: () => 0,
+      deployHostileCountermeasures: vi.fn(),
+      addHostileProjectile: vi.fn(),
+      addPlayerProjectile: vi.fn(),
+      onMissileLaunch: vi.fn(),
+      onWingmanRadio: vi.fn(),
+      difficulty: DIFFICULTY_PRESETS.standard,
+      random: createSeededRandom(18),
+    });
+
+    expect(battle.allies.map(ally => ally.radioId)).toEqual([
+      'wingman1', 'wingman2', 'owl', 'varpunen',
+    ]);
+  });
+
   it('adds a hard side attack and a wingman decoy target to a plain sweep group', () => {
     const player = new THREE.Group();
     player.position.set(0, 300, 0);

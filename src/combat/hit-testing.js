@@ -5,7 +5,7 @@ const localStart = new THREE.Vector3();
 const localEnd = new THREE.Vector3();
 const localDelta = new THREE.Vector3();
 const PROJECTILE_HIT_ASSIST = 1.25;
-export const CANNON_PROJECTILE_HIT_ASSIST = 1.38;
+export const CANNON_PROJECTILE_HIT_ASSIST = 1.5;
 const axes=['x','y','z'];
 const defaultVehicleBounds={min:[-10,0,-12],max:[10,14,20]};
 
