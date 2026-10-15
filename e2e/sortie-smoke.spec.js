@@ -38,11 +38,15 @@ test('first visit quick start is keyboard accessible and returns focus from cont
   await page.keyboard.press('Enter');
   await expect(page.locator('[data-mission="training"]')).toHaveAttribute('aria-pressed', 'true');
 
-  for (let tabCount = 0; tabCount < 16; tabCount += 1) {
+  const showControls = page.locator('#show-menu-controls');
+  await expect(showControls).toBeEnabled();
+  const focusableMenuControls = await page.locator(
+    'button:visible:not([disabled]), select:visible:not([disabled]), input:visible:not([disabled]), textarea:visible:not([disabled]), a:visible',
+  ).count();
+  for (let tabCount = 0; tabCount < focusableMenuControls + 2; tabCount += 1) {
     if (await page.evaluate(() => document.activeElement?.id === 'show-menu-controls')) break;
     await page.keyboard.press('Tab');
   }
-  const showControls = page.locator('#show-menu-controls');
   await expect(showControls).toBeFocused();
   await page.keyboard.press('Enter');
   const controlsDialog = page.locator('#menu-controls-dialog');
