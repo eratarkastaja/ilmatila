@@ -217,6 +217,13 @@ jobs:
       - name: Deploy Pages artifact
         id: deployment
         uses: actions/deploy-pages@v5
+        env:
+          # Keep the staging deployment distinct from the later beta deployment
+          # of the same source commit. Pages uses GITHUB_SHA as its deployment
+          # version and otherwise may retain the staging root at the live URL.
+          GITHUB_SHA: >-
+            ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'staging' &&
+            format('staging-{0}', github.run_id) || github.sha }}
 
   staging-smoke:
     if: >-
