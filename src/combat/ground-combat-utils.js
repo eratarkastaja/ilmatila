@@ -43,6 +43,7 @@ export function isMappedDryGround(terrain, x, z) {
 }
 
 export function getGroundWeaponRange(weapon = '') {
+  if (weapon.includes('MLRS')) return 12000;
   if (weapon.includes('120') || weapon.includes('125')) return 2200;
   if (weapon.includes('30')) return 1500;
   if (weapon.includes('14,5')) return 1250;

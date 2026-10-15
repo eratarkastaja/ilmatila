@@ -238,6 +238,7 @@ export class CombatWorld {
       onFriendlyAircraftHit: (wingman, damage, sourceUnit) => this.airBattle.damageWingman(wingman, damage, sourceUnit),
       onJetDestroyed: (enemy, credited, details) => this.destructionSystem.destroyAircraft(enemy, credited, details),
       onUnitDestroyed: (unit, credited, details) => this.destructionSystem.destroyGroundUnit(unit, credited, details),
+      onGroundImpact: (position, shot) => this.applyMlrsImpact(position, shot),
       addSpark: position => this.combatEffects.addSpark(position),
       addWaterImpact: position => this.fx?.addWaterImpact(position),
       addExplosion: (position, intensity) => this.combatEffects.addExplosion(position, intensity),
@@ -815,6 +816,24 @@ export class CombatWorld {
   checkPlayerCollision(dt=this.frameDelta??0){
     if(this.destroyed)return true;
     return this.collisionSystem.checkPlayerCollision(dt);
+  }
+  applyMlrsImpact(position, shot) {
+    const radius = shot.blastRadius ?? 260;
+    const directTarget = shot.impactTarget;
+    for (const unit of this.redUnits) {
+      if (unit.dead || unit === directTarget || unit.armed === false) continue;
+      const distance = Math.hypot(
+        unit.mesh.position.x - position.x,
+        unit.mesh.position.z - position.z,
+      );
+      if (distance > radius) continue;
+      const falloff = 1 - (distance / radius) * .65;
+      unit.hp -= (shot.splashDamage ?? 4.8) * falloff;
+      if (unit.hp <= 0) {
+        this.destructionSystem.destroyGroundUnit(unit, false, { sourceUnit: shot.sourceUnit, shot });
+      }
+    }
+    this.combatEffects.addExplosion(position, shot.explosionIntensity ?? 1.02);
   }
   destroyPlayer(reasonKey,params={}){
     if(this.destroyed)return;

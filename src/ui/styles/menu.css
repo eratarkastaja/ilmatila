@@ -996,6 +996,25 @@
   letter-spacing: .08em;
 }
 
+.campaign-sustainment-reset {
+  margin-top: 10px;
+  padding: 7px 10px;
+  border: 1px solid #785f5b;
+  color: #d2aaa0;
+  background: #241917aa;
+  font: 700 10px Rajdhani,sans-serif;
+  letter-spacing: .08em;
+  cursor: pointer;
+  transition: border-color .18s ease, color .18s ease, background .18s ease;
+}
+
+.campaign-sustainment-reset:hover,
+.campaign-sustainment-reset:focus-visible {
+  border-color: #d9a99c;
+  color: #ffe1d8;
+  background: #38211daa;
+}
+
 .campaign-overview .campaign-ending {
   margin-bottom: 0;
   padding-top: 10px;

@@ -18,7 +18,7 @@ export class GroundUnitAI {
       if(unit.team==='red')battle.airDefenseAI.updateHostile(battle, unit, dt);
       else battle.airDefenseAI.updateFriendly(battle, unit, dt);
       unit.phase+=dt*(unit.armed===false?.38:.25);
-      let target=null,nearest=2600;
+      let target=null,nearest=unit.role==='artillery'?12000:2600;
       if(unit.armed!==false && unit.mesh.userData.platform!=='ito90'){
         const opposing=unit.team==='blue'?battle.redUnits:battle.friends;
         for(const candidate of opposing){
@@ -29,7 +29,11 @@ export class GroundUnitAI {
       }
 
       const travel=unit.travel.set(0,0,0);let speed=unit.speed;
-      if(unit.role==='airDefense'){
+      if(unit.role==='artillery'){
+        // Rocket artillery stays behind the line. It reaches deep targets
+        // without driving into the direct-fire engagement.
+        speed=0;
+      }else if(unit.role==='airDefense'){
         // Dedicated gun and missile batteries hold position and traverse their
         // weapon mounts instead of turning the whole carrier toward contacts.
         speed=0;
@@ -95,11 +99,14 @@ export class GroundUnitAI {
         const spec=unit.mesh.userData.vehicleSpec;
         unit.cool-=dt;
         if(nearest<getGroundWeaponRange(spec?.weapon)&&unit.cool<=0){
-          battle.weaponAI.fireGround(battle, unit, target);
+          if (unit.role === 'artillery') battle.weaponAI.fireMlrs(battle, unit, target);
+          else battle.weaponAI.fireGround(battle, unit, target);
           const weapon = spec?.weapon ?? '';
           // Realistic reload/burst pauses let the armoured line exchange fire
           // for a while instead of resolving the whole battle in seconds.
-          unit.cool = weapon.includes('120') || weapon.includes('125')
+          unit.cool = weapon.includes('MLRS')
+            ? 25 + this.random() * 5
+            : weapon.includes('120') || weapon.includes('125')
             ? 5.1 + this.random() * 1.6
             : weapon.includes('30') || weapon.includes('14,5')
               ? 2.8 + this.random() * 1.25

@@ -47,14 +47,25 @@ Each run stores three visible values from 0 to 100:
 
 Accepted sorties carry the remaining air-to-air missiles, air-to-ground
 missiles, cannon rounds, flares, chaff, and fuel minutes into the next chapter,
-capped by the selected difficulty's normal stores. Before launch, the campaign
-view opens a kit selector with a mission-aware recommended loadout or manual
-values. Hardpoints, payload mass, inventory, and fuel endurance validate the
-selection before it is passed to the sortie. The Disperse, Hold the E18, and
-Counterstroke chapters expose the same limited sustainment choice: a small
-partial rearm or field maintenance restoration with a readiness cost. The
-selector shows current inventory, post-support inventory, and the chosen kit so
-the readiness and support tradeoff is visible before takeoff.
+capped by the selected difficulty's normal stores. The base fully replenishes
+all finite stores before the next chapter, including cannon ammunition and
+fuel, so a long campaign cannot strand the player without equipment. The exact
+full load follows the difficulty preset (for example, Hard has 2,400 cannon
+rounds while Standard has 3,500).
+Before launch, the campaign view opens a kit selector with a mission-aware
+recommended loadout or manual values. Hardpoints, payload mass, inventory, and
+fuel endurance validate the selection before it is passed to the sortie. The
+Disperse, Hold the E18, and Counterstroke chapters expose the same limited
+sustainment choice: add the Varpunen / Sparrow reserve wingman, deploy three
+friendly 23 ITK 61/95 Sergei truck-mounted air-defence guns, deploy one 298
+RSRAKH 06 MLRS launcher, or open an expanded ordnance package. The RSRAKH
+fires a six-rocket, long-range salvo with lethal area damage against hostile
+ground formations. The ordnance package adds four external missile stations
+and 800 kg of payload capacity for the sortie. The ground-support choices also
+activate the local ground layer in Disperse. Each choice costs sortie readiness
+and is consumed on a retry. The selector shows current inventory, post-support
+inventory, and the chosen kit so the readiness and support tradeoff is visible
+before takeoff.
 The selector offers AMRAAM or Sidewinder for air combat and JASSM-ER, AARGM-ER,
 StormBreaker, or JDAM for ground attack. Standard and Hard use four internal
 plus six external weapon stations; Easy exposes two additional arcade stations.

@@ -75,11 +75,16 @@ accept/retry decision after the tactical debrief. Its implementation and
 chapter table are documented in [campaign implementation](campaign-design.md).
 
 The campaign carries remaining air-to-air missiles, air-to-ground missiles,
-cannon rounds, flares, and chaff into the next accepted sortie. Disperse, Hold
-the E18, and Counterstroke expose a limited sustainment choice: a capped partial
-rearm or field maintenance restoration consumes sortie readiness. Optional
-objectives can change air control, defense integrity, or sortie readiness when
-their results are accepted.
+cannon rounds, flares, and chaff into the next accepted sortie, while base
+resupply fills the full difficulty-specific inventory so the campaign cannot
+run out of basic equipment. Disperse, Hold the E18, and Counterstroke expose a
+sustainment choice: add the named Varpunen / Sparrow reserve wingman, deploy
+three lethal friendly 23 ITK 61/95 Sergei truck-mounted air-defence guns,
+deploy one 298 RSRAKH 06 MLRS launcher for a six-rocket ground salvo, or open
+an expanded ordnance package with four additional external missile stations
+and 800 kg of payload capacity.
+Optional objectives can change air control, defense integrity, or sortie
+readiness when their results are accepted.
 
 Unknown Track implements proximity identification, escort timing, uncertain and
 neutral radar states, and weapons hold. Broken Silence implements a protected

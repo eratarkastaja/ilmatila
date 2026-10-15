@@ -98,7 +98,7 @@ describe('CampaignProgress', () => {
       saves: {
         standard: save({
           chapterIndex: 2,
-          sustainmentChoice: 'partial-rearm',
+          sustainmentChoice: 'sparrow-wingman',
           sustainmentUsed: true,
         }),
       },

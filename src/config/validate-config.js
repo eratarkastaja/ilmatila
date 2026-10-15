@@ -179,6 +179,8 @@ const missionSchema = object({
   hostileHelicopterLateralSpacing: optional(number(1, 20000)),
   hostileHelicopterSpawnAltitude: optional(number(1, 10000)),
   groundIto90Count: optional(number(0, 100, true)),
+  groundSergeiCount: optional(number(0, 100, true)),
+  groundMlrsCount: optional(number(0, 100, true)),
   groundShilkaCount: optional(number(0, 100, true)),
   battlefieldIngressOffset: optional(number(0, 50000)),
   objective: { type: 'objective' },
@@ -194,7 +196,7 @@ const MISSION_VARIANT_CHANGE_FIELDS = new Set([
   'groundPairs', 'groundTrucks', 'groundFriendlyTrucks', 'groundFrontSpan', 'convoyArea',
   'hostileHelicopters', 'hostileHelicopterSpawnDistance', 'hostileHelicopterMinimumSpawnDistance',
   'hostileHelicopterLateralSpacing', 'hostileHelicopterSpawnAltitude', 'groundIto90Count',
-  'groundShilkaCount', 'battlefieldIngressOffset', 'objective', 'optionalObjectives', 'weather',
+  'groundShilkaCount', 'groundSergeiCount', 'groundMlrsCount', 'battlefieldIngressOffset', 'objective', 'optionalObjectives', 'weather',
 ]);
 
 const encounterSchema = object({
@@ -657,7 +659,7 @@ function validateMissionRelations(mission, key, validIds, errors) {
   }
   if (mission.groundBattle === false && [mission.groundPairs, mission.groundTrucks, mission.groundFriendlyTrucks ?? 0,
     mission.groundFrontSpan, mission.convoyArea, mission.groundIto90Count ?? 0,
-    mission.groundShilkaCount ?? 0].some(value => value > 0)) {
+    mission.groundSergeiCount ?? 0, mission.groundShilkaCount ?? 0, mission.groundMlrsCount ?? 0].some(value => value > 0)) {
     errors.push(`${path} has ground forces configured while groundBattle is false`);
   }
   if (mission.objective?.type === 'support' && (!mission.groundBattle || mission.groundPairs < 1)) {
@@ -803,7 +805,7 @@ function validateCampaignSustainmentDecision(decision, path, errors) {
       errors.push(`${choicePath} must be an object`);
       return;
     }
-    const choiceKeys = new Set(['id', 'titleKey', 'descriptionKey', 'restore', 'readinessCost']);
+    const choiceKeys = new Set(['id', 'titleKey', 'descriptionKey', 'restore', 'mission', 'readinessCost']);
     for (const key of Object.keys(choice)) {
       if (!choiceKeys.has(key)) errors.push(`${choicePath}.${key} is not a recognized setting`);
     }
@@ -813,13 +815,45 @@ function validateCampaignSustainmentDecision(decision, path, errors) {
     validateNode(choice.titleKey, string, `${choicePath}.titleKey`, errors);
     validateNode(choice.descriptionKey, string, `${choicePath}.descriptionKey`, errors);
     validateNode(choice.readinessCost, number(0, 100), `${choicePath}.readinessCost`, errors);
-    if (!choice.restore || typeof choice.restore !== 'object' || Array.isArray(choice.restore)) {
+    if (choice.restore !== undefined && (!choice.restore || typeof choice.restore !== 'object' || Array.isArray(choice.restore))) {
       errors.push(`${choicePath}.restore must be an object`);
-    } else {
+    } else if (choice.restore) {
       const restoreKeys = new Set(['airMissiles', 'groundMissiles', 'gunRounds', 'flares', 'chaff']);
       for (const key of Object.keys(choice.restore)) {
         if (!restoreKeys.has(key)) errors.push(`${choicePath}.restore.${key} is not a recognized store`);
         else validateNode(choice.restore[key], number(0, 10000), `${choicePath}.restore.${key}`, errors);
+      }
+    }
+    if (choice.mission !== undefined && (!choice.mission || typeof choice.mission !== 'object' || Array.isArray(choice.mission))) {
+      errors.push(`${choicePath}.mission must be an object`);
+    } else if (choice.mission) {
+      const missionKeys = new Set([
+        'campaignWingmanDelta', 'campaignWingmanRadioId', 'groundBattle', 'groundSergeiCount', 'groundMlrsCount',
+        'campaignKitHardpointDelta', 'campaignKitPayloadDeltaKg',
+      ]);
+      for (const key of Object.keys(choice.mission)) {
+        if (!missionKeys.has(key)) errors.push(`${choicePath}.mission.${key} is not a recognized setting`);
+      }
+      if (choice.mission.campaignWingmanDelta !== undefined) {
+        validateNode(choice.mission.campaignWingmanDelta, number(0, 10, true), `${choicePath}.mission.campaignWingmanDelta`, errors);
+      }
+      if (choice.mission.groundSergeiCount !== undefined) {
+        validateNode(choice.mission.groundSergeiCount, number(0, 100, true), `${choicePath}.mission.groundSergeiCount`, errors);
+      }
+      if (choice.mission.groundMlrsCount !== undefined) {
+        validateNode(choice.mission.groundMlrsCount, number(0, 100, true), `${choicePath}.mission.groundMlrsCount`, errors);
+      }
+      if (choice.mission.campaignKitHardpointDelta !== undefined) {
+        validateNode(choice.mission.campaignKitHardpointDelta, number(0, 20, true), `${choicePath}.mission.campaignKitHardpointDelta`, errors);
+      }
+      if (choice.mission.campaignKitPayloadDeltaKg !== undefined) {
+        validateNode(choice.mission.campaignKitPayloadDeltaKg, number(0, 10000), `${choicePath}.mission.campaignKitPayloadDeltaKg`, errors);
+      }
+      if (choice.mission.groundBattle !== undefined) {
+        validateNode(choice.mission.groundBattle, boolean, `${choicePath}.mission.groundBattle`, errors);
+      }
+      if (choice.mission.campaignWingmanRadioId !== undefined) {
+        validateNode(choice.mission.campaignWingmanRadioId, string, `${choicePath}.mission.campaignWingmanRadioId`, errors);
       }
     }
   });

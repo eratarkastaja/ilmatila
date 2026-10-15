@@ -7,6 +7,7 @@ export const RADIO_CREW = Object.freeze({
   groundControl: Object.freeze({ callsignKey: 'radio.callsign.groundControl' }),
   wingman1: Object.freeze({ callsignKey: 'radio.callsign.wingman1' }),
   wingman2: Object.freeze({ callsignKey: 'radio.callsign.wingman2' }),
+  varpunen: Object.freeze({ callsignKey: 'radio.callsign.varpunen' }),
 });
 
 export const WINGMAN_COMMAND_EVENTS = Object.freeze({

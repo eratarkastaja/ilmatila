@@ -51,17 +51,21 @@ describe('CampaignSession', () => {
     session.state.chapterIndex = 2;
     session.state.stores = { airMissiles: 4, groundMissiles: 4, gunRounds: 1000, flares: 8, chaff: 8 };
     expect(session.getStoresAfterChoice()).toEqual(session.getCurrentStores());
-    expect(session.selectSustainmentChoice('partial-rearm')).toBe(true);
-    expect(session.getStoresAfterChoice('partial-rearm').airMissiles)
-      .toBeGreaterThan(session.getCurrentStores().airMissiles);
+    expect(session.selectSustainmentChoice('sparrow-wingman')).toBe(true);
+    expect(session.getStoresAfterChoice('sparrow-wingman').airMissiles)
+      .toBe(4);
     expect(session.retryReadinessCost).toBe(7);
+    expect(session.resolveCurrentMission().mission).toMatchObject({
+      wingmen: 3,
+      campaignWingmanRadioId: 'varpunen',
+    });
 
     expect(session.retryCurrent()).toBe(true);
 
     expect(session.state.sortieReadiness).toBe(63);
     expect(session.state.sustainmentChoice).toBeNull();
     expect(session.state.sustainmentUsed).toBe(true);
-    expect(session.selectSustainmentChoice('partial-rearm')).toBe(false);
+    expect(session.selectSustainmentChoice('sparrow-wingman')).toBe(false);
     expect(session.resolveCurrentMission().mission.campaignStores).toEqual({
       airMissiles: 4,
       groundMissiles: 2,
@@ -293,7 +297,7 @@ describe('CampaignSession', () => {
     expect(session.resolveCurrentMission().mission.objective.type).toBe('strikeDefense');
   });
 
-  it('offers rare partial sustainment and carries the sortie remainder forward', () => {
+  it('offers operational support and resupplies the next sortie', () => {
     const session = new CampaignSession({
       progress: new CampaignProgress(memoryStorage()),
       difficulty: 'standard',
@@ -308,16 +312,11 @@ describe('CampaignSession', () => {
       chaff: 3,
     };
 
-    expect(session.currentSustainmentDecision.choices).toHaveLength(2);
-    expect(session.selectSustainmentChoice('partial-rearm')).toBe(true);
+    expect(session.currentSustainmentDecision.choices).toHaveLength(4);
+    expect(session.selectSustainmentChoice('sergei-air-defense')).toBe(true);
     const resolved = session.resolveCurrentMission();
-    expect(resolved.mission.campaignStores).toMatchObject({
-      airMissiles: 3,
-      groundMissiles: 2,
-      gunRounds: 470,
-      flares: 2,
-      chaff: 3,
-    });
+    expect(resolved.mission).toMatchObject({ groundBattle: true, groundSergeiCount: 3 });
+    expect(resolved.mission.campaignStores).toMatchObject({ airMissiles: 1, groundMissiles: 0 });
 
     const accepted = session.acceptResult('complete', {
       campaignAttemptId: session.state.currentAttemptId,
@@ -326,15 +325,75 @@ describe('CampaignSession', () => {
     });
     expect(accepted.applied).toBe(true);
     expect(session.state.stores).toEqual({
-      airMissiles: 2,
-      groundMissiles: 1,
-      gunRounds: 80,
-      flares: 1,
-      chaff: 2,
+      airMissiles: 10,
+      groundMissiles: 10,
+      gunRounds: 3500,
+      flares: 15,
+      chaff: 15,
       fuelMinutes: 480,
     });
-    expect(session.state.sortieReadiness).toBe(72);
+    expect(session.state.sortieReadiness).toBe(71);
     expect(session.state.sustainmentChoice).toBeNull();
+  });
+
+  it('resolves the RSRAKH support choice into a friendly MLRS battery', () => {
+    const session = new CampaignSession({
+      progress: new CampaignProgress(memoryStorage()),
+      difficulty: 'hard',
+      seedFactory: () => 91,
+    });
+    session.state.chapterIndex = 2;
+
+    expect(session.selectSustainmentChoice('rsrakh-mlrs')).toBe(true);
+    expect(session.resolveCurrentMission().mission).toMatchObject({
+      groundBattle: true,
+      groundMlrsCount: 1,
+    });
+  });
+
+  it('resolves expanded ordnance support into extra hardpoints and payload capacity', () => {
+    const session = new CampaignSession({
+      progress: new CampaignProgress(memoryStorage()),
+      difficulty: 'hard',
+      seedFactory: () => 91,
+    });
+    session.state.chapterIndex = 2;
+
+    expect(session.selectSustainmentChoice('expanded-ordnance-capacity')).toBe(true);
+    const kit = session.getKitState();
+    expect(kit.limits).toMatchObject({ hardpoints: 14, externalHardpoints: 10, payloadKg: 5000 });
+    expect(session.resolveCurrentMission().mission).toMatchObject({
+      campaignKitHardpointDelta: 4,
+      campaignKitPayloadDeltaKg: 800,
+    });
+    expect(session.retryReadinessCost).toBe(8);
+    expect(session.selectSustainmentChoice(null)).toBe(true);
+    expect(session.selectedSustainmentChoice).toBeNull();
+    expect(session.retryReadinessCost).toBe(3);
+  });
+
+  it('refills to the selected difficulty cap, including Hard cannon ammunition', () => {
+    const session = new CampaignSession({
+      progress: new CampaignProgress(memoryStorage()),
+      difficulty: 'hard',
+      seedFactory: () => 92,
+    });
+
+    const accepted = session.acceptResult('complete', {
+      campaignAttemptId: session.state.currentAttemptId,
+      remainingStores: { airMissiles: 0, groundMissiles: 0, gunRounds: 0, flares: 0, chaff: 0, fuelMinutes: 0 },
+      optionalObjectives: [],
+    });
+
+    expect(accepted.applied).toBe(true);
+    expect(session.state.stores).toEqual({
+      airMissiles: 8,
+      groundMissiles: 8,
+      gunRounds: 2400,
+      flares: 10,
+      chaff: 10,
+      fuelMinutes: 240,
+    });
   });
 
   it('can jump to a campaign chapter for development testing without saving the jump', () => {

@@ -8,6 +8,15 @@ summarized here instead of being kept as one document per pipeline attempt.
 The first beta of the 0.3 release line contains the current campaign, sortie,
 kit-selection, weather, HUD, mission-objective, and Pages-pipeline work.
 
+This release also adds persistent between-sortie support choices: the named
+Varpunen / Sparrow reserve wingman, three friendly Sergei air-defence trucks,
+one lethal 298 RSRAKH 06 MLRS battery, and an expanded ordnance package with
+four additional external missile stations and 800 kg of payload capacity.
+Support choices now have visible readiness costs and can be removed before
+launch. The campaign kit selector reflects the active hardpoint and payload
+limits, while ground artillery uses the shared projectile and destruction
+systems for real area damage.
+
 ### Validation
 
 - Vitest unit and integration suite passed.

@@ -40,6 +40,20 @@ describe('campaign kit selection', () => {
     expect(getKitLimits('easy').hardpoints).toBe(12);
   });
 
+  it('adds four external missile stations and payload capacity for the ordnance support package', () => {
+    const limits = getKitLimits('hard', {
+      campaignKitHardpointDelta: 4,
+      campaignKitPayloadDeltaKg: 800,
+    });
+    expect(limits.hardpoints).toBe(14);
+    expect(limits.externalHardpoints).toBe(10);
+    expect(limits.payloadKg).toBe(5000);
+    expect(getRecommendedKit(inventory, {
+      campaignKitHardpointDelta: 4,
+      groundBattle: true,
+    }).airMissiles).toBe(8);
+  });
+
   it('makes long-range strike weapons meaningfully heavier than small glide weapons', () => {
     const light = getRecommendedKit(inventory, { groundBattle: true });
     const heavy = { ...light, groundMissileType: 'jassm' };

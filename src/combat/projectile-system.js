@@ -39,7 +39,7 @@ export class ProjectileSystem {
   constructor({
     scene, player, playerShots = [], hostiles = [], decoys = [], collision, audio,
     playerVelocity = stationaryVelocity, weather = null, onPlayerDestroyed, onPlayerDamaged, onPlayerHit, onPlayerMissileHit, onJetDestroyed,
-    onUnitDestroyed, onFriendlyAircraftHit, addSpark, addWaterImpact, addExplosion, incomingDamageMultiplier = 1,
+    onUnitDestroyed, onFriendlyAircraftHit, onGroundImpact, addSpark, addWaterImpact, addExplosion, incomingDamageMultiplier = 1,
     hostileMissileTurnRate = HOSTILE_MISSILE_TURN_RATE, hostileMissileDamage = 62,
     hostileMissileProximityRadius = 20, random = createSeededRandom(DEFAULT_RANDOM_SEED), visualRandom = randomVisual,
   }) {
@@ -58,6 +58,7 @@ export class ProjectileSystem {
     this.onPlayerMissileHit = onPlayerMissileHit;
     this.onJetDestroyed = onJetDestroyed;
     this.onFriendlyAircraftHit = onFriendlyAircraftHit;
+    this.onGroundImpact = onGroundImpact;
     this.onUnitDestroyed = onUnitDestroyed;
     this.incomingDamageMultiplier = incomingDamageMultiplier;
     this.hostileMissileTurnRate = hostileMissileTurnRate;
@@ -263,6 +264,16 @@ export class ProjectileSystem {
           shot.proximityDamage ?? .8,
         );
       }
+      if (!impact && shot.life > 0 && shot.mlrs && shot.target && !shot.target.dead) {
+        impact = this.collision.findMissileProximityImpact(
+          previous,
+          shot.mesh.position,
+          dt,
+          shot.target,
+          shot.proximityRadius ?? 85,
+          1,
+        );
+      }
       if (impact) {
         const { target, hitInfo } = impact;
         const damage = shot.damage * (hitInfo.damage ?? 1);
@@ -272,6 +283,10 @@ export class ProjectileSystem {
           applyAirframeCondition(target.mesh, target.hp, target.maxHp);
         }
         const impactPosition = this._impactPosition.copy(previous).lerp(shot.mesh.position, hitInfo.t);
+        if (shot.mlrs) {
+          shot.impactTarget = target;
+          this.onGroundImpact?.(impactPosition, shot);
+        }
         if (!shot.ally && shot.ballistic) {
           this.onPlayerHit?.(target, {
             damage,
@@ -286,6 +301,12 @@ export class ProjectileSystem {
         } else {
           this.addSpark(impactPosition);
         }
+        shot.life = 0;
+      }
+      if (!impact && shot.life > 0 && shot.mlrs && shot.impactPoint
+        && this.collision.sweptDistanceSquared(previous, shot.mesh.position, shot.impactPoint, shot.impactPoint) < 55 ** 2) {
+        shot.impactTarget = null;
+        this.onGroundImpact?.(shot.impactPoint, shot);
         shot.life = 0;
       }
       if (shot.life > 0 && shot.ballistic) {

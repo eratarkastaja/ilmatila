@@ -12,6 +12,8 @@ const platforms = {
   pasi: { name: 'XA-180 PASI', faction: 'finnish', kind: 'wheeled', length: 7.7, width: 2.9, hullHeight: 2.45, totalHeight: 3.0, wheels: 6, hp: 3, radius: 5.3, weapon: '12,7 MM' },
   sisuSa150: { name: 'SISU SA-150 MASI', faction: 'finnish', kind: 'wheeled', length: 6.76, width: 2.48, hullHeight: 1.62, totalHeight: 3.1, wheels: 4, hp: 2, radius: 4.7, weapon: null },
   ito90: { name: 'ITO 90 CROTALE NG', faction: 'finnish', kind: 'wheeled', length: 7.9, width: 2.9, hullHeight: 2.45, totalHeight: 4.15, wheels: 6, hp: 4, radius: 5.6, weapon: 'CROTALE NG' },
+  sergei23: { name: '23 ITK 61/95 SERGEI', faction: 'finnish', kind: 'wheeled', length: 7.4, width: 2.5, hullHeight: 1.62, totalHeight: 4.35, wheels: 6, hp: 3, radius: 5.1, weapon: '23 MM' },
+  rsrakh06: { name: '298 RSRAKH 06 MLRS', faction: 'finnish', kind: 'wheeled', length: 7.4, width: 2.5, hullHeight: 1.62, totalHeight: 4.25, wheels: 6, hp: 3, radius: 5.1, weapon: '298 MLRS' },
   t72: { name: 'T-72B', faction: 'russian', kind: 'tracked', length: 9.5, width: 3.6, hullHeight: 1.5, totalHeight: 2.95, wheels: 6, hp: 7, radius: 6.8, weapon: '125 MM' },
   bmp2: { name: 'BMP-2', faction: 'russian', kind: 'tracked', length: 6.7, width: 3.15, hullHeight: 1.55, totalHeight: 2.7, wheels: 6, hp: 4, radius: 5.0, weapon: '30 MM' },
   btr80: { name: 'BTR-80', faction: 'russian', kind: 'wheeled', length: 7.65, width: 2.9, hullHeight: 2.05, totalHeight: 3.0, wheels: 8, hp: 3, radius: 5.1, weapon: '14,5 MM' },
@@ -42,6 +44,8 @@ export function createGroundVehicle(platformId, faction) {
     case 'pasi': buildPasi(group, spec, { body, bodyLight, bodyDark, rubber, steel, glass }); break;
     case 'sisuSa150': buildMasi(group, spec, { body, bodyLight, bodyDark, rubber, steel, glass }); break;
     case 'ito90': buildCrotale(group, spec, { body, bodyLight, bodyDark, rubber, steel, glass }); break;
+    case 'sergei23': buildSergei23(group, spec, { body, bodyLight, bodyDark, rubber, steel, glass }); break;
+    case 'rsrakh06': buildRsrakh06(group, spec, { body, bodyLight, bodyDark, rubber, steel, glass }); break;
     case 't72': buildT72(group, spec, { body, bodyLight, bodyDark, track, rubber, steel, glass }); break;
     case 'bmp2': buildBMP2(group, spec, { body, bodyLight, bodyDark, track, rubber, steel, glass }); break;
     case 'btr80': buildBTR80(group, spec, { body, bodyLight, bodyDark, rubber, steel, glass }); break;
@@ -61,6 +65,7 @@ export function createGroundVehicle(platformId, faction) {
   group.userData.vehicleSpec = { ...spec };
   group.userData.aaMount = group.getObjectByName('aa-mount') ?? null;
   group.userData.aaTraverse = group.getObjectByName('aa-traverse') ?? null;
+  group.userData.mlrsMount = group.getObjectByName('mlrs-mount') ?? null;
   return group;
 }
 
@@ -187,6 +192,85 @@ function buildCrotale(group, s, m) {
     }
   }
   addBox(group, [0.72, 0.12, 0.48], [0, 3.08, 1.17], m.bodyDark);
+}
+
+function buildSergei23(group, s, m) {
+  // A compact 23 ITK 61/95 on a Sergei truck bed. The open platform and twin
+  // barrels make the support weapon readable from the air without a new asset.
+  addBox(group, [s.width * .84, .76, s.length * .57], [0, .98, -.28], m.bodyDark);
+  addBox(group, [s.width * .88, .13, s.length * .59], [0, 1.39, -.28], m.bodyLight);
+  addBox(group, [2.12, .16, 2.68], [0, 1.56, -1.53], m.bodyLight);
+  for (const side of [-1, 1]) {
+    addBox(group, [.12, .64, 2.75], [side * 1.08, 1.87, -1.53], m.body);
+    addBox(group, [.08, .08, 2.82], [side * 1.15, 2.18, -1.53], m.bodyDark);
+  }
+  addBox(group, [2.12, .58, .12], [0, 1.82, -2.91], m.body);
+  addBox(group, [1.82, .08, .09], [0, 2.12, -2.96], m.bodyDark);
+  addBox(group, [2.18, 1.62, 2.02], [0, 2.13, 2.02], m.body);
+  addWindow(group, [-.51, 2.51, 3.05], [.86, .62, .09], m.glass, -.16);
+  addWindow(group, [.51, 2.51, 3.05], [.86, .62, .09], m.glass, .16);
+  addBox(group, [.12, .8, .09], [0, 2.08, 3.06], m.bodyDark);
+  addBox(group, [1.43, .44, .08], [0, 1.48, 3.05], m.bodyDark);
+  for (let x = -.55; x <= .56; x += .28) addBox(group, [.055, .36, .045], [x, 1.48, 3.11], m.steel);
+  addBox(group, [1.82, .12, .14], [0, 1.13, 3.19], m.steel);
+  addBox(group, [1.35, .09, .52], [0, 2.99, 2.02], m.bodyLight);
+  for (const side of [-1, 1]) {
+    addBox(group, [.08, .38, .35], [side * 1.12, 1.69, 2.24], m.bodyDark);
+    addBox(group, [.1, .54, .13], [side * 1.13, 1.68, 2.2], m.glass);
+    addBox(group, [.18, .12, .55], [side * 1.22, 1.04, 1.64], m.steel);
+    for (const z of [-1.925, 1.925]) addWheel(group, side * 1.27, .63, z, m.rubber, m.steel, .49);
+  }
+  addBox(group, [.2, .3, .15], [0, 1.2, 3.26], m.bodyDark);
+
+  const traverse = new THREE.Group();
+  traverse.name = 'aa-traverse';
+  traverse.userData.dynamicWeaponMount = true;
+  traverse.position.set(0, 2.54, -.92);
+  group.add(traverse);
+  const mount = new THREE.Group();
+  mount.name = 'aa-mount';
+  mount.userData.dynamicWeaponMount = true;
+  mount.position.set(0, .18, 0);
+  traverse.add(mount);
+  const platform = new THREE.Mesh(new THREE.CylinderGeometry(.88, .98, .16, 12), m.bodyDark);
+  platform.position.y = .08;
+  mount.add(platform);
+  addCannon(mount, 23, .058, 2.55, m.steel, m.bodyDark, .56, -.27, .12);
+  addCannon(mount, 23, .058, 2.55, m.steel, m.bodyDark, .56, .27, .12);
+  addBox(mount, [1.1, .18, .62], [0, .42, .18], m.bodyLight);
+}
+
+function buildRsrakh06(group, s, m) {
+  // The Finnish 298 RSRAKH 06 is a truck-mounted rocket artillery platform.
+  // Keep the launcher deliberately legible from the air: a rear firing deck,
+  // raised six-tube pod, and a restrained service silhouette are enough to
+  // communicate “long-range strike” without importing a new asset.
+  buildMasi(group, s, m);
+  const traverse = new THREE.Group();
+  traverse.name = 'mlrs-mount';
+  traverse.userData.dynamicWeaponMount = true;
+  traverse.position.set(0, 2.28, -1.65);
+  group.add(traverse);
+
+  const pod = new THREE.Group();
+  pod.userData.dynamicWeaponMount = true;
+  pod.rotation.x = -0.16;
+  traverse.add(pod);
+  addBox(pod, [1.95, .72, 2.45], [0, .05, -.18], m.bodyDark);
+  addBox(pod, [1.72, .12, 2.25], [0, .44, -.18], m.bodyLight);
+  for (const side of [-1, 1]) {
+    for (const row of [-1, 0, 1]) {
+      const tube = new THREE.Mesh(new THREE.CylinderGeometry(.16, .19, 2.35, 8), m.steel);
+      tube.rotation.x = Math.PI / 2;
+      tube.position.set(side * .45, .08 + row * .2, .16);
+      pod.add(tube);
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(.14, .14, .035, 8), m.bodyDark);
+      cap.rotation.x = Math.PI / 2;
+      cap.position.set(side * .45, .08 + row * .2, 1.34);
+      pod.add(cap);
+    }
+  }
+  addBox(pod, [2.18, .14, .24], [0, -.42, -1.08], m.bodyLight);
 }
 
 function buildShilka(group, s, m) {
@@ -480,6 +564,7 @@ function addRussianMarking(group, platformId, s, starMaterial) {
     btr80: [0, 2.91, -0.32],
     'zsu23-4': [0, 3.48, -0.82],
     ural4320: [0, 3.19, -1.85],
+    sergei23: [0, 3.03, -.92],
   };
   star.position.set(...positions[platformId]);
   group.add(star);

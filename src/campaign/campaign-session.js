@@ -24,6 +24,19 @@ function restoreStores(stores, restore, difficulty) {
   return next;
 }
 
+function resupplyStoresForNextSortie(stores, difficulty) {
+  const caps = getCampaignStoreCaps(difficulty);
+  const next = { ...stores };
+  for (const key of STORE_KEYS) {
+    if (caps[key] === null) {
+      next[key] = null;
+      continue;
+    }
+    next[key] = caps[key];
+  }
+  return next;
+}
+
 function createAttemptId(definition, difficulty, sequence) {
   return `${definition.id}:${difficulty}:${sequence}`;
 }
@@ -144,7 +157,7 @@ export class CampaignSession {
     const inventory = this.getStoresAfterChoice(choice?.id);
     const mission = resolveCampaignMission(this.definition, this.state)?.mission ?? {};
     const recommended = getRecommendedKit(inventory, mission);
-    const limits = getKitLimits(this.difficulty);
+    const limits = getKitLimits(this.difficulty, mission);
     const selected = this.state.kitSelection && validateKit(this.state.kitSelection, inventory, limits)
       ? { ...recommended, ...this.state.kitSelection }
       : recommended;
@@ -278,7 +291,10 @@ export class CampaignSession {
       stores: result.remainingStores ? normalizeCampaignStores(result.remainingStores, state.difficulty) : state.stores,
       score: Number.isFinite(result.score) ? Math.max(0, Math.round(result.score)) : 0,
     }];
-    if (result.remainingStores) state.stores = normalizeCampaignStores(result.remainingStores, state.difficulty);
+    if (result.remainingStores) {
+      const remainingStores = normalizeCampaignStores(result.remainingStores, state.difficulty);
+      state.stores = resupplyStoresForNextSortie(remainingStores, state.difficulty);
+    }
     state.sustainmentChoice = null;
     state.sustainmentUsed = false;
     state.kitSelection = null;

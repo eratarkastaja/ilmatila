@@ -136,7 +136,7 @@ export class GroundSpawnSystem {
       battle.colliders.push(supply.collider);
     }
 
-    const addAirDefenseVehicle = (platform, team, index, count, depth, flankSign) => {
+    const addAirDefenseVehicle = (platform, team, index, count, depth, flankSign, role = 'airDefense') => {
       const spec = getGroundVehicleSpec(platform);
       const lane = (index - (count - 1) * 0.5) * Math.min(1500, frontSpan * 0.18) * flankSign;
       const position = nearestDryPoint(
@@ -151,8 +151,8 @@ export class GroundSpawnSystem {
       battle.scene.add(mesh);
       const unit = {
         mesh, hp: spec.hp, maxHp: spec.hp, team,
-        role: 'airDefense',
-        missionTargetRoleKey: team === 'red' ? 'combat.groundTargetRole.airDefense' : null,
+        role,
+        missionTargetRoleKey: team === 'red' && role === 'airDefense' ? 'combat.groundTargetRole.airDefense' : null,
         cool: 0, phase: rnd() * Math.PI * 2, armed: true, speed: 0,
         flank: team === 'blue' ? 1 : -1,
         velocity: new THREE.Vector3(), travel: new THREE.Vector3(),
@@ -177,6 +177,14 @@ export class GroundSpawnSystem {
     for (let i = 0; i < (battle.mission.groundIto90Count ?? 0); i++) {
       const depth = supportMission ? -finnishDepth - 720 : finnishDepth + 720;
       addAirDefenseVehicle('ito90', 'blue', i, battle.mission.groundIto90Count, depth, 1);
+    }
+    for (let i = 0; i < (battle.mission.groundSergeiCount ?? 0); i++) {
+      const depth = supportMission ? -finnishDepth - 980 : finnishDepth + 980;
+      addAirDefenseVehicle('sergei23', 'blue', i, battle.mission.groundSergeiCount, depth, 1);
+    }
+    for (let i = 0; i < (battle.mission.groundMlrsCount ?? 0); i++) {
+      const depth = supportMission ? -finnishDepth - 1380 : finnishDepth + 1380;
+      addAirDefenseVehicle('rsrakh06', 'blue', i, battle.mission.groundMlrsCount, depth, 1, 'artillery');
     }
     for (let i = 0; i < (battle.mission.groundShilkaCount ?? 0); i++) {
       const depth = supportMission ? russianDepth + 760 : -russianDepth - 760;

@@ -18,6 +18,7 @@ const AA_TRACKING_WARNING_SECONDS = 1.5;
 const FRIENDLY_AA_PROFILES = Object.freeze({
   cv9030: { speed: 930, maxRange: 3300, maxAltitude: 2200, spread: .0085, damage: .18, rounds: 5, interval: .12, cooldown: 7.5, jitter: 4.5, muzzle: 2.45 },
   pasi: { speed: 820, maxRange: 2200, maxAltitude: 1500, spread: .014, damage: .085, rounds: 5, interval: .105, cooldown: 10, jitter: 5.5, muzzle: 1.65 },
+  sergei23: { speed: 1080, maxRange: 4300, maxAltitude: 2800, spread: .0065, damage: .42, rounds: 12, interval: .075, cooldown: 5.5, jitter: 2.5, muzzle: 3.25 },
 });
 const HOSTILE_AA_PROFILES = Object.freeze({
   btr80: { speed: 850, maxRange: 2700, spread: .011, damage: 17, near: 9, rounds: 6, interval: .085, maxAltitude: 1100 },

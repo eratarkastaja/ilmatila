@@ -39,18 +39,44 @@ const LIMITED_SUSTAINMENT = {
   descriptionKey: 'campaign.sustainment.description',
   choices: [
     {
-      id: 'partial-rearm',
-      titleKey: 'campaign.sustainment.choice.partialRearm.title',
-      descriptionKey: 'campaign.sustainment.choice.partialRearm.description',
-      restore: { airMissiles: 2, groundMissiles: 2, gunRounds: 350 },
+      id: 'sparrow-wingman',
+      titleKey: 'campaign.sustainment.choice.sparrowWingman.title',
+      descriptionKey: 'campaign.sustainment.choice.sparrowWingman.description',
+      mission: {
+        campaignWingmanDelta: 1,
+        campaignWingmanRadioId: 'varpunen',
+      },
       readinessCost: 4,
     },
     {
-      id: 'field-maintenance',
-      titleKey: 'campaign.sustainment.choice.fieldMaintenance.title',
-      descriptionKey: 'campaign.sustainment.choice.fieldMaintenance.description',
-      restore: { flares: 4, chaff: 4 },
-      readinessCost: 3,
+      id: 'sergei-air-defense',
+      titleKey: 'campaign.sustainment.choice.sergeiAirDefense.title',
+      descriptionKey: 'campaign.sustainment.choice.sergeiAirDefense.description',
+      mission: {
+        groundBattle: true,
+        groundSergeiCount: 3,
+      },
+      readinessCost: 5,
+    },
+    {
+      id: 'rsrakh-mlrs',
+      titleKey: 'campaign.sustainment.choice.rsrakhMlrs.title',
+      descriptionKey: 'campaign.sustainment.choice.rsrakhMlrs.description',
+      mission: {
+        groundBattle: true,
+        groundMlrsCount: 1,
+      },
+      readinessCost: 6,
+    },
+    {
+      id: 'expanded-ordnance-capacity',
+      titleKey: 'campaign.sustainment.choice.expandedOrdnanceCapacity.title',
+      descriptionKey: 'campaign.sustainment.choice.expandedOrdnanceCapacity.description',
+      mission: {
+        campaignKitHardpointDelta: 4,
+        campaignKitPayloadDeltaKg: 800,
+      },
+      readinessCost: 5,
     },
   ],
 };

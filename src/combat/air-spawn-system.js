@@ -15,10 +15,11 @@ export class AirSpawnSystem {
     if (!battle.mission.deferredHostiles) battle.spawnHostiles(heading, playerForward, playerRight);
 
     for (let i = 0; i < battle.mission.wingmen; i++) {
-      const wing = i === 0 ? -1 : 1;
+      const formationOffset = i === 0 ? -230 : i === 1 ? 230 : -460;
+      const wing = formationOffset < 0 ? -1 : 1;
       const jet = createFighter({ friendly: true, aircraftAsset: battle.aircraftAssets?.player });
       jet.position.copy(battle.player.position)
-        .addScaledVector(playerRight, wing * 230)
+        .addScaledVector(playerRight, formationOffset)
         .addScaledVector(playerForward, -300);
       jet.position.y += wing * 28 + 24;
       jet.rotation.order = 'YXZ';
@@ -27,7 +28,10 @@ export class AirSpawnSystem {
       battle.scene.add(jet);
       battle.allies.push({
         mesh: jet,
-        radioId: `wingman${i + 1}`,
+        radioId: i === battle.mission.wingmen - 1 && battle.mission.campaignWingmanRadioId
+          ? battle.mission.campaignWingmanRadioId
+          : `wingman${i + 1}`,
+        formationOffset,
         wing,
         fireCooldown: 1.2 + i * .6,
         burstClock: 0,

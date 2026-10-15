@@ -15,6 +15,7 @@ function makeSystem(overrides = {}) {
     onPlayerDestroyed: vi.fn(),
     onJetDestroyed: vi.fn(),
     onUnitDestroyed: vi.fn(),
+    onGroundImpact: vi.fn(),
     addSpark: vi.fn(),
     addExplosion: vi.fn(),
   };
@@ -437,5 +438,29 @@ describe('ProjectileSystem', () => {
 
     expect(missile.decoyTarget).toBeNull();
     expect(missile.velocity.length()).toBeGreaterThan(300);
+  });
+
+  it('detonates an MLRS rocket at its planned ground impact point', () => {
+    const { system, scene, playerShots, hooks } = makeSystem();
+    const rocket = {
+      projectile: true,
+      ground: true,
+      ballistic: false,
+      mlrs: true,
+      mesh: new THREE.Object3D(),
+      velocity: new THREE.Vector3(10, 0, 0),
+      life: 2,
+      impactPoint: new THREE.Vector3(10, 0, 0),
+      blastRadius: 260,
+      splashDamage: 4.8,
+    };
+    scene.add(rocket.mesh);
+    system.addPlayerProjectile(rocket);
+
+    system.update(1);
+
+    expect(hooks.onGroundImpact).toHaveBeenCalledWith(rocket.impactPoint, rocket);
+    expect(playerShots).toHaveLength(0);
+    expect(scene.children).not.toContain(rocket.mesh);
   });
 });

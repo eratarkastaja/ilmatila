@@ -51,6 +51,7 @@ export class CampaignView {
     this.sustainmentTitle = documentObject.querySelector('#campaign-sustainment-title');
     this.sustainmentDescription = documentObject.querySelector('#campaign-sustainment-description');
     this.sustainmentChoices = documentObject.querySelector('#campaign-sustainment-choices');
+    this.sustainmentReset = documentObject.querySelector('#campaign-sustainment-reset');
     this.onSustainmentChoice = null;
     this.onNewRun = null;
     this.onKitChange = null;
@@ -66,6 +67,7 @@ export class CampaignView {
       globalThis.requestAnimationFrame?.(() => this.updateSustainmentOverflow());
     });
     this.sustainmentClose?.addEventListener('click', () => this.sustainmentDialog?.close());
+    this.sustainmentReset?.addEventListener('click', () => this.onSustainmentChoice?.(null));
     this.standaloneKitOpen?.addEventListener('click', () => this.onStandaloneKitOpen?.());
     this.historyOpen?.addEventListener('click', () => this.historyDialog?.showModal());
     this.historyClose?.addEventListener('click', () => this.historyDialog?.close());
@@ -462,6 +464,10 @@ export class CampaignView {
         : selected
         ? t('campaign.sustainment.selected')
         : t('campaign.sustainment.available');
+    }
+    if (this.sustainmentReset) {
+      this.sustainmentReset.hidden = !selected || session.state.sustainmentUsed;
+      this.sustainmentReset.disabled = session.state.sustainmentUsed;
     }
     if (this.sustainmentDescription) {
       this.sustainmentDescription.textContent = decision

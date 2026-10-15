@@ -20,11 +20,18 @@ export const GROUND_WEAPON_OPTIONS = Object.freeze({
 
 const ITEM_WEIGHT = Object.freeze({ gunRounds: .018, flares: 1, chaff: 1 });
 
-export function getKitLimits(difficulty = 'standard') {
+export function getKitLimits(difficulty = 'standard', mission = {}) {
+  const extraHardpoints = Number.isInteger(mission?.campaignKitHardpointDelta)
+    ? Math.max(0, mission.campaignKitHardpointDelta)
+    : 0;
+  const extraPayload = Number.isFinite(mission?.campaignKitPayloadDeltaKg)
+    ? Math.max(0, mission.campaignKitPayloadDeltaKg)
+    : 0;
   return {
     ...KIT_LIMITS,
-    hardpoints: difficulty === 'easy' ? 12 : KIT_LIMITS.hardpoints,
-    externalHardpoints: difficulty === 'easy' ? 8 : KIT_LIMITS.externalHardpoints,
+    hardpoints: (difficulty === 'easy' ? 12 : KIT_LIMITS.hardpoints) + extraHardpoints,
+    externalHardpoints: (difficulty === 'easy' ? 8 : KIT_LIMITS.externalHardpoints) + extraHardpoints,
+    payloadKg: KIT_LIMITS.payloadKg + extraPayload,
   };
 }
 
@@ -61,9 +68,12 @@ export function validateKit(stores, inventory, limits = KIT_LIMITS) {
 
 export function getRecommendedKit(inventory, mission = {}) {
   const support = mission.groundBattle || mission.objective?.type === 'logisticsStrike';
+  const extraAirCapacity = Number.isInteger(mission.campaignKitHardpointDelta)
+    ? Math.max(0, mission.campaignKitHardpointDelta)
+    : 0;
   return {
     ...inventory,
-    airMissiles: Math.min(inventory.airMissiles ?? 0, support ? 4 : 6),
+    airMissiles: Math.min(inventory.airMissiles ?? 0, (support ? 4 : 6) + extraAirCapacity),
     groundMissiles: Math.min(inventory.groundMissiles ?? 0, support ? 4 : 2),
     airMissileType: 'amraam',
     groundMissileType: support ? 'aargm' : 'stormbreaker',

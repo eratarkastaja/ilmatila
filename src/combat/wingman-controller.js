@@ -268,7 +268,7 @@ export class WingmanController {
       } else if (isReturningToBase(battle.wingmanOrder) && battle.wingmanReturnPoint) {
         ally.phase = 'rtb';
         waypoint.copy(battle.wingmanReturnPoint)
-          .addScaledVector(playerRight, ally.wing * 230);
+          .addScaledVector(playerRight, ally.formationOffset ?? ally.wing * 230);
         waypoint.y += 24 + ally.wing * 28;
         ally.returnedToBase = ally.mesh.position.distanceTo(battle.wingmanReturnPoint) <= 1250;
       } else if (target && targetRange < 10500 && !holdFormation) {
@@ -301,7 +301,7 @@ export class WingmanController {
         ally.phase = 'formation';
         const aft = this._aft.copy(playerForward).negate();
         waypoint.copy(battle.player.position)
-          .addScaledVector(playerRight, ally.wing * 230)
+          .addScaledVector(playerRight, ally.formationOffset ?? ally.wing * 230)
           .addScaledVector(aft, 300);
         waypoint.y+=24+ally.wing*28;
       }

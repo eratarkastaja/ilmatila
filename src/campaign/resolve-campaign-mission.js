@@ -21,7 +21,7 @@ function scaleCount(value, scale) {
 function tuneNumbers(config, difficulty) {
   const tuned = { ...config };
   const scale = FORCE_SCALE[difficulty] ?? 1;
-  for (const key of ['hostiles', 'hostileHelicopters', 'groundPairs', 'groundShilkaCount']) {
+  for (const key of ['hostiles', 'hostileHelicopters', 'groundPairs', 'groundShilkaCount', 'groundSergeiCount', 'groundMlrsCount']) {
     if (key in tuned) tuned[key] = scaleCount(tuned[key], scale);
   }
   if (Number.isFinite(tuned.openingDelay)) {
@@ -201,6 +201,11 @@ function applyMissionOverrides(mission, overrides, difficulty) {
   return resolved;
 }
 
+function applySustainmentChoice(mission, chapter, state) {
+  const choice = chapter.sustainmentDecision?.choices?.find(item => item.id === state.sustainmentChoice);
+  return choice?.mission ? { ...mission, ...clone(choice.mission) } : mission;
+}
+
 /** Resolves campaign pressure into an ordinary mission definition. */
 export function resolveCampaignMission(definition, state, { seed = state.currentSeed } = {}) {
   if (!definition || !state || state.completed) return null;
@@ -221,6 +226,7 @@ export function resolveCampaignMission(definition, state, { seed = state.current
   mission = applyDefenseIntegrityPressure(mission, state.defenseIntegrity);
   mission = applyReadinessPressure(mission, state.sortieReadiness);
   mission = applyCampaignHistory(mission, state, chapter);
+  mission = applySustainmentChoice(mission, chapter, state);
   if (Number.isFinite(chapter.timeOfDay)) {
     const weather = typeof mission.weather === 'string'
       ? { preset: mission.weather }
@@ -228,7 +234,8 @@ export function resolveCampaignMission(definition, state, { seed = state.current
     mission.weather = { ...weather, timeOfDay: chapter.timeOfDay };
   }
   const readinessWingmanDelta = state.sortieReadiness < 35 ? -1 : state.sortieReadiness >= 80 ? 1 : 0;
-  mission.wingmen = Math.max(1, Math.min(3, mission.wingmen + readinessWingmanDelta + (mission.campaignWingmanDelta ?? 0)));
+  const maximumWingmen = mission.campaignWingmanDelta ? 4 : 3;
+  mission.wingmen = Math.max(1, Math.min(maximumWingmen, mission.wingmen + readinessWingmanDelta + (mission.campaignWingmanDelta ?? 0)));
 
   Object.assign(mission, {
     campaignId: definition.id,
