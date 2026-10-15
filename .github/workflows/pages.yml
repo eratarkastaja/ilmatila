@@ -219,6 +219,8 @@ jobs:
       - name: Check out source for staging deploy adapter
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'staging'
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
 
       - name: Check out deploy-pages action for staging
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'staging'
@@ -231,7 +233,7 @@ jobs:
       - name: Prepare staging Pages action
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'staging'
         run: |
-          staging_build_version="$(printf 'staging-%s' "$GITHUB_RUN_ID" | sha256sum | cut -c1-40)"
+          staging_build_version="$(git rev-parse HEAD^)"
           perl -0pi -e 's/process\.env\.GITHUB_SHA/process.env.ILMATILA_PAGES_BUILD_VERSION || process.env.GITHUB_SHA/g' \
             .github/deploy-pages-action/dist/index.js
           echo "ILMATILA_PAGES_BUILD_VERSION=$staging_build_version" >> "$GITHUB_ENV"
