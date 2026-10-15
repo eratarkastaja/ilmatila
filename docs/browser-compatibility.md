@@ -2,7 +2,7 @@
 
 ## Test run
 
-The `0.2.0-beta.5` release uses the production browser matrix in the Pages
+The `0.3.0-beta.1` release uses the production browser matrix in the Pages
 workflow. Playwright 1.63.0 drives actual browser binaries against the
 Päijänne terrain assets and aircraft GLBs; no browser implementations are
 mocked in the passing runs.
@@ -36,4 +36,4 @@ Playwright-driven tabs report both documents as focused and visible after `bring
 - **Linux Playwright WebKit:** Its headless WPE build exposes the Pointer Lock API but does not grant capture. The app presents the localized launch error and keeps the menu usable; this result does not establish Apple Safari behavior.
 - **Playwright bundled Chromium:** Its headless shell did not produce a heading change for the scripted mouse move, while the actual Chrome 154, Edge 154, and Firefox 155 projects did. The bundled shell is not a target beta browser, so the CI matrix tests branded Chrome and Edge directly instead of treating that shell as their substitute.
 
-The CI browser job installs Chrome, Edge, Firefox, and WebKit and runs these production-build tests. The GitHub Actions workflow itself was not triggered during this local test run.
+The CI browser job installs Chrome, Edge, Firefox, and WebKit and runs these production-build tests. The release workflow also validates the deployed staging path before the beta tag is allowed to update the live Pages site.
