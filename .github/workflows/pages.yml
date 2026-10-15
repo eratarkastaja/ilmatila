@@ -115,7 +115,7 @@ jobs:
   staging-preflight:
     if: >-
       (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'beta') ||
-      startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-beta.')
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-beta.'))
     needs: [quality, browser-smoke]
     uses: ./.github/workflows/deployed-browser-smoke.yml
     with:

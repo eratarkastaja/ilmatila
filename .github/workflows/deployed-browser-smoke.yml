@@ -70,6 +70,8 @@ jobs:
         env:
           BUILD_INFO_URL: ${{ inputs.build_info_url }}
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          PAGES_VERIFY_ATTEMPTS: 30
+          PAGES_VERIFY_DELAY_MS: 20000
 
       - name: Run the production browser matrix against the deployed URL
         run: xvfb-run --auto-servernum npm run test:e2e

@@ -1,6 +1,6 @@
 # ILMATILA
 
-ILMATILA is an independent browser-based air-combat game by ERÄGAMES. The current public beta is **0.2.0-beta.5**. Missions, combat, progression, aircraft handling, radar, and weapons are playable; balance and mission pacing may still change during beta. The simulation is fictional and is not intended for real-world training or operational use.
+ILMATILA is an independent browser-based air-combat game by ERÄGAMES. The current public beta is **0.2.0-beta.6**. Missions, combat, progression, aircraft handling, radar, and weapons are playable; balance and mission pacing may still change during beta. The simulation is fictional and is not intended for real-world training or operational use.
 
 **[Play ILMATILA in your browser](https://eratarkastaja.github.io/ilmatila/).**
 
@@ -18,7 +18,7 @@ Touch and mobile devices are not supported in this beta. Apple Safari has not ye
 - Automated tab-switch testing confirms that a sortie survives switching away and back, but headless browsers do not reliably expose operating-system focus/visibility transitions. Real desktop focus behavior has not been certified across operating systems.
 - The `?stress=1` developer scenario intentionally exceeds the normal-mission performance target; it is a profiling tool, not a supported gameplay mode.
 
-No open P0/P1 issue is known for the verified Chrome, Edge, and Firefox runs. See the [beta release notes](docs/beta-release-0.2.0-beta.5.md) for the complete validation record.
+No open P0/P1 issue is known for the verified Chrome, Edge, and Firefox runs. See the [beta release notes](docs/beta-release-0.2.0-beta.6.md) for the complete validation record.
 
 ## Run locally
 
