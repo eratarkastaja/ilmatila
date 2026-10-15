@@ -211,10 +211,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build, staging-preflight]
     permissions:
+      actions: read
       pages: write
       id-token: write
       contents: read
     steps:
+      - name: Check out source for staging deploy adapter
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'staging'
+        uses: actions/checkout@v7
+
       - name: Deploy staging Pages artifact with unique version
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'staging'
         run: node tools/release/deploy-pages.mjs "staging-${GITHUB_RUN_ID}"
