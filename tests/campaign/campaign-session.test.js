@@ -68,13 +68,13 @@ describe('CampaignSession', () => {
     expect(session.selectSustainmentChoice('sparrow-wingman')).toBe(false);
     expect(session.resolveCurrentMission().mission.campaignStores).toEqual({
       airMissiles: 4,
-      groundMissiles: 2,
+      groundMissiles: 4,
       gunRounds: 1000,
       flares: 8,
       chaff: 8,
       fuelMinutes: 240,
       airMissileType: 'amraam',
-      groundMissileType: 'stormbreaker',
+      groundMissileType: 'aargm',
     });
   });
 
@@ -133,7 +133,7 @@ describe('CampaignSession', () => {
     const result = {
       campaignAttemptId: attemptId,
       score: 1200,
-      optionalObjectives: [{ id: 'no-damage', status: 'completed' }],
+      optionalObjectives: [{ id: 'flight-intact', status: 'completed' }],
     };
 
     const preview = session.previewResult('complete', result);
@@ -199,8 +199,8 @@ describe('CampaignSession', () => {
     const result = {
       campaignAttemptId: attemptId,
       optionalObjectives: [
-        { id: 'lead-intercept', status: 'failed' },
-        { id: 'wingmen-home', status: 'completed' },
+        { id: 'outer-screen', status: 'failed' },
+        { id: 'relay-intact', status: 'completed' },
       ],
     };
 
@@ -209,15 +209,15 @@ describe('CampaignSession', () => {
     expect(preview.classification).toBe('success');
     expect(preview.changes).toMatchObject({
       airControl: 3,
-      defenseIntegrity: -4,
-      sortieReadiness: 5,
+      defenseIntegrity: -1,
+      sortieReadiness: 2,
     });
     expect(preview.optionalObjectiveChanges).toEqual([
-      { id: 'lead-intercept', status: 'failed', changes: {
+      { id: 'outer-screen', status: 'failed', changes: {
         airControl: -2, defenseIntegrity: -5, sortieReadiness: 0,
       } },
-      { id: 'wingmen-home', status: 'completed', changes: {
-        airControl: 0, defenseIntegrity: 0, sortieReadiness: 3,
+      { id: 'relay-intact', status: 'completed', changes: {
+        airControl: 0, defenseIntegrity: 3, sortieReadiness: 0,
       } },
     ]);
 
@@ -316,6 +316,7 @@ describe('CampaignSession', () => {
     expect(session.selectSustainmentChoice('sergei-air-defense')).toBe(true);
     const resolved = session.resolveCurrentMission();
     expect(resolved.mission).toMatchObject({ groundBattle: true, groundSergeiCount: 3 });
+    expect(resolved.mission.optionalObjectives.map(objective => objective.id)).toContain('support-sergei');
     expect(resolved.mission.campaignStores).toMatchObject({ airMissiles: 1, groundMissiles: 0 });
 
     const accepted = session.acceptResult('complete', {

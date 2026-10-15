@@ -128,4 +128,56 @@ describe('MissionOptionalObjectives', () => {
     relay.dead = true;
     expect(tracker.update(state)[0].status).toBe('completed');
   });
+
+  it('counts authored target groups and fails only when the required total becomes impossible', () => {
+    const targets = [
+      { dead: false, role: 'strike' },
+      { dead: false, role: 'strike' },
+      { dead: false, role: 'sweep' },
+    ];
+    const tracker = new MissionOptionalObjectives([{
+      id: 'strike-package',
+      type: 'destroyTargets',
+      target: { collection: 'airHostiles', role: 'strike' },
+      required: 2,
+    }]);
+    const state = makeState({ airHostiles: targets, targetCollectionsReady: { airHostiles: true } });
+
+    expect(tracker.update(state)[0].status).toBe('pending');
+    targets[0].dead = true;
+    expect(tracker.update(state)[0].status).toBe('pending');
+    targets[1].dead = true;
+    expect(tracker.update(state)[0].status).toBe('completed');
+  });
+
+  it('preserves force thresholds and remembers zone penetrations across frames', () => {
+    const defenders = [
+      { dead: false, role: 'defender' },
+      { dead: false, role: 'defender' },
+      { dead: false, role: 'defender' },
+      { dead: false, role: 'defender' },
+    ];
+    const strike = { dead: false, role: 'strike', mesh: { position: { x: 900, y: 0, z: 0 } } };
+    const tracker = new MissionOptionalObjectives([
+      {
+        id: 'line', type: 'preserveForce',
+        target: { collection: 'friendlyGround', role: 'defender' }, minimumFraction: .75,
+      },
+      {
+        id: 'zone', type: 'denyZone',
+        target: { collection: 'airHostiles', role: 'strike' },
+        zone: { center: 'extraction', radius: 500 }, maximumPenetrations: 0,
+      },
+    ]);
+    const state = makeState({ friendlyGround: defenders, airHostiles: [strike] });
+
+    expect(tracker.update(state).map(result => result.status)).toEqual(['pending', 'pending']);
+    defenders[0].dead = true;
+    expect(tracker.update(state)[0].status).toBe('pending');
+    strike.mesh.position.x = 900;
+    expect(tracker.update(state)[1].status).toBe('pending');
+    strike.mesh.position.x = 100;
+    expect(tracker.update(state)[1].status).toBe('failed');
+    expect(tracker.update({ ...state, outcome: 'complete' }, true)[0].status).toBe('completed');
+  });
 });

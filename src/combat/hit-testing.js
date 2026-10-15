@@ -5,11 +5,12 @@ const localStart = new THREE.Vector3();
 const localEnd = new THREE.Vector3();
 const localDelta = new THREE.Vector3();
 const PROJECTILE_HIT_ASSIST = 1.25;
+export const CANNON_PROJECTILE_HIT_ASSIST = 1.38;
 const axes=['x','y','z'];
 const defaultVehicleBounds={min:[-10,0,-12],max:[10,14,20]};
 
 /** Segment against the aircraft's authored ellipsoid hit zones, in local space. */
-export function traceFighterHit(start, end, fighter, worldMatrixCurrent=false) {
+export function traceFighterHit(start, end, fighter, worldMatrixCurrent=false, hitAssist=PROJECTILE_HIT_ASSIST) {
   if(!worldMatrixCurrent)fighter.updateWorldMatrix(true, false);
   inverseWorld.copy(fighter.matrixWorld).invert();
   const a = localStart.copy(start).applyMatrix4(inverseWorld);
@@ -17,9 +18,9 @@ export function traceFighterHit(start, end, fighter, worldMatrixCurrent=false) {
   let best = null;
 
   for (const zone of fighter.userData.hitZones ?? []) {
-    const rx = zone.rx * PROJECTILE_HIT_ASSIST;
-    const ry = zone.ry * PROJECTILE_HIT_ASSIST;
-    const rz = zone.rz * PROJECTILE_HIT_ASSIST;
+    const rx = zone.rx * hitAssist;
+    const ry = zone.ry * hitAssist;
+    const rz = zone.rz * hitAssist;
     const ox = (a.x - zone.x) / rx;
     const oy = (a.y - zone.y) / ry;
     const oz = (a.z - zone.z) / rz;

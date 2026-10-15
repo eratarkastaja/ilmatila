@@ -4,6 +4,7 @@ export const GUN_PROJECTILE_SPEED = 1000;
 export const GUN_PROJECTILE_LIFETIME = 2.2;
 export const GUN_PROJECTILE_GRAVITY = 9.81;
 export const GUN_ROUNDS_PER_SECOND = 55;
+export const GUN_PROJECTILE_DAMAGE = .48;
 
 export function estimateInterceptTime(offset, targetVelocity, projectileSpeed, maxTime = 6) {
   const a = targetVelocity.lengthSq() - projectileSpeed * projectileSpeed;

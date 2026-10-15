@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { pointSegmentDistanceSquared, traceFighterHit, traceVehicleHit } from '../../src/combat/hit-testing.js';
+import {
+  CANNON_PROJECTILE_HIT_ASSIST,
+  pointSegmentDistanceSquared,
+  traceFighterHit,
+  traceVehicleHit,
+} from '../../src/combat/hit-testing.js';
 
 function makeFighter(hitZones) {
   const fighter = new THREE.Object3D();
@@ -48,6 +53,15 @@ describe('projectile hit testing', () => {
       new THREE.Vector3(10, 2, 0),
       fighter,
     )).toBeNull();
+  });
+
+  it('uses a slightly more forgiving envelope for cannon rounds', () => {
+    const fighter = makeFighter([{ x: 0, y: 0, z: 0, rx: 2, ry: 1, rz: 2, damage: 1 }]);
+    const start = new THREE.Vector3(-10, 1.3, 0);
+    const end = new THREE.Vector3(10, 1.3, 0);
+
+    expect(traceFighterHit(start, end, fighter)).toBeNull();
+    expect(traceFighterHit(start, end, fighter, false, CANNON_PROJECTILE_HIT_ASSIST)).not.toBeNull();
   });
 
   it('transforms aircraft hit zones into world space', () => {

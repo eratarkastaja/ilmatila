@@ -28,6 +28,7 @@ export class AirSpawnSystem {
       battle.scene.add(jet);
       battle.allies.push({
         mesh: jet,
+        role: 'wingman',
         radioId: i === battle.mission.wingmen - 1 && battle.mission.campaignWingmanRadioId
           ? battle.mission.campaignWingmanRadioId
           : `wingman${i + 1}`,
@@ -180,6 +181,7 @@ export class AirSpawnSystem {
         identified: !nonCombatant,
         combatant: !nonCombatant,
         radarTeam: nonCombatant ? 'unknown' : 'hostile',
+        role: missionRole,
         identificationProgress: 0,
         missionRole,
         missionTargetRoleKey: missionRole === 'strike' ? 'combat.airTargetRole.strike' : null,

@@ -206,6 +206,28 @@ function applySustainmentChoice(mission, chapter, state) {
   return choice?.mission ? { ...mission, ...clone(choice.mission) } : mission;
 }
 
+function getSelectedSustainmentChoice(chapter, state) {
+  return chapter.sustainmentDecision?.choices?.find(item => item.id === state.sustainmentChoice) ?? null;
+}
+
+function resolveCampaignOptionalObjectives(chapter, mission, sustainmentChoice) {
+  const authored = Array.isArray(chapter.optionalObjectives)
+    ? chapter.optionalObjectives
+    : mission.optionalObjectives ?? [];
+  const objectives = authored.map(objective => ({
+    ...clone(objective),
+    ...(objective.target ? { target: clone(objective.target) } : {}),
+    ...(objective.zone ? { zone: clone(objective.zone) } : {}),
+  }));
+  const supportObjective = sustainmentChoice?.optionalObjective;
+  if (supportObjective) objectives.push({
+    ...clone(supportObjective),
+    ...(supportObjective.target ? { target: clone(supportObjective.target) } : {}),
+    ...(supportObjective.zone ? { zone: clone(supportObjective.zone) } : {}),
+  });
+  return objectives;
+}
+
 /** Resolves campaign pressure into an ordinary mission definition. */
 export function resolveCampaignMission(definition, state, { seed = state.currentSeed } = {}) {
   if (!definition || !state || state.completed) return null;
@@ -227,6 +249,7 @@ export function resolveCampaignMission(definition, state, { seed = state.current
   mission = applyReadinessPressure(mission, state.sortieReadiness);
   mission = applyCampaignHistory(mission, state, chapter);
   mission = applySustainmentChoice(mission, chapter, state);
+  const sustainmentChoice = getSelectedSustainmentChoice(chapter, state);
   if (Number.isFinite(chapter.timeOfDay)) {
     const weather = typeof mission.weather === 'string'
       ? { preset: mission.weather }
@@ -246,6 +269,15 @@ export function resolveCampaignMission(definition, state, { seed = state.current
   });
 
   const preview = resolveMissionVariant(mission, seed);
+  const optionalObjectives = resolveCampaignOptionalObjectives(chapter, preview.mission, sustainmentChoice);
+  mission.campaignOptionalObjectives = optionalObjectives;
+  mission.optionalObjectives = optionalObjectives;
+  preview.mission.campaignOptionalObjectives = optionalObjectives;
+  preview.mission.optionalObjectives = optionalObjectives.map(objective => ({
+    ...clone(objective),
+    ...(objective.target ? { target: clone(objective.target) } : {}),
+    ...(objective.zone ? { zone: clone(objective.zone) } : {}),
+  }));
   if (Number.isFinite(chapter.timeOfDay)) {
     const weather = typeof preview.mission.weather === 'string'
       ? { preset: preview.mission.weather }

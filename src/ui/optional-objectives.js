@@ -8,7 +8,11 @@ function targetLabel(objective) {
 function descriptionParams(objective) {
   return {
     limit: formatNumber(objective.limitSeconds ?? 0),
-    count: formatNumber(objective.minimumRemaining ?? 0),
+    count: formatNumber(objective.minimumRemaining ?? objective.required ?? 0),
+    required: formatNumber(objective.required ?? 0),
+    minimumAlive: formatNumber(objective.minimumAlive ?? 0),
+    minimumFraction: formatNumber(Math.round((objective.minimumFraction ?? 0) * 100)),
+    maximum: formatNumber(objective.maximumPenetrations ?? 0),
     radius: formatNumber(objective.zoneRadius ?? 0),
     target: targetLabel(objective),
   };
@@ -39,9 +43,12 @@ export function renderOptionalObjectives(container, objectives = [], results = n
     const content = document.createElement('div');
     content.className = 'optional-objective-copy';
     const title = document.createElement('strong');
-    title.textContent = t(`mission.optionalObjective.${objective.type}.title`);
+    title.textContent = t(objective.titleKey ?? `mission.optionalObjective.${objective.type}.title`);
     const description = document.createElement('p');
-    description.textContent = t(`mission.optionalObjective.${objective.type}.briefing`, descriptionParams(objective));
+    description.textContent = t(
+      objective.briefingKey ?? `mission.optionalObjective.${objective.type}.briefing`,
+      descriptionParams(objective),
+    );
     content.append(title, description);
     item.append(content);
 

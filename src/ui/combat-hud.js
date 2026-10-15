@@ -14,6 +14,13 @@ const setClassIfChanged = (node, className, enabled) => {
   }
 };
 
+function optionalResultParams(params = {}) {
+  return Object.fromEntries(Object.entries(params).map(([key, value]) => [
+    key,
+    key === 'target' ? (value ? t(value) : t('mission.optionalObjective.target.generic')) : value,
+  ]));
+}
+
 /** Renders the combat status read model without owning simulation state. */
 export class CombatHud {
   constructor() {
@@ -53,6 +60,32 @@ export class CombatHud {
     this.boundaryWarningDistance = document.querySelector('#boundary-warning-distance');
     this.radarTime = document.querySelector('#radar-time');
     this.nightVisionStatus = document.querySelector('#night-vision-status');
+    this.optionalObjectivesHud = document.querySelector('#mission-optional-objectives-hud');
+    this.optionalObjectivesList = document.querySelector('#mission-optional-objective-hud-list');
+    this.optionalObjectivesSignature = '';
+  }
+
+  renderOptionalObjectives(objectives = []) {
+    const rows = Array.isArray(objectives) ? objectives : [];
+    setHiddenIfChanged(this.optionalObjectivesHud, rows.length === 0);
+    if (!this.optionalObjectivesList) return;
+    const signature = rows.map(row => `${row.id}:${row.status}:${row.detailKey}:${JSON.stringify(row.params ?? {})}`).join('|');
+    if (signature === this.optionalObjectivesSignature) return;
+    this.optionalObjectivesSignature = signature;
+    this.optionalObjectivesList.replaceChildren();
+    for (const row of rows) {
+      const item = document.createElement('li');
+      item.dataset.status = row.status ?? 'pending';
+      const title = document.createElement('strong');
+      title.textContent = t(row.titleKey ?? `mission.optionalObjective.${row.type}.title`);
+      const detail = document.createElement('span');
+      detail.textContent = t(
+        row.detailKey ?? 'mission.optionalObjective.result.pending',
+        optionalResultParams(row.params),
+      );
+      item.append(title, detail);
+      this.optionalObjectivesList.append(item);
+    }
   }
 
   update(state) {
@@ -154,6 +187,7 @@ export class CombatHud {
     }
 
     const { radar, threats, weapons, mission } = state;
+    this.renderOptionalObjectives(mission?.optionalObjectives);
     if (this.radarWarning) {
       setHiddenIfChanged(this.radarWarning, state.session.destroyed || !threats.radarWarningState);
       if (threats.radarWarningState) {

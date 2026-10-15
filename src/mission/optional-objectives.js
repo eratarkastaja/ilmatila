@@ -31,35 +31,42 @@ function matchesSelector(unit, selector) {
   if (selector.role && unit.role !== selector.role) return false;
   if (selector.team && unit.team !== selector.team) return false;
   if (selector.armed !== undefined && unit.armed !== selector.armed) return false;
+  if (selector.radioId && unit.radioId !== selector.radioId) return false;
+  if (selector.platform && unit.platform !== selector.platform) return false;
+  if (selector.reinforcementSource !== undefined
+    && unit.reinforcementSource !== selector.reinforcementSource) return false;
   return true;
+}
+
+function selectTargets(state, selector) {
+  const collection = state[selector?.collection];
+  if (!Array.isArray(collection)) return [];
+  const matches = collection.filter(unit => matchesSelector(unit, selector ?? {}));
+  if (selector?.index === undefined) return matches;
+  return matches[selector.index] ? [matches[selector.index]] : [];
 }
 
 /** Returns bit flags for whether a selector matched and whether a match was destroyed. */
 function targetStatus(state, selector) {
-  const collection = state[selector?.collection];
-  if (!Array.isArray(collection)) return 0;
-  let matchIndex = 0;
-  let status = 0;
-  for (const unit of collection) {
-    if (!matchesSelector(unit, selector)) continue;
-    if (selector.index !== undefined && matchIndex++ !== selector.index) continue;
-    status |= TARGET_FOUND;
-    if (isDestroyed(unit)) status |= TARGET_DESTROYED;
-    if (selector.index !== undefined || (status & TARGET_DESTROYED)) return status;
-  }
+  const targets = selectTargets(state, selector);
+  if (targets.length === 0) return 0;
+  let status = TARGET_FOUND;
+  if (targets.some(isDestroyed)) status |= TARGET_DESTROYED;
   return status;
 }
 
 function selectedTarget(state, selector) {
-  const collection = state[selector?.collection];
-  if (!Array.isArray(collection)) return null;
-  let matchIndex = 0;
-  const targetIndex = selector.index ?? 0;
-  for (const unit of collection) {
-    if (!matchesSelector(unit, selector)) continue;
-    if (matchIndex++ === targetIndex) return unit;
+  return selectTargets(state, selector)[0] ?? null;
+}
+
+function snapshotTargets(state, selector, final, runtime) {
+  if (runtime.targets === null) {
+    const targets = selectTargets(state, selector);
+    const ready = state.targetCollectionsReady?.[selector?.collection] ?? true;
+    if (targets.length === 0 && !final && !ready) return null;
+    runtime.targets = targets;
   }
-  return null;
+  return runtime.targets;
 }
 
 function setResult(result, status, detailKey, key1, value1, key2, value2) {
@@ -164,7 +171,96 @@ const evaluators = {
       : setResult(result, 'pending', 'mission.optionalObjective.result.targetApproachingZone',
         'target', objective.target.labelKey);
   },
+  destroyTargets(result, objective, state, final, runtime) {
+    const targets = snapshotTargets(state, objective.target, final, runtime);
+    if (targets === null) return setResult(result, 'pending', 'mission.optionalObjective.result.waitingForTarget');
+    const total = targets.length;
+    const destroyed = targets.filter(isDestroyed).length;
+    const required = Math.max(0, objective.required ?? 0);
+    const remaining = Math.max(0, required - destroyed);
+    if (total === 0) {
+      return final
+        ? setResult(result, 'notApplicable', 'mission.optionalObjective.result.targetUnavailable')
+        : setResult(result, 'pending', 'mission.optionalObjective.result.waitingForTarget');
+    }
+    if (destroyed >= required) {
+      return setResult(result, 'completed', 'mission.optionalObjective.result.targetsDestroyed',
+        'destroyed', destroyed, 'required', required);
+    }
+    if (total - destroyed < remaining) {
+      return setResult(result, 'failed', 'mission.optionalObjective.result.targetsImpossible',
+        'destroyed', destroyed, 'required', required);
+    }
+    return setResult(result, final ? 'failed' : 'pending',
+      final ? 'mission.optionalObjective.result.targetsNotDestroyed' : 'mission.optionalObjective.result.targetsProgress',
+      'destroyed', destroyed, 'required', required);
+  },
+  preserveForce(result, objective, state, final, runtime) {
+    const targets = snapshotTargets(state, objective.target, final, runtime);
+    if (targets === null) return setResult(result, 'pending', 'mission.optionalObjective.result.waitingForTarget');
+    const total = targets.length;
+    const alive = targets.filter(target => !isDestroyed(target)).length;
+    const minimumAlive = objective.minimumAlive ?? 0;
+    const minimumFraction = objective.minimumFraction ?? 0;
+    const fraction = total > 0 ? alive / total : 0;
+    const meetsAlive = alive >= minimumAlive;
+    const meetsFraction = fraction >= minimumFraction;
+    if (total === 0) {
+      return final
+        ? setResult(result, 'notApplicable', 'mission.optionalObjective.result.targetUnavailable')
+        : setResult(result, 'pending', 'mission.optionalObjective.result.waitingForTarget');
+    }
+    if (!meetsAlive || !meetsFraction) {
+      return setResult(result, 'failed', 'mission.optionalObjective.result.forceBelowThreshold',
+        'alive', alive, 'total', total);
+    }
+    if (!final) return setResult(result, 'pending', 'mission.optionalObjective.result.forceProgress',
+      'alive', alive, 'total', total);
+    return state.outcome === 'complete'
+      ? setResult(result, 'completed', 'mission.optionalObjective.result.forcePreserved',
+        'alive', alive, 'total', total)
+      : setResult(result, 'failed', 'mission.optionalObjective.result.sortieIncomplete');
+  },
+  denyZone(result, objective, state, final, runtime) {
+    const targets = snapshotTargets(state, objective.target, final, runtime);
+    if (targets === null) return setResult(result, 'pending', 'mission.optionalObjective.result.waitingForTarget');
+    const center = resolveZoneCenter(state, objective.zone?.center);
+    const radius = objective.zone?.radius ?? 0;
+    if (targets.length === 0 || !center || !(radius > 0)) {
+      return final
+        ? setResult(result, 'notApplicable', 'mission.optionalObjective.result.targetUnavailable')
+        : setResult(result, 'pending', 'mission.optionalObjective.result.waitingForTarget');
+    }
+    runtime.penetrated ??= new Set();
+    for (const target of targets) {
+      const position = target?.mesh?.position;
+      if (!position) continue;
+      const dx = position.x - center.x;
+      const dz = position.z - center.z;
+      if (dx * dx + dz * dz <= radius * radius) runtime.penetrated.add(target);
+    }
+    const penetrations = runtime.penetrated.size;
+    const maximum = Math.max(0, objective.maximumPenetrations ?? 0);
+    if (penetrations > maximum) {
+      return setResult(result, 'failed', 'mission.optionalObjective.result.zonePenetrated',
+        'penetrations', penetrations, 'maximum', maximum);
+    }
+    if (!final) return setResult(result, 'pending', 'mission.optionalObjective.result.zoneClear',
+      'penetrations', penetrations, 'maximum', maximum);
+    return state.outcome === 'complete'
+      ? setResult(result, 'completed', 'mission.optionalObjective.result.zoneClear',
+        'penetrations', penetrations, 'maximum', maximum)
+      : setResult(result, 'failed', 'mission.optionalObjective.result.sortieIncomplete');
+  },
 };
+
+function resolveZoneCenter(state, center) {
+  if (center && typeof center === 'object') return center;
+  if (center === 'protectedAsset') return state.protectedAssetCenter ?? state.extractionCenter;
+  if (center === 'extraction') return state.extractionCenter;
+  if (typeof center === 'string') return state[center] ?? state[`${center}Center`] ?? null;
+  return null;
+}
 
 /** Tracks mission-configured secondary criteria without changing the primary mission outcome. */
 export class MissionOptionalObjectives {
@@ -173,10 +269,12 @@ export class MissionOptionalObjectives {
     this.results = objectives.map(objective => ({
       id: objective.id,
       type: objective.type,
+      ...(objective.titleKey ? { titleKey: objective.titleKey } : {}),
       status: 'pending',
       detailKey: 'mission.optionalObjective.result.pending',
       params: {},
     }));
+    this.runtime = objectives.map(() => ({ targets: null, penetrated: null }));
     this.finished = false;
   }
 
@@ -187,7 +285,7 @@ export class MissionOptionalObjectives {
       if (terminalStatuses.has(result.status)) continue;
       const objective = this.objectives[index];
       const evaluate = evaluators[objective.type];
-      if (evaluate) evaluate(result, objective, state, final);
+      if (evaluate) evaluate(result, objective, state, final, this.runtime[index]);
       else setResult(result, 'notApplicable', 'mission.optionalObjective.result.unsupported');
     }
     if (final) this.finished = true;

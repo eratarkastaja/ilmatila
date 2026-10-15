@@ -77,9 +77,17 @@ status from the previous accepted sortie. During launch, each chapter adds a
 semantic radio tasking message alongside the shared phase calls.
 
 Optional objectives apply authored state effects when their result is accepted.
-The implemented effects cover strike interception, wingman survival, friendly
-force protection, and logistics destruction. A failed optional objective can
-reduce a state value without changing the primary sortie result.
+Campaign chapters replace the ordinary mission optional list with their own
+authored list after variant selection. The list can use `destroyTargets`,
+`preserveForce`, and `denyZone` in addition to the shared missile, wingman,
+damage, time, and ground-target criteria. A selected sustainment choice may
+append one more objective, such as keeping Varpunen, a Sergei screen, or an
+RSRAKH battery alive. These selectors use the live unit collection and authored
+roles/platforms, so a target group is captured when it spawns rather than
+silently switching to a later reinforcement. The implemented effects cover
+strike interception, wingman survival, friendly-force protection, and logistics
+destruction. A failed optional objective can reduce a state value without
+changing the primary sortie result.
 
 The three strategic values also shape the next sortie, not just its debrief.
 Air control changes CAP pressure, reinforcement probability, radar sensor range,

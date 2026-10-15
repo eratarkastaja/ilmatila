@@ -443,9 +443,17 @@ export class CombatWorld {
       wingmenTotal:this.airBattle.allies.length,
       missilesRemaining:0,
       airHostiles:this.enemies,
+      airFriendly:this.allies,
       groundHostiles:this.redUnits,
       friendlyGround:this.friends,
       extractionCenter:this.missionFlow.home,
+      protectedAssetCenter:this.objectiveAnchor,
+      targetCollectionsReady: {
+        airHostiles: this.airBattle.hostilesSpawned,
+        groundHostiles: true,
+        airFriendly: true,
+        friendlyGround: true,
+      },
     };
     this._radarContactSets={
       airFriendly:this.allies,airHostile:this.enemies,
@@ -484,7 +492,7 @@ export class CombatWorld {
       wingmanRescue:{wingman:null,attacker:null,remaining:0,missileInbound:false},
       supportForce:{active:false,fraction:1,unitsAlive:0,unitsTotal:0},
       score:0,
-      mission:{phase:null,waypoint:null,boundaryApproach:null,boundaryCritical:false,protectedAsset:{active:false,fraction:0,distance:Infinity}},
+      mission:{phase:null,waypoint:null,boundaryApproach:null,boundaryCritical:false,optionalObjectives:[],protectedAsset:{active:false,fraction:0,distance:Infinity}},
       threats:{
         radarWarningState:null,missile:null,missileEta:Infinity,missileDistance:Infinity,
         launchVisible:false,launchSourcePosition:null,launchSeeker:null,
@@ -573,6 +581,7 @@ export class CombatWorld {
     state.environment.night=isNightTime(timeOfDay);
     state.environment.nightVision=this.nightVisionEnabled;
     state.session.gunFiring=this.input.pressed.has('Space');
+    state.mission.optionalObjectives=this.optionalObjectiveTracker?.results??[];
     state.radar.mode=this.radar.mode;
     state.radar.target=this.radar.target;
     state.radar.targetDomain=this.radar.targetDomain;
@@ -1263,6 +1272,7 @@ export class CombatWorld {
     state.wingmenReturned=0;
     for(const wingman of this.airBattle.allies)if(!wingman.dead)state.wingmenReturned++;
     state.missilesRemaining=this.weaponSystem.missiles.air+this.weaponSystem.missiles.ground;
+    state.targetCollectionsReady.airHostiles=this.airBattle.hostilesSpawned;
   }
   clearInput(){
     this.input.clear();

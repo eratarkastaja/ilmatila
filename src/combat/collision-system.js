@@ -1,5 +1,10 @@
 import * as THREE from 'three';
-import { pointSegmentDistanceSquared, traceFighterHit, traceVehicleHit } from './hit-testing.js';
+import {
+  CANNON_PROJECTILE_HIT_ASSIST,
+  pointSegmentDistanceSquared,
+  traceFighterHit,
+  traceVehicleHit,
+} from './hit-testing.js';
 
 const origin = new THREE.Vector3();
 const stationaryVelocity = new THREE.Vector3();
@@ -167,7 +172,13 @@ export class CollisionSystem {
       // Trace against the target's current pose, compensating for its motion during this step.
       const relativeStart = this._relativeStart.copy(start).addScaledVector(enemy.velocity ?? stationaryVelocity, dt);
       if(pointSegmentDistanceSquared(enemy.mesh.position,relativeStart,end)>20**2)continue;
-      const impact = traceFighterHit(relativeStart, end, enemy.mesh,matricesPrepared);
+      const impact = traceFighterHit(
+        relativeStart,
+        end,
+        enemy.mesh,
+        matricesPrepared,
+        ballistic ? CANNON_PROJECTILE_HIT_ASSIST : undefined,
+      );
       if (impact && (!hitInfo || impact.t < hitInfo.t)) {
         target = enemy;
         hitInfo = impact;

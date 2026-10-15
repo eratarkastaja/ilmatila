@@ -72,6 +72,16 @@ export function resolveMissionVariant(mission, seed) {
       ...(objective.target ? { target: { ...objective.target } } : {}),
     }));
   }
+  // Campaign chapters apply their own optional objectives after variant
+  // selection. Keep that authored list intact when CombatWorld resolves the
+  // same mission a second time for the live sortie.
+  if (Array.isArray(mission.campaignOptionalObjectives)) {
+    resolvedMission.optionalObjectives = mission.campaignOptionalObjectives.map(objective => ({
+      ...objective,
+      ...(objective.target ? { target: { ...objective.target } } : {}),
+      ...(objective.zone ? { zone: { ...objective.zone } } : {}),
+    }));
+  }
 
   const encounters = (variant.encounters ?? []).map(encounter => {
     const response = chooseEncounterResponse(encounter.responses, random);

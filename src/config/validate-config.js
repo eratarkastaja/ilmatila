@@ -39,11 +39,20 @@ const OPTIONAL_OBJECTIVE_FIELDS = {
   preserveMissiles: ['minimumRemaining'],
   protectFriendlyGroundUnit: ['target'],
   interceptBeforeZone: ['target', 'zoneRadius'],
+  destroyTargets: ['target', 'required'],
+  preserveForce: ['target'],
+  denyZone: ['target', 'zone', 'maximumPenetrations'],
 };
 const OPTIONAL_OBJECTIVE_COLLECTIONS = {
   destroyOptionalGroundTarget: 'groundHostiles',
   protectFriendlyGroundUnit: 'friendlyGround',
   interceptBeforeZone: 'airHostiles',
+  destroyTargets: null,
+  preserveForce: null,
+  denyZone: null,
+};
+const OPTIONAL_OBJECTIVE_OPTIONAL_FIELDS = {
+  preserveForce: ['minimumAlive', 'minimumFraction'],
 };
 
 const difficultySchema = object({
@@ -393,7 +402,7 @@ function validateOptionalObjectiveTarget(target, path, expectedCollection, error
     errors.push(`${path} must be an object`);
     return;
   }
-  const allowedKeys = ['collection', 'index', 'role', 'team', 'armed', 'labelKey'];
+  const allowedKeys = ['collection', 'index', 'role', 'team', 'armed', 'labelKey', 'radioId', 'platform', 'reinforcementSource'];
   for (const key of Object.keys(target)) {
     if (!allowedKeys.includes(key)) errors.push(`${path}.${key} is not a recognized target selector setting`);
   }
@@ -405,6 +414,61 @@ function validateOptionalObjectiveTarget(target, path, expectedCollection, error
   if (target.team !== undefined) validateNode(target.team, string, `${path}.team`, errors);
   if (target.armed !== undefined) validateNode(target.armed, boolean, `${path}.armed`, errors);
   if (target.labelKey !== undefined) validateNode(target.labelKey, string, `${path}.labelKey`, errors);
+  if (target.radioId !== undefined) validateNode(target.radioId, string, `${path}.radioId`, errors);
+  if (target.platform !== undefined) validateNode(target.platform, string, `${path}.platform`, errors);
+  if (target.reinforcementSource !== undefined) {
+    validateNode(target.reinforcementSource, boolean, `${path}.reinforcementSource`, errors);
+  }
+}
+
+function validateFlexibleOptionalTarget(target, path, errors) {
+  if (!target || typeof target !== 'object' || Array.isArray(target)) {
+    errors.push(`${path} must be an object`);
+    return;
+  }
+  const allowedCollections = new Set(['airHostiles', 'groundHostiles', 'airFriendly', 'friendlyGround']);
+  if (!allowedCollections.has(target.collection)) {
+    errors.push(`${path}.collection must be one of ${[...allowedCollections].join(', ')}`);
+  }
+  validateOptionalObjectiveTarget(target, path, target.collection, errors);
+}
+
+function validateObjectivePresentation(objective, path, errors) {
+  if (objective.titleKey !== undefined) validateNode(objective.titleKey, string, `${path}.titleKey`, errors);
+  if (objective.briefingKey !== undefined) validateNode(objective.briefingKey, string, `${path}.briefingKey`, errors);
+}
+
+function validateOptionalObjectiveSpecificFields(objective, path, errors) {
+  if (objective.type === 'destroyTargets') {
+    validateFlexibleOptionalTarget(objective.target, `${path}.target`, errors);
+    validateNode(objective.required, number(1, 500, true), `${path}.required`, errors);
+  }
+  if (objective.type === 'preserveForce') {
+    validateFlexibleOptionalTarget(objective.target, `${path}.target`, errors);
+    if (objective.minimumAlive === undefined && objective.minimumFraction === undefined) {
+      errors.push(`${path} requires minimumAlive or minimumFraction`);
+    }
+    if (objective.minimumAlive !== undefined) {
+      validateNode(objective.minimumAlive, number(0, 500, true), `${path}.minimumAlive`, errors);
+    }
+    if (objective.minimumFraction !== undefined) {
+      validateNode(objective.minimumFraction, number(0, 1), `${path}.minimumFraction`, errors);
+    }
+  }
+  if (objective.type === 'denyZone') {
+    validateFlexibleOptionalTarget(objective.target, `${path}.target`, errors);
+    if (!objective.zone || typeof objective.zone !== 'object' || Array.isArray(objective.zone)) {
+      errors.push(`${path}.zone must be an object`);
+    } else {
+      const zoneKeys = ['center', 'radius'];
+      for (const key of Object.keys(objective.zone)) {
+        if (!zoneKeys.includes(key)) errors.push(`${path}.zone.${key} is not recognized`);
+      }
+      validateNode(objective.zone.center, string, `${path}.zone.center`, errors);
+      validateNode(objective.zone.radius, number(100, 100000), `${path}.zone.radius`, errors);
+    }
+    validateNode(objective.maximumPenetrations, number(0, 500, true), `${path}.maximumPenetrations`, errors);
+  }
 }
 
 function validateOptionalObjectives(objectives, path, errors) {
@@ -428,13 +492,17 @@ function validateOptionalObjectives(objectives, path, errors) {
       return;
     }
     if (!('type' in objective)) errors.push(`${objectivePath}.type is required`);
-    const allowedFields = ['id', 'type', ...expectedFields];
+    const allowedFields = [
+      'id', 'type', 'titleKey', 'briefingKey', ...expectedFields,
+      ...(OPTIONAL_OBJECTIVE_OPTIONAL_FIELDS[objective.type] ?? []),
+    ];
     for (const key of Object.keys(objective)) {
       if (!allowedFields.includes(key)) errors.push(`${objectivePath}.${key} is not valid for ${objective.type}`);
     }
     for (const key of expectedFields) {
       if (!(key in objective)) errors.push(`${objectivePath}.${key} is required`);
     }
+    validateObjectivePresentation(objective, objectivePath, errors);
     if (OPTIONAL_OBJECTIVE_COLLECTIONS[objective.type] && objective.target !== undefined) {
       validateOptionalObjectiveTarget(
         objective.target,
@@ -452,6 +520,7 @@ function validateOptionalObjectives(objectives, path, errors) {
     if (objective.type === 'interceptBeforeZone' && objective.zoneRadius !== undefined) {
       validateNode(objective.zoneRadius, number(100, 100000), `${objectivePath}.zoneRadius`, errors);
     }
+    validateOptionalObjectiveSpecificFields(objective, objectivePath, errors);
   });
 }
 
@@ -737,7 +806,11 @@ function validateCampaignMissionOverrides(overrides, path, errors) {
     'disableVariants', 'rulesOfEngagement', 'hostileDisposition',
     'hostiles', 'hostileSpawnDistance', 'hostileMinimumSpawnDistance',
     'hostileLateralSpacing', 'hostileComposition', 'hostileRoles',
-    'hostileEntry', 'wingmanInitialOrder', 'objective',
+    'hostileEntry', 'wingmanInitialOrder', 'objective', 'groundBattle', 'groundPairs',
+    'groundTrucks', 'groundFriendlyTrucks', 'groundFrontSpan', 'convoyArea',
+    'hostileHelicopters', 'hostileHelicopterSpawnDistance', 'hostileHelicopterMinimumSpawnDistance',
+    'hostileHelicopterLateralSpacing', 'hostileHelicopterSpawnAltitude', 'groundIto90Count',
+    'groundShilkaCount', 'groundSergeiCount', 'groundMlrsCount', 'battlefieldIngressOffset',
   ]);
   for (const key of Object.keys(overrides)) {
     if (!allowed.has(key)) errors.push(`${path}.${key} is not a permitted campaign mission override`);
@@ -781,6 +854,14 @@ function validateCampaignMissionOverrides(overrides, path, errors) {
     errors.push(`${path}.wingmanInitialOrder must be attack, defend, regroup, or rtb`);
   }
   if (overrides.objective !== undefined) validateObjective(overrides.objective, `${path}.objective`, errors);
+  for (const key of [
+    'groundBattle', 'groundPairs', 'groundTrucks', 'groundFriendlyTrucks', 'groundFrontSpan', 'convoyArea',
+    'hostileHelicopters', 'hostileHelicopterSpawnDistance', 'hostileHelicopterMinimumSpawnDistance',
+    'hostileHelicopterLateralSpacing', 'hostileHelicopterSpawnAltitude', 'groundIto90Count',
+    'groundShilkaCount', 'groundSergeiCount', 'groundMlrsCount', 'battlefieldIngressOffset',
+  ]) {
+    if (overrides[key] !== undefined) validateNode(overrides[key], missionSchema.shape[key], `${path}.${key}`, errors);
+  }
 }
 
 function validateCampaignSustainmentDecision(decision, path, errors) {
@@ -805,7 +886,7 @@ function validateCampaignSustainmentDecision(decision, path, errors) {
       errors.push(`${choicePath} must be an object`);
       return;
     }
-    const choiceKeys = new Set(['id', 'titleKey', 'descriptionKey', 'restore', 'mission', 'readinessCost']);
+    const choiceKeys = new Set(['id', 'titleKey', 'descriptionKey', 'restore', 'mission', 'optionalObjective', 'readinessCost']);
     for (const key of Object.keys(choice)) {
       if (!choiceKeys.has(key)) errors.push(`${choicePath}.${key} is not a recognized setting`);
     }
@@ -855,6 +936,9 @@ function validateCampaignSustainmentDecision(decision, path, errors) {
       if (choice.mission.campaignWingmanRadioId !== undefined) {
         validateNode(choice.mission.campaignWingmanRadioId, string, `${choicePath}.mission.campaignWingmanRadioId`, errors);
       }
+    }
+    if (choice.optionalObjective !== undefined) {
+      validateOptionalObjectives([choice.optionalObjective], `${choicePath}.optionalObjective`, errors);
     }
   });
 }
@@ -928,7 +1012,7 @@ export function validateCampaigns(campaigns = CAMPAIGNS, missions = MISSIONS) {
       const chapterKeys = new Set([
         'id', 'day', 'timeOfDay', 'areaId', 'baseMissionId', 'titleKey', 'briefingKey',
         'radioBriefingKey',
-        'decisiveObjectiveId', 'effects', 'missionOverrides', 'sustainmentDecision',
+        'decisiveObjectiveId', 'effects', 'missionOverrides', 'sustainmentDecision', 'optionalObjectives',
         'optionalObjectiveEffects',
       ]);
       for (const key of Object.keys(chapter)) {
@@ -947,7 +1031,11 @@ export function validateCampaigns(campaigns = CAMPAIGNS, missions = MISSIONS) {
       validateNode(chapter.titleKey, string, `${chapterPath}.titleKey`, errors);
       validateNode(chapter.briefingKey, string, `${chapterPath}.briefingKey`, errors);
       validateNode(chapter.decisiveObjectiveId, string, `${chapterPath}.decisiveObjectiveId`, errors);
-      const objectiveIds = new Set((missions[chapter.baseMissionId]?.optionalObjectives ?? []).map(item => item.id));
+      const chapterObjectives = chapter.optionalObjectives ?? missions[chapter.baseMissionId]?.optionalObjectives ?? [];
+      if (chapter.optionalObjectives !== undefined) {
+        validateOptionalObjectives(chapter.optionalObjectives, `${chapterPath}.optionalObjectives`, errors);
+      }
+      const objectiveIds = new Set(chapterObjectives.map(item => item.id));
       if (Object.hasOwn(missions, chapter.baseMissionId) && !objectiveIds.has(chapter.decisiveObjectiveId)) {
         errors.push(`${chapterPath}.decisiveObjectiveId is not an optional objective in ${chapter.baseMissionId}`);
       }

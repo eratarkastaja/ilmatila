@@ -151,6 +151,7 @@ export class GroundSpawnSystem {
       battle.scene.add(mesh);
       const unit = {
         mesh, hp: spec.hp, maxHp: spec.hp, team,
+        platform,
         role,
         missionTargetRoleKey: team === 'red' && role === 'airDefense' ? 'combat.groundTargetRole.airDefense' : null,
         cool: 0, phase: rnd() * Math.PI * 2, armed: true, speed: 0,

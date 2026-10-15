@@ -2040,6 +2040,57 @@ canvas.night-vision-scene {
   font-variant-numeric: tabular-nums;
 }
 
+.mission-optional-objectives-hud {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+  padding-top: 5px;
+  border-top: 1px solid #91b4a52b;
+}
+
+.mission-optional-objectives-hud[hidden] {
+  display: none;
+}
+
+.mission-optional-objectives-hud>small {
+  color: #9fd9b2;
+  font: 600 8px Rajdhani,sans-serif;
+  letter-spacing: .18em;
+}
+
+.mission-optional-objectives-hud ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mission-optional-objectives-hud li {
+  display: grid;
+  grid-template-columns: minmax(0, auto) 1fr;
+  gap: 5px;
+  align-items: baseline;
+  color: #bdcec3;
+  font: 500 9px/1.2 Rajdhani,sans-serif;
+  letter-spacing: .06em;
+}
+
+.mission-optional-objectives-hud li strong {
+  color: #dce9df;
+  font: 700 9px Barlow Condensed,sans-serif;
+  letter-spacing: .08em;
+  white-space: nowrap;
+}
+
+.mission-optional-objectives-hud li[data-status="completed"] strong {
+  color: #9fe0b4;
+}
+
+.mission-optional-objectives-hud li[data-status="failed"] strong {
+  color: #e6a58c;
+}
+
 .support-force-status {
   display: grid;
   gap: 3px;

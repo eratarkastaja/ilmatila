@@ -529,7 +529,7 @@ describe('main game session lifecycle', () => {
       campaignAttemptId: firstWorld.mission.campaignAttemptId,
       score: 1800,
       accuracy: 0.75,
-      optionalObjectives: [{ id: 'no-damage', status: 'completed' }],
+      optionalObjectives: [{ id: 'flight-intact', status: 'completed' }],
     });
 
     expect(document.querySelector('#campaign-debrief-actions').hidden).toBe(false);

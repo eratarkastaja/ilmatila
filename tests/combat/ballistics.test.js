@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import {
   estimateInterceptTime,
   GUN_PROJECTILE_GRAVITY,
+  GUN_PROJECTILE_DAMAGE,
   GUN_PROJECTILE_LIFETIME,
   GUN_PROJECTILE_SPEED,
   GUN_ROUNDS_PER_SECOND,
@@ -14,6 +15,7 @@ describe('gun ballistics', () => {
     expect(GUN_PROJECTILE_LIFETIME).toBe(2.2);
     expect(GUN_PROJECTILE_GRAVITY).toBe(9.81);
     expect(GUN_ROUNDS_PER_SECOND).toBe(55);
+    expect(GUN_PROJECTILE_DAMAGE).toBe(.48);
   });
 
   it('returns the direct flight time for a stationary target', () => {

@@ -32,6 +32,27 @@ The release pipeline preserves the live root while staging a candidate, then
 deploys the beta tag only after the exact tagged commit has passed staging.
 The deployed site writes its version and source commit to `build-info.json`.
 
+## 0.3.0-beta.2
+
+This beta makes the Shadow at the Border campaign's optional objectives
+mission-specific and mechanically meaningful. Chapters now track authored target
+groups, force preservation, and protected-zone denial, including sustainment
+objectives for Varpunen, Sergei air defence, RSRAKH 06, and expanded ordnance.
+The decisive objective is now visible in the campaign result, while ordinary
+successes and recoverable setbacks remain valid ways to continue the campaign.
+
+The sortie HUD now shows optional-objective progress during flight, with the
+same results carried into the briefing and debrief. Target roles and live force
+collections are preserved through campaign variant resolution. The player
+cannon also receives a moderate damage and hit-envelope improvement so careful
+aiming no longer burns through finite ammunition at an unreasonable rate.
+
+### Validation
+
+- Vitest unit and integration suite passed: 356 tests.
+- ESLint passed.
+- Production Vite build passed.
+
 ### Support status
 
 Desktop Chrome, Edge, and Firefox are the verified playable browsers. WebKit is
