@@ -3,7 +3,7 @@
 This file is the maintained release record. Older beta checkpoints are
 summarized here instead of being kept as one document per pipeline attempt.
 
-## 0.3.0-beta.5
+## 0.3.0-beta.6
 
 This follow-up release fixes a WebGL compatibility regression in the night
 vision particle shader. The night-vision uniform is now declared in the
