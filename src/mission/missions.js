@@ -72,7 +72,10 @@ export const MISSIONS = {
         id: 'long-range-screen', labelKey: 'mission.variant.intercept.longRange', weight: 3,
         changes: {
           hostileComposition: ['mig29', 'mig29', 'su27', 'su27'],
-          hostileRoles: ['sweep', 'flank', 'strike', 'strike'],
+          // Keep two authored sweep elements even when one is assigned a
+          // flank tactic at runtime; campaign selectors target the authored
+          // formation role, not the current maneuver.
+          hostileRoles: ['sweep', 'sweep', 'strike', 'strike'],
           optionalObjectives: [
             { id: 'wingmen-home', type: 'allWingmenSurvive' },
             { id: 'lead-intercept', type: 'interceptBeforeZone', target: {

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { GroundSpawnSystem } from '../../src/combat/ground-spawn-system.js';
 import { disposeGroundVehicleVisual } from '../../src/ground/vehicles.js';
+import { createSeededRandom } from '../../src/combat/random.js';
 
 describe('support ground target roles', () => {
   let battle;
@@ -99,5 +100,60 @@ describe('support ground target roles', () => {
     expect(batteries[0]).toMatchObject({ role: 'artillery', team: 'blue' });
     expect(batteries[0].mesh.userData.vehicleSpec.weapon).toBe('298 MLRS');
     expect(batteries[0].mesh.userData.mlrsMount).toBeTruthy();
+  });
+});
+
+describe('seeded ground layout variation', () => {
+  const activeBattles = [];
+
+  afterEach(() => {
+    for (const currentBattle of activeBattles) {
+      for (const unit of [...currentBattle.friends, ...currentBattle.redUnits]) {
+        disposeGroundVehicleVisual(unit.mesh);
+      }
+    }
+    activeBattles.length = 0;
+  });
+
+  const spawnBattle = seed => {
+    const battle = {
+      mission: {
+        id: 'support', groundBattle: true, groundPairs: 8, groundTrucks: 8,
+        groundFriendlyTrucks: 4, groundFrontSpan: 18000, convoyArea: 12000,
+        groundIto90Count: 2, groundSergeiCount: 2, groundShilkaCount: 2,
+      },
+      random: () => .5,
+      spawnRandom: createSeededRandom(seed),
+      terrain: { worldSize: 32000, sampleHeight: () => 0, isWater: () => false },
+      battleCenter: new THREE.Vector3(0, 0, 0),
+      routeForward: new THREE.Vector3(0, 0, 1),
+      routeRight: new THREE.Vector3(1, 0, 0),
+      scene: new THREE.Scene(),
+      friends: [],
+      redUnits: [],
+      colliders: [],
+      difficulty: {},
+    };
+    activeBattles.push(battle);
+    new GroundSpawnSystem().spawn(battle);
+    return battle;
+  };
+
+  const snapshot = battle => battle.redUnits.map(unit => ({
+    role: unit.role,
+    platform: unit.mesh.userData.platform,
+    x: Math.round(unit.mesh.position.x),
+    z: Math.round(unit.mesh.position.z),
+  }));
+
+  it('keeps a sortie layout repeatable while changing it for another seed', () => {
+    const first = snapshot(spawnBattle(0x10203040));
+    const repeat = snapshot(spawnBattle(0x10203040));
+    const alternate = snapshot(spawnBattle(0x50607080));
+
+    expect(repeat).toEqual(first);
+    expect(alternate).not.toEqual(first);
+    expect(alternate.filter(unit => unit.role === 'assault')).toHaveLength(8);
+    expect(alternate.filter(unit => unit.role === 'logistics')).toHaveLength(8);
   });
 });

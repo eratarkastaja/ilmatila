@@ -32,6 +32,7 @@ export const RADIO_EVENTS = Object.freeze({
   'mission.contact': { messageKey: 'radio.phase.contact', crew: 'flightLead', priority: 1, duration: 2.6 },
   'mission.engagement': { messageKey: 'radio.phase.engagement', crew: 'flightLead', priority: 1, duration: 2.6 },
   'mission.objective': { messageKey: 'radio.phase.objective', crew: 'flightLead', priority: 1, duration: 3 },
+  'mission.objectiveStage': { messageKey: 'radio.objectiveStage', crew: 'groundControl', priority: 3, duration: 3.8, cooldown: 4 },
   'mission.objectiveComplete': { messageKey: 'radio.objectiveComplete', crew: 'flightLead', priority: 2, duration: 3 },
   'mission.weaponsHold': { messageKey: 'radio.weaponsHold', crew: 'flightLead', priority: 5, duration: 3.8, cooldown: 5 },
   'mission.airPolicingIdentified': { messageKey: 'radio.airPolicingIdentified', crew: 'flightLead', priority: 3, duration: 4 },

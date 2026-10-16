@@ -42,6 +42,19 @@ describe('mission objective progression', () => {
     })).toBe(MISSION_OUTCOME.COMPLETE);
   });
 
+  it('requires the E18 logistics column to survive its timed transfer window', () => {
+    const objective = {
+      type: 'protectUntilProgress', duration: 300, minimumLogisticsFraction: .5,
+    };
+
+    expect(evaluateMissionObjective(objective, {
+      elapsed: 300, friendlyLogisticsFraction: .5,
+    })).toBe(MISSION_OUTCOME.COMPLETE);
+    expect(evaluateMissionObjective(objective, {
+      elapsed: 300, friendlyLogisticsFraction: .49,
+    })).toBe(MISSION_OUTCOME.ACTIVE);
+  });
+
   it('completes air policing after identification and a sustained escort', () => {
     const objective = { type: 'airPolicing', requiredContacts: 2, escortDuration: 12 };
 
@@ -98,6 +111,11 @@ describe('mission objective progression', () => {
       type: 'clearAir',
       setback: { type: 'assetLost', graceDuration: 3 },
     }, { elapsed: 3, protectedAssetLost: true, priorityTargetsRemaining: 1 })).toBe(MISSION_OUTCOME.SETBACK);
+
+    expect(evaluateMissionObjective({
+      type: 'protectUntilProgress', duration: 300, minimumLogisticsFraction: .5,
+      setback: { type: 'friendlyLogistics', minimum: .5 },
+    }, { elapsed: 300, friendlyLogisticsFraction: .49 })).toBe(MISSION_OUTCOME.SETBACK);
   });
 
   it('advances training time without exceeding its duration', () => {

@@ -19,7 +19,7 @@ import { DestructionSystem } from './destruction-system.js';
 import { applyAirframeCondition } from './airframe-condition.js';
 import { getBoundaryApproach } from './boundary-warning.js';
 import { getDifficultyPreset } from './difficulty.js';
-import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
+import { createSeededRandom, DEFAULT_RANDOM_SEED, GROUND_SPAWN_LAYOUT_SEED_XOR } from './random.js';
 import { calculateDebriefGrade } from '../mission/debrief-grade.js';
 import { MissionOptionalObjectives, scaleMissileReserveObjectives } from '../mission/optional-objectives.js';
 import { resolveMissionVariant } from '../mission/mission-variants.js';
@@ -73,6 +73,7 @@ export class CombatWorld {
     this.seed = Number(seed) >>> 0;
     this.random = createSeededRandom(this.seed);
     this.spawnRandom = createSeededRandom((this.seed ^ AIR_SPAWN_LAYOUT_SEED_XOR) >>> 0);
+    this.groundSpawnRandom = createSeededRandom((this.seed ^ GROUND_SPAWN_LAYOUT_SEED_XOR) >>> 0);
     this.telemetry=null;
     const missionResolution=resolveMissionVariant(mission,this.seed);
     this.missionVariant=missionResolution.variant;
@@ -181,6 +182,7 @@ export class CombatWorld {
       addProjectile: shot => this.projectileSystem.addHostileProjectile(shot),
       addFriendlyProjectile: shot => this.projectileSystem.addPlayerProjectile(shot),
       random: this.random,
+      spawnRandom: this.groundSpawnRandom,
     });
     this.airBattle.setGroundUnits(this.groundBattle.redUnits);
     this.airBattle.setFriendlyGroundUnits(this.groundBattle.friends);
@@ -277,7 +279,11 @@ export class CombatWorld {
     const objectiveSetbackConditions = Array.isArray(objectiveSetbacks)
       ? objectiveSetbacks
       : objectiveSetbacks ? [objectiveSetbacks] : [];
+    const authoredObjectiveStages = missionConfig.objective?.type === 'staged'
+      ? missionConfig.objective.stages ?? []
+      : [];
     const tracksFriendlyStrength = missionConfig.objective?.type === 'forceDefense'
+      || authoredObjectiveStages.some(stage => stage.type === 'forceDefense')
       || objectiveSetbackConditions.some(condition => condition?.type === 'friendlyStrength');
     this.missionSystem = new MissionSystem({
       mission: missionConfig,
@@ -304,9 +310,10 @@ export class CombatWorld {
       state.protectedAssetThreat=0;
       state.protectedAssetDistance=Infinity;
         state.friendlyStrengthFraction=1;
-        if(missionConfig.objective?.type==='airPolicing'){
+        const activeObjectiveType = this.missionSystem?.activeObjective?.type ?? missionConfig.objective?.type;
+        if(activeObjectiveType==='airPolicing'){
           this.airBattle.getOperationalState(state);
-        }else if(missionConfig.objective?.type==='assetDefense'){
+        }else if(activeObjectiveType==='assetDefense'){
           const targetIndex=missionConfig.objective.target?.index??0;
           const target=this.enemies[targetIndex];
           state.priorityTargetsRemaining=!this.airBattle.hostilesSpawned||Boolean(target&&!target.dead)?1:0;
@@ -323,11 +330,11 @@ export class CombatWorld {
               1,
             );
           }
-        }else if(missionConfig.objective?.type==='logisticsStrike'){
+        }else if(activeObjectiveType==='logisticsStrike'){
           state.priorityTargetsRemaining=this.redUnits.some(unit => (
             unit.role==='logistics' && unit.reinforcementSource && !unit.dead
           )) ? 1 : 0;
-        }else if(missionConfig.objective?.type==='strikeDefense'){
+        }else if(activeObjectiveType==='strikeDefense'){
           if(!this.airBattle.hostilesSpawned){
             state.priorityTargetsRemaining=(missionConfig.hostileRoles??[])
               .filter(role=>role==='strike').length;
@@ -346,6 +353,9 @@ export class CombatWorld {
           }
           state.friendlyStrengthFraction=maximum>0?health/maximum:0;
         }
+        const logistics = this.friends.filter(unit => unit.role === 'logistics');
+        const operationalLogistics = logistics.filter(unit => !unit.dead && unit.hp > 0).length;
+        state.friendlyLogisticsFraction = logistics.length > 0 ? operationalLogistics / logistics.length : 1;
         return state;
       },
       nodes: {
@@ -419,6 +429,10 @@ export class CombatWorld {
         }
       },
       onObjectiveActive:()=>this.missionSystem.activate(),
+      onStageChange:(stage,index)=>this.radio.emit('mission.objectiveStage',{
+        params:{stage:t(stage.titleKey ?? `mission.objective.${stage.type}`),index:index + 1},
+        scope:`stage:${index}`,
+      }),
       onObjectiveComplete:outcome=>{
         if(outcome===MISSION_OUTCOME.SETBACK){
           this.missionSystem.notifyObjectiveSetback();
@@ -440,6 +454,7 @@ export class CombatWorld {
       elapsed:0,
       damageTaken:0,
       wingmenReturned:0,
+      wingmenAtBase:0,
       wingmenTotal:this.airBattle.allies.length,
       missilesRemaining:0,
       airHostiles:this.enemies,
@@ -1270,7 +1285,11 @@ export class CombatWorld {
     state.damageTaken=this.damageTaken;
     state.wingmenTotal=this.airBattle.allies.length;
     state.wingmenReturned=0;
-    for(const wingman of this.airBattle.allies)if(!wingman.dead)state.wingmenReturned++;
+    state.wingmenAtBase=0;
+    for(const wingman of this.airBattle.allies){
+      if(!wingman.dead)state.wingmenReturned++;
+      if(!wingman.dead&&wingman.returnedToBase)state.wingmenAtBase++;
+    }
     state.missilesRemaining=this.weaponSystem.missiles.air+this.weaponSystem.missiles.ground;
     state.targetCollectionsReady.airHostiles=this.airBattle.hostilesSpawned;
   }

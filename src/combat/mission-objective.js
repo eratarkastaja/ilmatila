@@ -6,25 +6,27 @@ export const MISSION_OUTCOME = Object.freeze({
   ABORTED: 'aborted',
 });
 
-function setbackConditionTriggered(condition, elapsed, protectedAssetLost, friendlyStrengthFraction, groundRemaining) {
+function setbackConditionTriggered(condition, elapsed, protectedAssetLost, friendlyStrengthFraction, friendlyLogisticsFraction, groundRemaining) {
   if (condition?.type === 'deadline' && elapsed >= condition.duration) return true;
   if (condition?.type === 'assetLost'
     && protectedAssetLost
     && elapsed >= (condition.graceDuration ?? 0)) return true;
   if (condition?.type === 'friendlyStrength'
     && friendlyStrengthFraction < condition.minimum) return true;
+  if (condition?.type === 'friendlyLogistics'
+    && friendlyLogisticsFraction < condition.minimum) return true;
   if (condition?.type === 'groundBreakthrough'
     && groundRemaining > condition.maximumGroundRemaining) return true;
   return false;
 }
 
-function setbackTriggered(setback, elapsed, protectedAssetLost, friendlyStrengthFraction, groundRemaining) {
+function setbackTriggered(setback, elapsed, protectedAssetLost, friendlyStrengthFraction, friendlyLogisticsFraction, groundRemaining) {
   if (!setback) return false;
   if (!Array.isArray(setback)) {
-    return setbackConditionTriggered(setback, elapsed, protectedAssetLost, friendlyStrengthFraction, groundRemaining);
+    return setbackConditionTriggered(setback, elapsed, protectedAssetLost, friendlyStrengthFraction, friendlyLogisticsFraction, groundRemaining);
   }
   for (const condition of setback) {
-    if (setbackConditionTriggered(condition, elapsed, protectedAssetLost, friendlyStrengthFraction, groundRemaining)) return true;
+    if (setbackConditionTriggered(condition, elapsed, protectedAssetLost, friendlyStrengthFraction, friendlyLogisticsFraction, groundRemaining)) return true;
   }
   return false;
 }
@@ -39,6 +41,7 @@ export function evaluateMissionObjective(objective, {
   priorityTargetsRemaining = Infinity,
   protectedAssetLost = false,
   friendlyStrengthFraction = 1,
+  friendlyLogisticsFraction = 1,
   destroyed = false,
   outcome = MISSION_OUTCOME.ACTIVE,
 } = {}) {
@@ -50,6 +53,7 @@ export function evaluateMissionObjective(objective, {
     elapsed,
     protectedAssetLost,
     friendlyStrengthFraction,
+    friendlyLogisticsFraction,
     groundRemaining,
   )) return MISSION_OUTCOME.SETBACK;
 
@@ -65,6 +69,9 @@ export function evaluateMissionObjective(objective, {
     ? elapsed >= (objective.duration ?? 90)
     : objective.type === 'holdPosition'
       ? elapsed >= (objective.duration ?? 180)
+      : objective.type === 'protectUntilProgress'
+        ? elapsed >= (objective.duration ?? 300)
+          && friendlyLogisticsFraction >= (objective.minimumLogisticsFraction ?? 0)
       : objective.type === 'logisticsStrike'
         ? priorityTargetsRemaining <= 0
       : objective.type === 'strikeDefense'

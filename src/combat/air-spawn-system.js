@@ -192,7 +192,11 @@ export class AirSpawnSystem {
         identified: !nonCombatant,
         combatant: !nonCombatant,
         radarTeam: nonCombatant ? 'unknown' : 'hostile',
+        // Mission objectives use the authored role. Tactical behavior may
+        // still turn a sweep fighter into a flank attack on Hard.
         role: missionRole,
+        authoredRole: authoredMissionRole,
+        tacticalRole: missionRole,
         identificationProgress: 0,
         missionRole,
         missionTargetRoleKey: missionRole === 'strike' ? 'combat.airTargetRole.strike' : null,

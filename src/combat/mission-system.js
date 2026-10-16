@@ -3,20 +3,24 @@ import { t } from '../ui/i18n.js';
 
 /** Owns objective progress/outcome and its mission-specific presentation. */
 export class MissionSystem {
-  constructor({ mission, objective, totals, getRemaining, nodes = {}, deferCompletion = false, initiallyActive = true }) {
+  constructor({ mission, objective, totals, getRemaining, nodes = {}, deferCompletion = false, initiallyActive = true, onStageChange = () => {} }) {
     this.mission = mission;
     this.objective = objective;
+    this.stages = objective.type === 'staged' ? objective.stages ?? [] : null;
+    this.activeStageIndex = 0;
+    this.stageElapsed = 0;
+    this.onStageChange = onStageChange;
     this.totals = totals;
     this.getRemaining = getRemaining;
     this.remaining = { airRemaining: 0, groundRemaining: 0 };
     this.evaluation={
       elapsed:0,airRemaining:0,groundRemaining:0,identifiedCount:0,contactCount:0,
       escortElapsed:0,priorityTargetsRemaining:0,protectedAssetLost:false,
-      friendlyStrengthFraction:1,destroyed:false,outcome:MISSION_OUTCOME.ACTIVE,
+      friendlyStrengthFraction:1,friendlyLogisticsFraction:1,destroyed:false,outcome:MISSION_OUTCOME.ACTIVE,
     };
     this._progressParams={
       elapsed:0,duration:0,remaining:0,airRemaining:0,pendingAirRemaining:0,airTotal:0,
-      groundRemaining:0,groundTotal:0,identified:0,total:0,seconds:0,strength:0,
+      groundRemaining:0,groundTotal:0,identified:0,total:0,seconds:0,strength:0,logistics:0,
     };
     this.nodes = nodes;
     this.elapsed = 0;
@@ -34,20 +38,37 @@ export class MissionSystem {
     this.renderObjective();
   }
 
+  get activeObjective() {
+    return this.stages ? this.stages[this.activeStageIndex] : this.objective;
+  }
+
   update(dt, destroyed = false) {
     if (this.outcome !== MISSION_OUTCOME.ACTIVE || !this.objectiveActive || this.objectiveSatisfied) return;
     const remaining = this.getRemaining(this.remaining);
     const delta=Number.isFinite(dt)?Math.max(0,dt):0;
-    this.elapsed=this.objective.type==='training'
-      ? Math.min(this.objective.duration??90,this.elapsed+delta)
+    const activeObjective = this.activeObjective;
+    this.elapsed=activeObjective.type==='training'
+      ? Math.min(activeObjective.duration??90,this.elapsed+delta)
       : this.elapsed+delta;
+    this.stageElapsed=activeObjective.type==='training'
+      ? Math.min(activeObjective.duration??90,this.stageElapsed+delta)
+      : this.stageElapsed+delta;
     Object.assign(this.evaluation,remaining);
-    this.evaluation.elapsed=this.elapsed;
+    this.evaluation.elapsed=this.stages ? this.stageElapsed : this.elapsed;
     this.evaluation.airRemaining=remaining.airRemaining;
     this.evaluation.groundRemaining=remaining.groundRemaining;
     this.evaluation.destroyed=destroyed;
     this.evaluation.outcome=this.outcome;
-    const evaluatedOutcome=evaluateMissionObjective(this.objective,this.evaluation);
+    const evaluatedOutcome=evaluateMissionObjective(activeObjective,this.evaluation);
+    if (evaluatedOutcome === MISSION_OUTCOME.COMPLETE && this.stages
+      && this.activeStageIndex < this.stages.length - 1) {
+      this.activeStageIndex++;
+      this.stageElapsed=0;
+      this.objectiveResult=MISSION_OUTCOME.ACTIVE;
+      this.onStageChange(this.activeObjective, this.activeStageIndex);
+      this.renderObjective(remaining);
+      return;
+    }
     if ((evaluatedOutcome === MISSION_OUTCOME.COMPLETE || evaluatedOutcome === MISSION_OUTCOME.SETBACK)
       && this.deferCompletion) {
       this.objectiveSatisfied = true;
@@ -71,19 +92,21 @@ export class MissionSystem {
 
   markPlayerDestroyed() {
     const remaining = this.getRemaining(this.remaining);
-    this.evaluation.elapsed=this.elapsed;
+    Object.assign(this.evaluation, remaining);
+    this.evaluation.elapsed=this.stages ? this.stageElapsed : this.elapsed;
     this.evaluation.airRemaining=remaining.airRemaining;
     this.evaluation.groundRemaining=remaining.groundRemaining;
     this.evaluation.destroyed=true;
     this.evaluation.outcome=this.outcome;
-    this.outcome = evaluateMissionObjective(this.objective,this.evaluation);
+    this.outcome = evaluateMissionObjective(this.activeObjective,this.evaluation);
     this.missionComplete = this.outcome === MISSION_OUTCOME.COMPLETE;
     this.missionFailed = this.outcome !== MISSION_OUTCOME.ACTIVE && this.outcome !== MISSION_OUTCOME.COMPLETE;
   }
 
   renderObjective(remaining = this.getRemaining(this.remaining)) {
     const { objectiveTitle, objectiveProgress } = this.nodes;
-    const titleText=t(`mission.objective.${this.objective.type}`);
+    const objective = this.activeObjective;
+    const titleText=t(objective.titleKey ?? `mission.objective.${objective.type}`);
     if (objectiveTitle&&objectiveTitle.textContent!==titleText) objectiveTitle.textContent = titleText;
     if (!objectiveProgress) return;
     if (this.missionComplete || this.objectiveSatisfied) {
@@ -95,39 +118,39 @@ export class MissionSystem {
     }
     let progressText;
     const params=this._progressParams;
-    if (this.objective.type === 'training') {
-      const duration = this.objective.duration ?? 90;
-      params.elapsed=Math.min(duration,Math.floor(this.elapsed));
+    if (objective.type === 'training') {
+      const duration = objective.duration ?? 90;
+      params.elapsed=Math.min(duration,Math.floor(this.stages ? this.stageElapsed : this.elapsed));
       params.duration=duration;
       progressText = t('mission.progress.training',params);
-    } else if (this.objective.type === 'holdPosition') {
-      params.elapsed = Math.min(this.objective.duration ?? 180, Math.floor(this.elapsed));
-      params.duration = this.objective.duration ?? 180;
+    } else if (objective.type === 'holdPosition' || objective.type === 'protectUntilProgress') {
+      params.elapsed = Math.min(objective.duration ?? 180, Math.floor(this.stages ? this.stageElapsed : this.elapsed));
+      params.duration = objective.duration ?? 180;
       progressText = t('mission.progress.holdPosition', params);
-    } else if (this.objective.type === 'logisticsStrike') {
+    } else if (objective.type === 'logisticsStrike') {
       params.remaining = remaining.priorityTargetsRemaining ?? 0;
       progressText = t('mission.progress.logisticsStrike', params);
-    } else if (this.objective.type === 'strikeDefense') {
+    } else if (objective.type === 'strikeDefense') {
       params.remaining = remaining.priorityTargetsRemaining ?? 0;
       progressText = t('mission.progress.strikeDefense', params);
-    } else if (this.objective.type === 'support') {
+    } else if (objective.type === 'support') {
       params.airRemaining=remaining.airRemaining;
       params.airTotal=this.totals.air;
       params.groundRemaining=remaining.groundRemaining;
       params.groundTotal=this.totals.ground;
       progressText = t('mission.progress.support',params);
-    } else if (this.objective.type === 'airPolicing') {
+    } else if (objective.type === 'airPolicing') {
       params.identified=remaining.identifiedCount??0;
-      params.total=remaining.contactCount??this.objective.requiredContacts??0;
-      params.seconds=Math.max(0,Math.ceil((this.objective.escortDuration??0)-(remaining.escortElapsed??0)));
-      progressText=params.identified<Math.min(params.total,this.objective.requiredContacts??params.total)
+      params.total=remaining.contactCount??objective.requiredContacts??0;
+      params.seconds=Math.max(0,Math.ceil((objective.escortDuration??0)-(remaining.escortElapsed??0)));
+      progressText=params.identified<Math.min(params.total,objective.requiredContacts??params.total)
         ?t('mission.progress.airPolicingIdentify',params)
         :t('mission.progress.airPolicingEscort',params);
-    } else if (this.objective.type === 'assetDefense') {
+    } else if (objective.type === 'assetDefense') {
       params.remaining=remaining.priorityTargetsRemaining??0;
       params.airRemaining=remaining.airRemaining??0;
       progressText=t('mission.progress.assetDefense',params);
-    } else if (this.objective.type === 'forceDefense') {
+    } else if (objective.type === 'forceDefense') {
       params.airRemaining=remaining.airRemaining;
       params.airTotal=this.totals.air;
       params.groundRemaining=remaining.groundRemaining;

@@ -385,6 +385,23 @@ describe('main game session lifecycle', () => {
     expect(document.querySelector('#theater-mission-name').textContent).toBe('THE BORDER BREAKS');
   });
 
+  it('requires confirmation before resetting the campaign from the production menu', async () => {
+    const document = await loadMain('patrol');
+    document.querySelector('#campaign-mode').dispatch('click');
+    const resetDialog = document.querySelector('#campaign-reset-dialog');
+    const resetOpen = document.querySelector('#campaign-reset-open');
+
+    resetOpen.dispatch('click');
+    expect(resetDialog.open).toBe(true);
+    document.querySelector('#campaign-reset-cancel').dispatch('click');
+    expect(resetDialog.open).toBe(false);
+
+    resetOpen.dispatch('click');
+    document.querySelector('#campaign-reset-confirm').dispatch('click');
+    expect(resetDialog.open).toBe(false);
+    expect(document.querySelector('#campaign-progress-label').textContent).toBe('CHAPTER 1 / 10');
+  });
+
   it('opens the menu flight controls in a modal instead of expanding the launch page', async () => {
     const document = await loadMain();
     const menu = document.querySelector('#start-menu');

@@ -7,6 +7,10 @@ function isDestroyed(unit) {
 const TARGET_FOUND = 1;
 const TARGET_DESTROYED = 2;
 
+function isCommittableOutcome(state) {
+  return state.outcome === 'complete' || state.outcome === 'setback';
+}
+
 /** Scales authored missile reserves when a difficulty carries fewer stores. */
 export function scaleMissileReserveObjectives(objectives, currentWeapons, referenceWeapons) {
   const rows = Array.isArray(objectives) ? objectives : [];
@@ -28,7 +32,8 @@ export function scaleMissileReserveObjectives(objectives, currentWeapons, refere
 }
 
 function matchesSelector(unit, selector) {
-  if (selector.role && unit.role !== selector.role) return false;
+  const authoredRole = unit.authoredRole ?? unit.role;
+  if (selector.role && authoredRole !== selector.role) return false;
   if (selector.team && unit.team !== selector.team) return false;
   if (selector.armed !== undefined && unit.armed !== selector.armed) return false;
   if (selector.radioId && unit.radioId !== selector.radioId) return false;
@@ -85,10 +90,23 @@ const evaluators = {
     }
     if (!final) return setResult(result, 'pending', 'mission.optionalObjective.result.wingmenStillFlying',
       'total', state.wingmenTotal);
-    return state.outcome === 'complete'
-      ? setResult(result, 'completed', 'mission.optionalObjective.result.wingmenReturned',
-        'returned', state.wingmenReturned, 'total', state.wingmenTotal)
-      : setResult(result, 'failed', 'mission.optionalObjective.result.sortieIncomplete');
+    return setResult(result, isCommittableOutcome(state) ? 'completed' : 'failed',
+      isCommittableOutcome(state)
+        ? 'mission.optionalObjective.result.wingmenReturned'
+        : 'mission.optionalObjective.result.sortieIncomplete',
+      'returned', state.wingmenReturned, 'total', state.wingmenTotal);
+  },
+  allWingmenReturned(result, _objective, state, final) {
+    if (state.wingmenTotal === 0) return setResult(result, 'notApplicable', 'mission.optionalObjective.result.noWingmen');
+    if (state.wingmenAtBase < state.wingmenTotal) {
+      return final
+        ? setResult(result, 'failed', 'mission.optionalObjective.result.wingmenNotHome',
+          'returned', state.wingmenAtBase, 'total', state.wingmenTotal)
+        : setResult(result, 'pending', 'mission.optionalObjective.result.wingmenHeadingHome',
+          'returned', state.wingmenAtBase, 'total', state.wingmenTotal);
+    }
+    return setResult(result, 'completed', 'mission.optionalObjective.result.wingmenHome',
+      'returned', state.wingmenAtBase, 'total', state.wingmenTotal);
   },
   noDamage(result, _objective, state, final) {
     if (state.damageTaken > 0) {
@@ -96,9 +114,10 @@ const evaluators = {
         'damage', Math.round(state.damageTaken));
     }
     if (!final) return setResult(result, 'pending', 'mission.optionalObjective.result.noDamageYet');
-    return state.outcome === 'complete'
-      ? setResult(result, 'completed', 'mission.optionalObjective.result.noDamageTaken')
-      : setResult(result, 'failed', 'mission.optionalObjective.result.sortieIncomplete');
+    return setResult(result, isCommittableOutcome(state) ? 'completed' : 'failed',
+      isCommittableOutcome(state)
+        ? 'mission.optionalObjective.result.noDamageTaken'
+        : 'mission.optionalObjective.result.sortieIncomplete');
   },
   destroyOptionalGroundTarget(result, objective, state, final) {
     const targets = targetStatus(state, objective.target);
@@ -127,13 +146,13 @@ const evaluators = {
   preserveMissiles(result, objective, state, final) {
     if (!final) return setResult(result, 'pending', 'mission.optionalObjective.result.missileReserve',
       'remaining', state.missilesRemaining, 'minimum', objective.minimumRemaining);
-    const preserved = state.outcome === 'complete' && state.missilesRemaining >= objective.minimumRemaining;
+    const preserved = isCommittableOutcome(state) && state.missilesRemaining >= objective.minimumRemaining;
     return setResult(result, preserved ? 'completed' : 'failed',
-      state.outcome !== 'complete'
-        ? 'mission.optionalObjective.result.sortieIncomplete'
-        : preserved
-          ? 'mission.optionalObjective.result.missilesPreserved'
-          : 'mission.optionalObjective.result.missilesBelowReserve',
+      preserved
+        ? 'mission.optionalObjective.result.missilesPreserved'
+        : isCommittableOutcome(state)
+          ? 'mission.optionalObjective.result.missilesBelowReserve'
+          : 'mission.optionalObjective.result.sortieIncomplete',
     'remaining', state.missilesRemaining, 'minimum', objective.minimumRemaining);
   },
   protectFriendlyGroundUnit(result, objective, state, final) {
@@ -145,9 +164,10 @@ const evaluators = {
     }
     if (targets & TARGET_DESTROYED) return setResult(result, 'failed', 'mission.optionalObjective.result.friendlyTargetLost');
     if (!final) return setResult(result, 'pending', 'mission.optionalObjective.result.friendlyTargetProtected');
-    return state.outcome === 'complete'
-      ? setResult(result, 'completed', 'mission.optionalObjective.result.friendlyTargetProtected')
-      : setResult(result, 'failed', 'mission.optionalObjective.result.sortieIncomplete');
+    return setResult(result, isCommittableOutcome(state) ? 'completed' : 'failed',
+      isCommittableOutcome(state)
+        ? 'mission.optionalObjective.result.friendlyTargetProtected'
+        : 'mission.optionalObjective.result.sortieIncomplete');
   },
   interceptBeforeZone(result, objective, state, final) {
     const target = selectedTarget(state, objective.target);
@@ -216,10 +236,11 @@ const evaluators = {
     }
     if (!final) return setResult(result, 'pending', 'mission.optionalObjective.result.forceProgress',
       'alive', alive, 'total', total);
-    return state.outcome === 'complete'
-      ? setResult(result, 'completed', 'mission.optionalObjective.result.forcePreserved',
-        'alive', alive, 'total', total)
-      : setResult(result, 'failed', 'mission.optionalObjective.result.sortieIncomplete');
+    return setResult(result, isCommittableOutcome(state) ? 'completed' : 'failed',
+      isCommittableOutcome(state)
+        ? 'mission.optionalObjective.result.forcePreserved'
+        : 'mission.optionalObjective.result.sortieIncomplete',
+      'alive', alive, 'total', total);
   },
   denyZone(result, objective, state, final, runtime) {
     const targets = snapshotTargets(state, objective.target, final, runtime);
@@ -247,10 +268,11 @@ const evaluators = {
     }
     if (!final) return setResult(result, 'pending', 'mission.optionalObjective.result.zoneClear',
       'penetrations', penetrations, 'maximum', maximum);
-    return state.outcome === 'complete'
-      ? setResult(result, 'completed', 'mission.optionalObjective.result.zoneClear',
-        'penetrations', penetrations, 'maximum', maximum)
-      : setResult(result, 'failed', 'mission.optionalObjective.result.sortieIncomplete');
+    return setResult(result, isCommittableOutcome(state) ? 'completed' : 'failed',
+      isCommittableOutcome(state)
+        ? 'mission.optionalObjective.result.zoneClear'
+        : 'mission.optionalObjective.result.sortieIncomplete',
+      'penetrations', penetrations, 'maximum', maximum);
   },
 };
 

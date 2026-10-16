@@ -94,8 +94,9 @@ Air control changes CAP pressure, reinforcement probability, radar sensor range,
 and friendly fighter support. Defense integrity changes friendly ground support
 vehicle and air-defense counts, defender durability, and the starting front
 position. Sortie readiness changes wingmen, carried stores, and the player's
-airframe condition. The campaign overview shows the nearest threshold and its
-effect beside each meter, so values close to a threshold remain legible.
+airframe condition. The campaign overview keeps the meters compact and opens
+the complete threshold/effect table for each value on demand; active effects
+are highlighted.
 
 Every chapter also authors four distinct tactical outcomes: a decisive victory,
 an ordinary success, a recoverable operational setback, and aircraft/pilot loss.
@@ -120,10 +121,26 @@ The final ending is `border-secured`, `invasion-contained`, or
 Campaign flags are operational state, not only narrative labels. If the relay
 is not protected, the next chapter's radar picture is degraded. Without
 `main-axis-confirmed`, First Wave receives an additional Strike pair.
-`relay-logistics-broken` suppresses the Counterstroke reinforcement encounter,
-while `border-line-stabilized` moves the final front farther forward and gives
-its friendly ground force additional support. The flight record retains each
+`relay-logistics-broken` is produced by an accepted Blind the Spear success or
+decisive result and suppresses the Counterstroke reinforcement encounter, while
+`border-line-stabilized` moves the final front farther forward and gives its
+friendly ground force additional support. The flight record retains each
 accepted chapter's result and score and is shown in the campaign overview.
+
+The flag audit is intentionally explicit:
+
+| Flag | Producer | Earliest consumer | Mechanical effect | Narrative-only? |
+| --- | --- | --- | --- | --- |
+| `relay-protected` | Broken Silence: Outer Screen | Disperse and every later chapter | Improves campaign intelligence and prevents the degraded radar picture. | No |
+| `main-axis-confirmed` | Northern Feint success/decisive, or Feint Contained optional | First Wave | Removes the extra Strike pair from the first-wave pressure. | No |
+| `relay-logistics-broken` | Blind the Spear success/decisive | Counterstroke | Cancels the Counterstroke reinforcement encounter. | No |
+| `border-line-stabilized` | Border Breaks success/decisive | The Border Holds | Moves the final front forward and adds friendly ground support. | No |
+| `local-air-defense-breached` | Blind the Spear decisive, or its AA optional | Campaign ending | Contributes to the `border-secured` final ending. | No |
+| `counterattack-window-open` | Blind the Spear ordinary success | Counterstroke | Starts the counterstroke from a 600 m more favorable front position. | No |
+| `road-base-supplied` | Disperse success/decisive | Campaign history/debrief | Records that the dispersed road base was sustained. | Yes |
+
+The two narrative-only flags are retained because they make the flight record
+and debrief more specific; they are not read as hidden tactical modifiers.
 
 ## Implemented chapter arc
 
@@ -135,19 +152,47 @@ accepted chapter's result and score and is shown in the campaign overview.
 | 4 | Northern Feint | Ilomantsi | Intercept | Clear the air picture and meet the authored time objective; deadline expiry triggers a recoverable setback. |
 | 5 | First Wave | Kuusamo | Intercept | Stop the Strike aircraft from breaking through the sector before the deadline; surviving sweep aircraft may remain when the corridor is secure. |
 | 6 | The Border Breaks | Virolahti | Support | Keep the friendly defensive line above its strength threshold while limiting hostile ground survivors; a line breach is a recoverable setback. |
-| 7 | Hold the E18 | Virolahti | Support | Hold the corridor through the civilian and reserve transfer window; a defensive-line breach is a recoverable setback rather than a requirement to destroy every threat. |
-| 8 | Blind the Spear | Virolahti | Support | Destroy the marked logistics relay as the primary objective before the counterattack window closes; other threats can remain when the relay is disabled. |
-| 9 | Counterstroke | Virolahti | Support | Hold the defensive line while the counterattack advances; friendly-force loss triggers RTB, and the sortie completes when the protection window is survived. |
-| 10 | The Border Holds | Virolahti | Support | Hold the final defensive line through the extraction window; the campaign closes after the line survives, not only after every hostile unit is destroyed. |
+| 7 | Hold the E18 | Virolahti | Support | Keep at least half of the logistics column operational through the civilian and reserve transfer window; losing the column triggers a recoverable setback. |
+| 8 | Blind the Spear | Virolahti | Support | Destroy the marked logistics relay as the primary objective before the counterattack window closes; success opens the counterstroke and other threats can remain. |
+| 9 | Counterstroke | Virolahti | Support | Clear the immediate air threat, protect the assault force, and keep the remaining hostile ground force below the breakthrough threshold; the line loss is a recoverable setback. |
+| 10 | The Border Holds | Virolahti | Support | Intercept the strike element, hold the line, and break the final assault in three authored stages; the campaign closes after the staged proof of control. |
 
 Chapters reuse the standalone Patrol, Intercept, and Support combat systems,
-but campaign resolution can select a campaign-specific objective. The
-`holdPosition` objective completes after an authored protection window while
-still allowing defensive-line setbacks; `logisticsStrike` completes when the
-named reinforcement relay is destroyed. This keeps the air and ground combat
-systems shared without reducing every chapter to a clear-air condition. The
-authored decisive, success, setback, optional-objective, sustainment, and
-strategic-state data remain separate from the ordinary combat systems.
+but campaign resolution selects a campaign-specific objective. `holdPosition`
+is reserved for authored protection windows; `protectUntilProgress` adds an
+explicit logistics-survival condition; `logisticsStrike` completes when the
+named reinforcement relay is destroyed; and `staged` advances through several
+primary objectives without ending the sortie between stages. This keeps the
+air and ground combat systems shared without reducing every chapter to a
+clear-air condition. The authored decisive, success, setback,
+optional-objective, sustainment, and strategic-state data remain separate from
+the ordinary combat systems.
+
+## Objective authoring contract
+
+Campaign objectives are checked as resolved missions, not only as static
+chapter data. The campaign feasibility suite walks all ten chapters, Easy /
+Standard / Hard, every available mission variant, and every limited-
+sustainment choice. It verifies that required destroy groups, friendly forces,
+logistics columns, protected zones, and wingmen actually exist after campaign
+pressure and variant selection. A required count may be difficulty-aware when
+the authored force is intentionally smaller on Easy.
+
+Aircraft carry both an `authoredRole` and a runtime tactical role. A flank
+mutation can change how an aircraft behaves, but it must not make an authored
+Sweep or Strike objective silently impossible. Optional objectives snapshot
+their target group when it becomes available, and preservation / zone objectives
+are evaluated independently of the primary outcome. That means an accepted
+operational setback still records a surviving convoy, reserve, or clean zone;
+only `completeBeforeTime` requires a completed primary sortie by definition.
+
+Support objectives are chapter-aware. They must describe a distinct contribution
+from the sustainment choice and avoid duplicating the chapter's decisive task.
+For example, the expanded-ordnance package attacks assault vehicles during
+Hold the E18 and Counterstroke, while the Sergei, RSRAKH, and reserve-wingman
+choices use preservation criteria. A support objective's completed or failed
+result may apply a small strategic effect, so the sustainment decision remains
+meaningful after the loadout screen.
 
 ## Rules of engagement and escalation
 
@@ -201,8 +246,10 @@ campaign, mission, weather, and difficulty shapes are checked by
 Campaign saves reject unknown campaigns and difficulties, clamp state values,
 filter flags to the authored set, normalize stores to difficulty caps, retain
 bounded history, and remain playable when browser storage is unavailable.
-After the final chapter, the campaign overview offers a confirmed
-“Start new campaign” action that clears only the selected difficulty's save.
+The campaign overview offers a confirmed reset action that clears only the
+selected difficulty's save. Production mode can replay successfully completed
+chapters from the campaign selector; replay is temporary and does not commit
+the sortie result or alter the saved campaign position.
 Standalone career records use their existing independent storage and unlock
 rules.
 

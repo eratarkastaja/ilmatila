@@ -84,6 +84,10 @@ describe('CampaignSession', () => {
     const session = new CampaignSession({ progress, seedFactory: () => 123 });
     const setbacks = session.definition.chapters.map(chapter => {
       const objective = chapter.missionOverrides?.objective;
+      const stagedSetback = objective?.type === 'staged'
+        ? objective.stages?.find(stage => stage.setback)?.setback
+        : null;
+      if (stagedSetback) return stagedSetback;
       if (objective?.setback) return objective.setback;
       if (objective?.type === 'assetDefense') return { type: 'assetLost' };
       if (objective?.type === 'forceDefense') return { type: 'friendlyStrength' };
@@ -277,6 +281,14 @@ describe('CampaignSession', () => {
     const reinforcementsBlocked = logisticsBroken.resolveCurrentMission();
     expect(reinforcementsBlocked.preview.encounters.every(encounter => !encounter.scheduled)).toBe(true);
 
+    const counterattackWindow = makeSession();
+    counterattackWindow.state.chapterIndex = 8;
+    counterattackWindow.state.flags = ['counterattack-window-open'];
+    const counterattackClosed = makeSession();
+    counterattackClosed.state.chapterIndex = 8;
+    expect(counterattackWindow.resolveCurrentMission().mission.campaignDefenseFrontOffset)
+      .toBeGreaterThan(counterattackClosed.resolveCurrentMission().mission.campaignDefenseFrontOffset);
+
     const stabilized = makeSession();
     stabilized.state.chapterIndex = 9;
     stabilized.state.flags = ['border-line-stabilized'];
@@ -286,6 +298,25 @@ describe('CampaignSession', () => {
     const exposedMission = exposed.resolveCurrentMission().mission;
     expect(stabilizedMission.groundFriendlyTrucks).toBeGreaterThan(exposedMission.groundFriendlyTrucks);
     expect(stabilizedMission.campaignDefenseFrontOffset).toBeGreaterThan(exposedMission.campaignDefenseFrontOffset);
+  });
+
+  it('carries the Blind the Spear relay result into Counterstroke', () => {
+    const session = new CampaignSession({
+      progress: new CampaignProgress(memoryStorage()),
+      difficulty: 'standard',
+      seedFactory: () => 77,
+    });
+    session.state.chapterIndex = 7;
+    const blind = session.resolveCurrentMission();
+    const accepted = session.acceptResult('complete', {
+      campaignAttemptId: blind.attemptId,
+      optionalObjectives: [{ id: 'suppress-air-defense', status: 'completed' }],
+    });
+
+    expect(accepted.applied).toBe(true);
+    expect(session.state.flags).toContain('relay-logistics-broken');
+    expect(session.currentChapter.id).toBe('counterstroke');
+    expect(session.resolveCurrentMission().preview.encounters.every(encounter => !encounter.scheduled)).toBe(true);
   });
 
   it('makes First Wave protect the strike corridor instead of clearing every aircraft', () => {
@@ -411,6 +442,48 @@ describe('CampaignSession', () => {
     expect(session.currentChapter.id).toBe('border-breaks');
     expect(session.resolveCurrentMission().chapter.id).toBe('border-breaks');
     expect(progress.getSave('standard').chapterIndex).toBe(0);
+  });
+
+  it('allows production replay only for accepted successful chapters and restores the save', () => {
+    const progress = new CampaignProgress(memoryStorage());
+    const session = new CampaignSession({
+      progress,
+      difficulty: 'standard',
+      seedFactory: () => 78,
+    });
+    const accepted = session.acceptResult('complete', {
+      campaignAttemptId: session.state.currentAttemptId,
+      optionalObjectives: [],
+    });
+
+    expect(accepted.applied).toBe(true);
+    expect(session.isChapterCompleted(0)).toBe(true);
+    expect(session.selectCompletedChapter(0)).toBe(true);
+    expect(session.isReplay).toBe(true);
+    expect(session.currentChapter.id).toBe('unknown-track');
+    expect(progress.getSave('standard').chapterIndex).toBe(1);
+    expect(session.selectCompletedChapter(1)).toBe(false);
+
+    expect(session.exitChapterSelection()).toBe(true);
+    expect(session.isReplay).toBe(false);
+    expect(session.currentChapter.id).toBe('broken-silence');
+    expect(session.progressChapterIndex).toBe(1);
+  });
+
+  it('does not expose a setback as a completed chapter for replay', () => {
+    const session = new CampaignSession({
+      progress: new CampaignProgress(memoryStorage()),
+      difficulty: 'standard',
+      seedFactory: () => 79,
+    });
+
+    expect(session.acceptResult('setback', {
+      campaignAttemptId: session.state.currentAttemptId,
+      playerRecovered: true,
+    }).applied).toBe(true);
+    expect(session.state.chapterIndex).toBe(1);
+    expect(session.isChapterCompleted(0)).toBe(false);
+    expect(session.selectCompletedChapter(0)).toBe(false);
   });
 
   it('keeps Easy force counts below Hard for the same seeded chapter', () => {

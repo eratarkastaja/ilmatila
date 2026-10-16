@@ -1,5 +1,5 @@
 import { formatNumber, t } from './i18n.js';
-import { getNearestMetricThreshold } from '../campaign/strategic-metrics.js';
+import { getMetricThresholds, isMetricThresholdActive } from '../campaign/strategic-metrics.js';
 import {
   AIR_WEAPON_OPTIONS,
   GROUND_WEAPON_OPTIONS,
@@ -28,7 +28,10 @@ export class CampaignView {
     this.description = documentObject.querySelector('#campaign-description');
     this.situation = documentObject.querySelector('#campaign-situation');
     this.ending = documentObject.querySelector('#campaign-ending');
-    this.newRunButton = documentObject.querySelector('#campaign-new-run');
+    this.resetOpen = documentObject.querySelector('#campaign-reset-open');
+    this.resetDialog = documentObject.querySelector('#campaign-reset-dialog');
+    this.resetCancel = documentObject.querySelector('#campaign-reset-cancel');
+    this.resetConfirm = documentObject.querySelector('#campaign-reset-confirm');
     this.historyDialog = documentObject.querySelector('#campaign-history-dialog');
     this.historyOpen = documentObject.querySelector('#campaign-history-open');
     this.historyClose = documentObject.querySelector('#campaign-history-close');
@@ -52,8 +55,15 @@ export class CampaignView {
     this.sustainmentDescription = documentObject.querySelector('#campaign-sustainment-description');
     this.sustainmentChoices = documentObject.querySelector('#campaign-sustainment-choices');
     this.sustainmentReset = documentObject.querySelector('#campaign-sustainment-reset');
+    this.metricDialog = documentObject.querySelector('#campaign-metric-dialog');
+    this.metricDialogTitle = documentObject.querySelector('#campaign-metric-dialog-title');
+    this.metricDialogValue = documentObject.querySelector('#campaign-metric-dialog-value');
+    this.metricDialogRows = documentObject.querySelector('#campaign-metric-dialog-rows');
+    this.metricDialogClose = documentObject.querySelector('#campaign-metric-dialog-close');
+    this.metricButtons = [...documentObject.querySelectorAll('[data-campaign-metric]')];
+    this.activeMetric = null;
     this.onSustainmentChoice = null;
-    this.onNewRun = null;
+    this.onResetCampaign = null;
     this.onKitChange = null;
     this.onStandaloneKitOpen = null;
     this.updateSustainmentOverflow = () => {
@@ -68,6 +78,20 @@ export class CampaignView {
     });
     this.sustainmentClose?.addEventListener('click', () => this.sustainmentDialog?.close());
     this.sustainmentReset?.addEventListener('click', () => this.onSustainmentChoice?.(null));
+    this.resetOpen?.addEventListener('click', () => this.resetDialog?.showModal());
+    this.resetCancel?.addEventListener('click', () => this.resetDialog?.close());
+    this.resetConfirm?.addEventListener('click', () => {
+      this.resetDialog?.close();
+      this.onResetCampaign?.();
+    });
+    this.metricDialogClose?.addEventListener('click', () => this.metricDialog?.close());
+    for (const button of this.metricButtons) {
+      button.addEventListener('click', () => this.showMetricDetails(button.dataset.campaignMetric));
+    }
+    this.metricDialog?.addEventListener('close', () => {
+      this.activeMetric = null;
+      for (const button of this.metricButtons) button.setAttribute('aria-expanded', 'false');
+    });
     this.standaloneKitOpen?.addEventListener('click', () => this.onStandaloneKitOpen?.());
     this.historyOpen?.addEventListener('click', () => this.historyDialog?.showModal());
     this.historyClose?.addEventListener('click', () => this.historyDialog?.close());
@@ -75,17 +99,14 @@ export class CampaignView {
       airControl: {
         value: documentObject.querySelector('#campaign-air-control-value'),
         fill: documentObject.querySelector('#campaign-air-control-fill'),
-        next: documentObject.querySelector('#campaign-air-control-next'),
       },
       defenseIntegrity: {
         value: documentObject.querySelector('#campaign-defense-integrity-value'),
         fill: documentObject.querySelector('#campaign-defense-integrity-fill'),
-        next: documentObject.querySelector('#campaign-defense-integrity-next'),
       },
       sortieReadiness: {
         value: documentObject.querySelector('#campaign-sortie-readiness-value'),
         fill: documentObject.querySelector('#campaign-sortie-readiness-fill'),
-        next: documentObject.querySelector('#campaign-sortie-readiness-next'),
       },
     };
     this.debriefActions = documentObject.querySelector('#campaign-debrief-actions');
@@ -110,6 +131,7 @@ export class CampaignView {
       this.hideDebrief();
       this.sustainmentDialog?.close();
       this.historyDialog?.close();
+      this.resetDialog?.close();
       if (this.sustainmentOpen) this.sustainmentOpen.hidden = true;
       if (this.historyOpen) this.historyOpen.hidden = true;
     }
@@ -129,25 +151,47 @@ export class CampaignView {
       const value = state[key];
       nodes.value.textContent = String(value);
       nodes.fill.style.width = `${value}%`;
-      const threshold = getNearestMetricThreshold(key, value);
-      if (nodes.next) {
-        nodes.next.textContent = threshold
-          ? t('campaign.metric.next', { threshold: threshold.value, effect: t(threshold.effectKey) })
-          : '';
-      }
     }
+    if (this.activeMetric && this.metricDialog?.open) this.showMetricDetails(this.activeMetric);
     this.ending.hidden = !session.completed;
     this.ending.textContent = session.completed && state.ending
       ? t(`campaign.ending.${state.ending}`)
       : '';
-    if (this.newRunButton) {
-      this.newRunButton.hidden = !session.completed;
-      this.newRunButton.onclick = () => this.onNewRun?.();
-    }
     if (this.historyOpen) this.historyOpen.hidden = false;
     this.renderSustainment(session);
     this.renderHistory(session);
     this.renderStores(session);
+  }
+
+  showMetricDetails(metric) {
+    const nodes = this.stateNodes[metric];
+    if (!nodes || !this.metricDialog || !this.metricDialogRows) return;
+    const value = Number(nodes.value.textContent);
+    this.activeMetric = metric;
+    for (const button of this.metricButtons) {
+      button.setAttribute('aria-expanded', String(button.dataset.campaignMetric === metric));
+    }
+    this.metricDialogTitle.textContent = t(`campaign.${metric}`);
+    this.metricDialogValue.textContent = t('campaign.metric.current', { value });
+    this.metricDialogRows.replaceChildren();
+    for (const threshold of getMetricThresholds(metric)) {
+      const row = this.documentObject.createElement('tr');
+      const thresholdCell = this.documentObject.createElement('th');
+      const effectCell = this.documentObject.createElement('td');
+      const statusCell = this.documentObject.createElement('td');
+      thresholdCell.scope = 'row';
+      thresholdCell.textContent = t(`campaign.metric.threshold.${threshold.operator}`, {
+        threshold: threshold.value,
+      });
+      effectCell.textContent = t(threshold.effectKey);
+      const active = isMetricThresholdActive(threshold, value);
+      row.classList.toggle('active', active);
+      row.dataset.active = String(active);
+      statusCell.textContent = active ? t('campaign.metric.active') : '';
+      row.append(thresholdCell, effectCell, statusCell);
+      this.metricDialogRows.append(row);
+    }
+    if (!this.metricDialog.open) this.metricDialog.showModal();
   }
 
   renderSituation(session) {

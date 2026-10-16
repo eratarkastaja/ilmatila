@@ -142,6 +142,10 @@ function applyCampaignHistory(mission, state, chapter) {
     resolved.variants = (resolved.variants ?? []).map(variant => disableReinforcements(variant));
   }
 
+  if (chapter.id === 'counterstroke' && flags.has('counterattack-window-open')) {
+    resolved.campaignDefenseFrontOffset += 600;
+  }
+
   if (chapter.id === 'border-holds' && flags.has('border-line-stabilized')) {
     resolved.groundFriendlyTrucks = (resolved.groundFriendlyTrucks ?? 0) + 2;
     resolved.campaignFriendlyGroundHealthScale *= 1.1;
@@ -153,6 +157,10 @@ function applyCampaignHistory(mission, state, chapter) {
 
 function tuneOperationalObjective(objective, difficulty, hostileCount) {
   const tuned = clone(objective);
+  if (tuned.type === 'staged') {
+    tuned.stages = (tuned.stages ?? []).map(stage => tuneOperationalObjective(stage, difficulty, hostileCount));
+    return tuned;
+  }
   if (tuned.type === 'airPolicing') {
     tuned.requiredContacts = hostileCount;
     if (difficulty === 'easy') {
@@ -214,12 +222,22 @@ function resolveCampaignOptionalObjectives(chapter, mission, sustainmentChoice) 
   const authored = Array.isArray(chapter.optionalObjectives)
     ? chapter.optionalObjectives
     : mission.optionalObjectives ?? [];
-  const objectives = authored.map(objective => ({
-    ...clone(objective),
+  const difficulty = mission.campaignDifficulty ?? 'standard';
+  const objectives = authored.map(objective => {
+    const resolved = {
+      ...clone(objective),
+      ...(objective.requiredByDifficulty?.[difficulty] !== undefined
+        ? { required: objective.requiredByDifficulty[difficulty] }
+        : {}),
+    };
+    return {
+      ...resolved,
     ...(objective.target ? { target: clone(objective.target) } : {}),
     ...(objective.zone ? { zone: clone(objective.zone) } : {}),
-  }));
-  const supportObjective = sustainmentChoice?.optionalObjective;
+    };
+  });
+  const supportObjective = sustainmentChoice?.optionalObjectiveByChapter?.[chapter.id]
+    ?? sustainmentChoice?.optionalObjective;
   if (supportObjective) objectives.push({
     ...clone(supportObjective),
     ...(supportObjective.target ? { target: clone(supportObjective.target) } : {}),
@@ -274,10 +292,11 @@ export function resolveCampaignMission(definition, state, { seed = state.current
     campaignAttemptId: state.currentAttemptId,
     displayTitleKey: chapter.titleKey,
     campaignRadioBriefingKey: chapter.radioBriefingKey,
+    campaignDifficulty: state.difficulty,
   });
 
   const preview = resolveMissionVariant(mission, seed);
-  const optionalObjectives = resolveCampaignOptionalObjectives(chapter, preview.mission, sustainmentChoice);
+  const optionalObjectives = resolveCampaignOptionalObjectives(chapter, mission, sustainmentChoice);
   mission.campaignOptionalObjectives = optionalObjectives;
   mission.optionalObjectives = optionalObjectives;
   preview.mission.campaignOptionalObjectives = optionalObjectives;

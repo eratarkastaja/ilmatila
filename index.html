@@ -64,7 +64,7 @@
             <p id="campaign-description"></p>
             <p id="campaign-situation" class="campaign-situation"></p>
             <div id="dev-mission-picker" class="dev-mission-picker" hidden>
-              <label for="dev-mission-select"><span data-i18n="menu.devMissionKicker">DEV</span><strong data-i18n="menu.devMissionLabel">CAMPAIGN MISSION</strong></label>
+              <label for="dev-mission-select"><span data-i18n="menu.devMissionKicker">CAMPAIGN</span><strong data-i18n="menu.devMissionLabel">CAMPAIGN CHAPTER</strong></label>
               <div class="select-wrap"><select id="dev-mission-select" data-i18n-aria-label="menu.devMissionAria">
                 <option value="unknown-track" data-i18n="campaign.shadowBorder.chapter.unknown-track.title">UNKNOWN TRACK</option>
                 <option value="broken-silence" data-i18n="campaign.shadowBorder.chapter.broken-silence.title">BROKEN SILENCE</option>
@@ -79,14 +79,27 @@
               </select><i>⌄</i></div>
             </div>
             <div class="campaign-state-grid">
-              <div><span><small data-i18n="campaign.airControl">AIR CONTROL</small><b id="campaign-air-control-value">0</b></span><em id="campaign-air-control-next"></em><i><b id="campaign-air-control-fill"></b></i></div>
-              <div><span><small data-i18n="campaign.defenseIntegrity">DEFENSE INTEGRITY</small><b id="campaign-defense-integrity-value">0</b></span><em id="campaign-defense-integrity-next"></em><i><b id="campaign-defense-integrity-fill"></b></i></div>
-              <div><span><small data-i18n="campaign.sortieReadiness">SORTIE READINESS</small><b id="campaign-sortie-readiness-value">0</b></span><em id="campaign-sortie-readiness-next"></em><i><b id="campaign-sortie-readiness-fill"></b></i></div>
+              <button type="button" data-campaign-metric="airControl" aria-controls="campaign-metric-dialog" aria-expanded="false" aria-haspopup="dialog"><span><small data-i18n="campaign.airControl">AIR CONTROL</small><b id="campaign-air-control-value">0</b></span><i><b id="campaign-air-control-fill"></b></i></button>
+              <button type="button" data-campaign-metric="defenseIntegrity" aria-controls="campaign-metric-dialog" aria-expanded="false" aria-haspopup="dialog"><span><small data-i18n="campaign.defenseIntegrity">DEFENSE INTEGRITY</small><b id="campaign-defense-integrity-value">0</b></span><i><b id="campaign-defense-integrity-fill"></b></i></button>
+              <button type="button" data-campaign-metric="sortieReadiness" aria-controls="campaign-metric-dialog" aria-expanded="false" aria-haspopup="dialog"><span><small data-i18n="campaign.sortieReadiness">SORTIE READINESS</small><b id="campaign-sortie-readiness-value">0</b></span><i><b id="campaign-sortie-readiness-fill"></b></i></button>
             </div>
+            <dialog id="campaign-metric-dialog" class="campaign-metric-dialog" aria-labelledby="campaign-metric-dialog-title">
+              <section class="campaign-metric-modal">
+                <header><div><small data-i18n="campaign.metric.kicker">CAMPAIGN EFFECTS</small><h3 id="campaign-metric-dialog-title"></h3><p id="campaign-metric-dialog-value"></p></div><button id="campaign-metric-dialog-close" class="campaign-sustainment-close" type="button" data-i18n="campaign.metric.close">CLOSE</button></header>
+                <table><thead><tr><th scope="col" data-i18n="campaign.metric.thresholdLabel">THRESHOLD</th><th scope="col" data-i18n="campaign.metric.effectLabel">EFFECT</th><th scope="col" data-i18n="campaign.metric.statusLabel">STATUS</th></tr></thead><tbody id="campaign-metric-dialog-rows"></tbody></table>
+              </section>
+            </dialog>
             <button id="campaign-history-open" class="campaign-history-open" type="button" data-i18n="campaign.history.open">OPEN CAMPAIGN HISTORY</button>
             <button id="campaign-sustainment-open" class="campaign-sustainment-open" type="button" hidden data-i18n="campaign.sustainment.open">OPEN SUPPORT WINDOW</button>
             <p id="campaign-ending" class="campaign-ending" hidden></p>
-            <button id="campaign-new-run" class="campaign-new-run" type="button" hidden data-i18n="campaign.newRun">START NEW CAMPAIGN</button>
+            <button id="campaign-reset-open" class="campaign-reset-open" type="button" data-i18n="campaign.reset.open">RESET CAMPAIGN</button>
+            <dialog id="campaign-reset-dialog" class="campaign-reset-dialog" aria-labelledby="campaign-reset-title" aria-describedby="campaign-reset-description">
+              <section class="campaign-reset-modal">
+                <header><div><small data-i18n="campaign.reset.kicker">CAMPAIGN RESET</small><h3 id="campaign-reset-title" data-i18n="campaign.reset.title">RESET CAMPAIGN?</h3></div></header>
+                <p id="campaign-reset-description" data-i18n="campaign.reset.description">This deletes the saved campaign on the selected difficulty. All progress, history, and supplies will be lost.</p>
+                <div class="campaign-reset-actions"><button id="campaign-reset-cancel" type="button" data-i18n="campaign.reset.cancel">CANCEL</button><button id="campaign-reset-confirm" type="button" data-i18n="campaign.reset.confirm">RESET CAMPAIGN</button></div>
+              </section>
+            </dialog>
           </section>
 
           <dialog id="campaign-sustainment-dialog" class="campaign-sustainment-dialog" aria-labelledby="campaign-sustainment-title">

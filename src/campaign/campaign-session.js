@@ -92,12 +92,16 @@ function applyEffects(state, effects) {
   return { next, changes };
 }
 
-function applyOptionalObjectiveEffects(state, chapter, objectives = []) {
+function applyOptionalObjectiveEffects(state, chapter, objectives = [], sustainmentChoice = null) {
   let next = state;
   const changes = Object.fromEntries(STATE_KEYS.map(key => [key, 0]));
   const applied = [];
   for (const result of objectives) {
-    const objectiveEffects = chapter.optionalObjectiveEffects?.[result?.id];
+    const objectiveEffects = chapter.optionalObjectiveEffects?.[result?.id]
+      ?? (result?.id === sustainmentChoice?.optionalObjective?.id
+        || result?.id === sustainmentChoice?.optionalObjectiveByChapter?.[chapter.id]?.id
+        ? sustainmentChoice.optionalObjectiveEffects
+        : null);
     const effect = objectiveEffects?.[result?.status];
     if (!effect) continue;
     const outcome = applyEffects(next, effect);
@@ -126,12 +130,24 @@ export class CampaignSession {
     this.progress = progress;
     this.seedFactory = seedFactory;
     this.state = progress?.getSave(difficulty) ?? createState(this.definition, difficulty, seedFactory);
+    this.selectionSnapshot = null;
+    this.developmentSelection = false;
+    this.replaySelection = false;
     this.progress?.saveCampaign(this.state);
   }
 
   get difficulty() { return this.state.difficulty; }
   get currentChapter() { return this.definition.chapters[this.state.chapterIndex] ?? null; }
   get completed() { return this.state.completed; }
+  get progressChapterIndex() { return this.selectionSnapshot?.chapterIndex ?? this.state.chapterIndex; }
+  get isReplay() { return this.replaySelection; }
+  isChapterCompleted(chapterIndex) {
+    if (!Number.isInteger(chapterIndex) || chapterIndex < 0 || chapterIndex >= this.progressChapterIndex) return false;
+    const chapterId = this.definition.chapters[chapterIndex]?.id;
+    return (this.selectionSnapshot?.history ?? this.state.history ?? []).some(entry => (
+      entry.chapterId === chapterId && ['success', 'decisive'].includes(entry.classification)
+    ));
+  }
   get currentSustainmentDecision() { return this.currentChapter?.sustainmentDecision ?? null; }
   get selectedSustainmentChoice() {
     const choices = this.currentSustainmentDecision?.choices ?? [];
@@ -169,7 +185,7 @@ export class CampaignSession {
     const { inventory, limits } = this.getKitState();
     if (!validateKit(kit, inventory, limits)) return false;
     this.state = { ...this.state, kitSelection: { ...kit } };
-    if (!this.developmentSelection) this.progress?.saveCampaign(this.state);
+    if (!this.selectionSnapshot) this.progress?.saveCampaign(this.state);
     return true;
   }
 
@@ -180,15 +196,18 @@ export class CampaignSession {
     const choice = choices.find(item => item.id === choiceId);
     if (choiceId !== null && (!choice || this.state.sortieReadiness < choice.readinessCost)) return false;
     this.state = { ...this.state, sustainmentChoice: choiceId };
-    if (!this.developmentSelection) this.progress?.saveCampaign(this.state);
+    if (!this.selectionSnapshot) this.progress?.saveCampaign(this.state);
     return true;
   }
 
-  /** Selects a chapter for the development campaign selector without saving the jump. */
-  selectDevelopmentChapter(chapterIndex) {
+  selectChapter(chapterIndex, selectionType) {
     if (!Number.isInteger(chapterIndex) || chapterIndex < 0 || chapterIndex >= this.definition.chapters.length) {
       return false;
     }
+    const progressChapterIndex = this.progressChapterIndex;
+    if (selectionType === 'replay' && chapterIndex >= progressChapterIndex) return false;
+    if (this.selectionSnapshot) this.exitChapterSelection();
+    const snapshot = structuredClone(this.state);
     const attemptSequence = this.state.attemptSequence + 1;
     this.state = {
       ...this.state,
@@ -203,7 +222,30 @@ export class CampaignSession {
       sustainmentUsed: false,
       kitSelection: null,
     };
-    this.developmentSelection = true;
+    this.selectionSnapshot = snapshot;
+    this.developmentSelection = selectionType === 'development';
+    this.replaySelection = selectionType === 'replay';
+    return true;
+  }
+
+  /** Selects a chapter for the development campaign selector without saving the jump. */
+  selectDevelopmentChapter(chapterIndex) {
+    return this.selectChapter(chapterIndex, 'development');
+  }
+
+  /** Selects an already accepted chapter for a production-mode replay. */
+  selectCompletedChapter(chapterIndex) {
+    if (!this.isChapterCompleted(chapterIndex)) return false;
+    return this.selectChapter(chapterIndex, 'replay');
+  }
+
+  /** Restores the saved campaign position after a temporary chapter selection. */
+  exitChapterSelection() {
+    if (!this.selectionSnapshot) return false;
+    this.state = this.selectionSnapshot;
+    this.selectionSnapshot = null;
+    this.developmentSelection = false;
+    this.replaySelection = false;
     return true;
   }
 
@@ -240,13 +282,13 @@ export class CampaignSession {
       retryReadinessCost: this.retryReadinessCost,
     };
     const base = applyEffects(this.state, chapter.effects[classification]);
-    const optional = applyOptionalObjectiveEffects(base.next, chapter, result.optionalObjectives);
+    const choice = this.selectedSustainmentChoice;
+    const optional = applyOptionalObjectiveEffects(base.next, chapter, result.optionalObjectives, choice);
     const next = optional.next;
     const changes = Object.fromEntries(STATE_KEYS.map(key => [
       key,
       base.changes[key] + optional.changes[key],
     ]));
-    const choice = this.selectedSustainmentChoice;
     if (choice?.readinessCost) {
       const before = next.sortieReadiness;
       next.sortieReadiness = clamp(before - choice.readinessCost);

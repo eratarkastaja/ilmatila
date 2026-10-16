@@ -13,7 +13,7 @@ const GROUND_VISIBILITY_UPDATE_INTERVAL = 0.25;
 
 /** Owns battlefield state and coordinates ground-unit simulation updates. */
 export class GroundBattle {
-  constructor({ scene, player, playerVelocity, terrain, mission, audio, fx, difficulty = {}, enemies = [], addProjectile, addFriendlyProjectile, random = createSeededRandom(DEFAULT_RANDOM_SEED) }) {
+  constructor({ scene, player, playerVelocity, terrain, mission, audio, fx, difficulty = {}, enemies = [], addProjectile, addFriendlyProjectile, random = createSeededRandom(DEFAULT_RANDOM_SEED), spawnRandom = random }) {
     this.scene = scene;
     this.player = player;
     this.playerVelocity = playerVelocity;
@@ -23,6 +23,7 @@ export class GroundBattle {
     this.fx = fx;
     this.difficulty = difficulty;
     this.random = random;
+    this.spawnRandom = spawnRandom;
     this.enemies = enemies;
     this.addProjectile = addProjectile;
     this.addFriendlyProjectile = addFriendlyProjectile;

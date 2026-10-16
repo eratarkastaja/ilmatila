@@ -33,6 +33,7 @@ const REQUIRED_CAMPAIGN_IDS = ['shadow-border'];
 const CAMPAIGN_AREAS = new Set(['paijanne', 'virolahti', 'ilomantsi', 'kuusamo']);
 const OPTIONAL_OBJECTIVE_FIELDS = {
   allWingmenSurvive: [],
+  allWingmenReturned: [],
   noDamage: [],
   destroyOptionalGroundTarget: ['target'],
   completeBeforeTime: ['limitSeconds'],
@@ -53,6 +54,7 @@ const OPTIONAL_OBJECTIVE_COLLECTIONS = {
 };
 const OPTIONAL_OBJECTIVE_OPTIONAL_FIELDS = {
   preserveForce: ['minimumAlive', 'minimumFraction'],
+  destroyTargets: ['requiredByDifficulty'],
 };
 
 const difficultySchema = object({
@@ -318,6 +320,8 @@ function validateObjective(objective, path, errors) {
     support: [],
     training: ['duration'],
     holdPosition: ['duration'],
+    protectUntilProgress: ['duration', 'minimumLogisticsFraction'],
+    staged: ['stages'],
     logisticsStrike: [],
     strikeDefense: [],
     airPolicing: ['identifyRange', 'identifyDuration', 'escortRange', 'escortDuration'],
@@ -329,15 +333,26 @@ function validateObjective(objective, path, errors) {
     errors.push(`${path}.type is not a recognized mission objective type`);
     return;
   }
-  const keys = ['type', 'setback', ...fields];
+  const keys = ['id', 'type', 'titleKey', 'setback', ...fields];
   for (const key of keys) {
-    if (key !== 'setback' && !(key in objective)) errors.push(`${path}.${key} is required`);
+    if (!['id', 'titleKey', 'setback'].includes(key) && !(key in objective)) errors.push(`${path}.${key} is required`);
   }
   for (const key of Object.keys(objective)) {
     if (!keys.includes(key)) errors.push(`${path}.${key} is not valid for ${objective.type}`);
   }
   if (objective.type === 'training') validateNode(objective.duration, number(1, 3600), `${path}.duration`, errors);
   if (objective.type === 'holdPosition') validateNode(objective.duration, number(1, 3600), `${path}.duration`, errors);
+  if (objective.type === 'protectUntilProgress') {
+    validateNode(objective.duration, number(1, 3600), `${path}.duration`, errors);
+    validateNode(objective.minimumLogisticsFraction, number(0, 1), `${path}.minimumLogisticsFraction`, errors);
+  }
+  if (objective.type === 'staged') {
+    if (!Array.isArray(objective.stages) || objective.stages.length < 1) {
+      errors.push(`${path}.stages must contain at least one objective`);
+    } else {
+      objective.stages.forEach((stage, index) => validateObjective(stage, `${path}.stages[${index}]`, errors));
+    }
+  }
   if (objective.type === 'airPolicing') {
     validateNode(objective.identifyRange, number(100, 20000), `${path}.identifyRange`, errors);
     validateNode(objective.identifyDuration, number(.1, 120), `${path}.identifyDuration`, errors);
@@ -374,6 +389,7 @@ function validateObjectiveSetback(setback, path, errors) {
       deadline: ['duration'],
       assetLost: ['graceDuration'],
       friendlyStrength: ['minimum'],
+      friendlyLogistics: ['minimum'],
       groundBreakthrough: ['maximumGroundRemaining'],
     };
     const fields = fieldsByType[condition.type];
@@ -391,6 +407,7 @@ function validateObjectiveSetback(setback, path, errors) {
     if (condition.type === 'deadline') validateNode(condition.duration, number(1, 3600), `${conditionPath}.duration`, errors);
     if (condition.type === 'assetLost') validateNode(condition.graceDuration, number(0, 600), `${conditionPath}.graceDuration`, errors);
     if (condition.type === 'friendlyStrength') validateNode(condition.minimum, number(0, 1), `${conditionPath}.minimum`, errors);
+    if (condition.type === 'friendlyLogistics') validateNode(condition.minimum, number(0, 1), `${conditionPath}.minimum`, errors);
     if (condition.type === 'groundBreakthrough') {
       validateNode(condition.maximumGroundRemaining, number(0, 500, true), `${conditionPath}.maximumGroundRemaining`, errors);
     }
@@ -516,6 +533,19 @@ function validateOptionalObjectives(objectives, path, errors) {
     }
     if (objective.type === 'preserveMissiles' && objective.minimumRemaining !== undefined) {
       validateNode(objective.minimumRemaining, number(0, 20, true), `${objectivePath}.minimumRemaining`, errors);
+    }
+    if (objective.type === 'destroyTargets' && objective.requiredByDifficulty !== undefined) {
+      if (!objective.requiredByDifficulty || typeof objective.requiredByDifficulty !== 'object'
+        || Array.isArray(objective.requiredByDifficulty)) {
+        errors.push(`${objectivePath}.requiredByDifficulty must be an object`);
+      } else {
+        for (const difficulty of REQUIRED_DIFFICULTY_IDS) {
+          if (objective.requiredByDifficulty[difficulty] !== undefined) {
+            validateNode(objective.requiredByDifficulty[difficulty], number(1, 500, true),
+              `${objectivePath}.requiredByDifficulty.${difficulty}`, errors);
+          }
+        }
+      }
     }
     if (objective.type === 'interceptBeforeZone' && objective.zoneRadius !== undefined) {
       validateNode(objective.zoneRadius, number(100, 100000), `${objectivePath}.zoneRadius`, errors);
@@ -886,7 +916,10 @@ function validateCampaignSustainmentDecision(decision, path, errors) {
       errors.push(`${choicePath} must be an object`);
       return;
     }
-    const choiceKeys = new Set(['id', 'titleKey', 'descriptionKey', 'restore', 'mission', 'optionalObjective', 'readinessCost']);
+    const choiceKeys = new Set([
+      'id', 'titleKey', 'descriptionKey', 'restore', 'mission', 'optionalObjective',
+      'optionalObjectiveByChapter', 'optionalObjectiveEffects', 'readinessCost',
+    ]);
     for (const key of Object.keys(choice)) {
       if (!choiceKeys.has(key)) errors.push(`${choicePath}.${key} is not a recognized setting`);
     }
@@ -939,6 +972,28 @@ function validateCampaignSustainmentDecision(decision, path, errors) {
     }
     if (choice.optionalObjective !== undefined) {
       validateOptionalObjectives([choice.optionalObjective], `${choicePath}.optionalObjective`, errors);
+    }
+    if (choice.optionalObjectiveByChapter !== undefined) {
+      if (!choice.optionalObjectiveByChapter || typeof choice.optionalObjectiveByChapter !== 'object'
+        || Array.isArray(choice.optionalObjectiveByChapter)) {
+        errors.push(`${choicePath}.optionalObjectiveByChapter must be an object keyed by chapter id`);
+      } else {
+        for (const [chapterId, objective] of Object.entries(choice.optionalObjectiveByChapter)) {
+          validateOptionalObjectives([objective], `${choicePath}.optionalObjectiveByChapter.${chapterId}`, errors);
+        }
+      }
+    }
+    if (choice.optionalObjectiveEffects !== undefined) {
+      const objectiveIds = new Set([
+        choice.optionalObjective?.id,
+        ...Object.values(choice.optionalObjectiveByChapter ?? {}).map(objective => objective.id),
+      ]);
+      validateCampaignOptionalObjectiveEffects(
+        { [choice.optionalObjective?.id ?? 'support']: choice.optionalObjectiveEffects },
+        `${choicePath}.optionalObjectiveEffects`,
+        objectiveIds,
+        errors,
+      );
     }
   });
 }

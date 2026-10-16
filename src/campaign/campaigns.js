@@ -56,6 +56,10 @@ const LIMITED_SUSTAINMENT = {
         titleKey: 'campaign.objective.supportVarpunen.title',
         briefingKey: 'campaign.objective.supportVarpunen.briefing',
       },
+      optionalObjectiveEffects: {
+        completed: { sortieReadiness: 2 },
+        failed: { sortieReadiness: -2 },
+      },
       readinessCost: 4,
     },
     {
@@ -73,6 +77,10 @@ const LIMITED_SUSTAINMENT = {
         minimumAlive: 2,
         titleKey: 'campaign.objective.supportSergei.title',
         briefingKey: 'campaign.objective.supportSergei.briefing',
+      },
+      optionalObjectiveEffects: {
+        completed: { defenseIntegrity: 2 },
+        failed: { defenseIntegrity: -2 },
       },
       readinessCost: 5,
     },
@@ -92,6 +100,10 @@ const LIMITED_SUSTAINMENT = {
         titleKey: 'campaign.objective.supportRsrakh.title',
         briefingKey: 'campaign.objective.supportRsrakh.briefing',
       },
+      optionalObjectiveEffects: {
+        completed: { defenseIntegrity: 2 },
+        failed: { defenseIntegrity: -2 },
+      },
       readinessCost: 6,
     },
     {
@@ -109,6 +121,28 @@ const LIMITED_SUSTAINMENT = {
         required: 2,
         titleKey: 'campaign.objective.supportExpandedOrdnance.title',
         briefingKey: 'campaign.objective.supportExpandedOrdnance.briefing',
+      },
+      optionalObjectiveByChapter: {
+        'hold-e18': {
+          id: 'support-expanded-ordnance',
+          type: 'destroyTargets',
+          target: { collection: 'groundHostiles', role: 'assault', labelKey: 'mission.optionalTarget.assaultForce' },
+          required: 3,
+          titleKey: 'campaign.objective.supportExpandedOrdnance.title',
+          briefingKey: 'campaign.objective.supportExpandedOrdnanceE18.briefing',
+        },
+        counterstroke: {
+          id: 'support-expanded-ordnance',
+          type: 'destroyTargets',
+          target: { collection: 'groundHostiles', role: 'assault', labelKey: 'mission.optionalTarget.assaultForce' },
+          required: 2,
+          titleKey: 'campaign.objective.supportExpandedOrdnance.title',
+          briefingKey: 'campaign.objective.supportExpandedOrdnanceCounterstroke.briefing',
+        },
+      },
+      optionalObjectiveEffects: {
+        completed: { airControl: 2 },
+        failed: { airControl: -1 },
       },
       readinessCost: 5,
     },
@@ -245,10 +279,6 @@ export const CAMPAIGNS = deepFreeze({
             completed: { defenseIntegrity: 3 },
             failed: { defenseIntegrity: -4 },
           },
-          'flight-intact': {
-            completed: { sortieReadiness: 3 },
-            failed: { sortieReadiness: -3 },
-          },
         },
       }),
       chapter({
@@ -282,13 +312,6 @@ export const CAMPAIGNS = deepFreeze({
             titleKey: 'campaign.objective.ordnanceReserve.title',
             briefingKey: 'campaign.objective.ordnanceReserve.briefing',
           },
-          {
-            id: 'flight-intact', type: 'preserveForce',
-            target: { collection: 'airFriendly', role: 'wingman', labelKey: 'mission.optionalTarget.flight' },
-            minimumFraction: 1,
-            titleKey: 'campaign.objective.flightIntact.title',
-            briefingKey: 'campaign.objective.flightIntact.briefing',
-          },
         ],
         sustainmentDecision: LIMITED_SUSTAINMENT,
         decisive: { airControl: 4, defenseIntegrity: 2, sortieReadiness: 10, addFlags: ['road-base-supplied'] },
@@ -303,10 +326,6 @@ export const CAMPAIGNS = deepFreeze({
             completed: { sortieReadiness: 3 },
             failed: { sortieReadiness: -2 },
           },
-          'flight-intact': {
-            completed: { sortieReadiness: 2 },
-            failed: { sortieReadiness: -2 },
-          },
         },
       }),
       chapter({
@@ -317,11 +336,11 @@ export const CAMPAIGNS = deepFreeze({
         },
         optionalObjectives: [
           {
-            id: 'identify-strike-element', type: 'destroyTargets',
+            id: 'disrupt-strike-element', type: 'destroyTargets',
             target: { collection: 'airHostiles', role: 'strike', labelKey: 'mission.optionalTarget.strikeElement' },
             required: 1,
-            titleKey: 'campaign.objective.identifyStrikeElement.title',
-            briefingKey: 'campaign.objective.identifyStrikeElement.briefing',
+            titleKey: 'campaign.objective.disruptStrikeElement.title',
+            briefingKey: 'campaign.objective.disruptStrikeElement.briefing',
           },
           {
             id: 'feint-contained', type: 'denyZone',
@@ -330,29 +349,18 @@ export const CAMPAIGNS = deepFreeze({
             titleKey: 'campaign.objective.feintContained.title',
             briefingKey: 'campaign.objective.feintContained.briefing',
           },
-          {
-            id: 'flight-intact', type: 'preserveForce',
-            target: { collection: 'airFriendly', role: 'wingman', labelKey: 'mission.optionalTarget.flight' },
-            minimumFraction: 1,
-            titleKey: 'campaign.objective.flightIntact.title',
-            briefingKey: 'campaign.objective.flightIntact.briefing',
-          },
         ],
         decisive: airSuccess('main-axis-confirmed', 8),
         success: airSuccess('main-axis-confirmed', 4),
         setback: { airControl: -6, defenseIntegrity: -4 },
         optionalObjectiveEffects: {
-          'identify-strike-element': {
+          'disrupt-strike-element': {
             completed: { airControl: 2 },
             failed: { airControl: -2 },
           },
           'feint-contained': {
             completed: { airControl: 3, defenseIntegrity: 3, addFlags: ['main-axis-confirmed'] },
             failed: { airControl: -3, defenseIntegrity: -3 },
-          },
-          'flight-intact': {
-            completed: { sortieReadiness: 3 },
-            failed: { sortieReadiness: -3 },
           },
         },
       }),
@@ -377,13 +385,6 @@ export const CAMPAIGNS = deepFreeze({
             titleKey: 'campaign.objective.breakSweep.title',
             briefingKey: 'campaign.objective.breakSweep.briefing',
           },
-          {
-            id: 'flight-intact', type: 'preserveForce',
-            target: { collection: 'airFriendly', role: 'wingman', labelKey: 'mission.optionalTarget.flight' },
-            minimumFraction: 1,
-            titleKey: 'campaign.objective.flightIntact.title',
-            briefingKey: 'campaign.objective.flightIntact.briefing',
-          },
         ],
         decisive: airSuccess('northern-axis-held', 10),
         success: airSuccess('northern-axis-held', 6),
@@ -396,10 +397,6 @@ export const CAMPAIGNS = deepFreeze({
           'break-sweep': {
             completed: { airControl: 2 },
             failed: { airControl: -2 },
-          },
-          'flight-intact': {
-            completed: { sortieReadiness: 2 },
-            failed: { sortieReadiness: -3 },
           },
         },
       }),
@@ -429,13 +426,6 @@ export const CAMPAIGNS = deepFreeze({
             titleKey: 'campaign.objective.bluntArmor.title',
             briefingKey: 'campaign.objective.bluntArmor.briefing',
           },
-          {
-            id: 'flight-intact', type: 'preserveForce',
-            target: { collection: 'airFriendly', role: 'wingman', labelKey: 'mission.optionalTarget.flight' },
-            minimumFraction: 1,
-            titleKey: 'campaign.objective.flightIntact.title',
-            briefingKey: 'campaign.objective.flightIntact.briefing',
-          },
         ],
         decisive: groundSuccess('border-line-stabilized', 10),
         success: groundSuccess('border-line-stabilized', 6),
@@ -449,17 +439,16 @@ export const CAMPAIGNS = deepFreeze({
             completed: { airControl: 2, defenseIntegrity: 2 },
             failed: { defenseIntegrity: -2 },
           },
-          'flight-intact': {
-            completed: { sortieReadiness: 2 },
-            failed: { sortieReadiness: -2 },
-          },
         },
       }),
       chapter({
         id: 'hold-e18', day: 6, timeOfDay: 20.5, areaId: 'virolahti', baseMissionId: 'support',
         decisiveObjectiveId: 'keep-column',
         missionOverrides: {
-          objective: { type: 'holdPosition', duration: 300, setback: { type: 'friendlyStrength', minimum: 0.5 } },
+          objective: {
+            type: 'protectUntilProgress', duration: 300, minimumLogisticsFraction: 0.5,
+            setback: { type: 'friendlyLogistics', minimum: 0.5 },
+          },
         },
         optionalObjectives: [
           {
@@ -472,16 +461,9 @@ export const CAMPAIGNS = deepFreeze({
           {
             id: 'suppress-air-defense', type: 'destroyTargets',
             target: { collection: 'groundHostiles', role: 'airDefense', labelKey: 'mission.optionalTarget.airDefense' },
-            required: 2,
+            required: 2, requiredByDifficulty: { easy: 1, standard: 2, hard: 2 },
             titleKey: 'campaign.objective.suppressAirDefense.title',
             briefingKey: 'campaign.objective.suppressAirDefense.briefing',
-          },
-          {
-            id: 'flight-intact', type: 'preserveForce',
-            target: { collection: 'airFriendly', role: 'wingman', labelKey: 'mission.optionalTarget.flight' },
-            minimumFraction: 1,
-            titleKey: 'campaign.objective.flightIntact.title',
-            briefingKey: 'campaign.objective.flightIntact.briefing',
           },
         ],
         sustainmentDecision: LIMITED_SUSTAINMENT,
@@ -497,10 +479,6 @@ export const CAMPAIGNS = deepFreeze({
             completed: { airControl: 2 },
             failed: { airControl: -2 },
           },
-          'flight-intact': {
-            completed: { sortieReadiness: 2 },
-            failed: { sortieReadiness: -2 },
-          },
         },
       }),
       chapter({
@@ -513,7 +491,7 @@ export const CAMPAIGNS = deepFreeze({
           {
             id: 'suppress-air-defense', type: 'destroyTargets',
             target: { collection: 'groundHostiles', role: 'airDefense', labelKey: 'mission.optionalTarget.airDefense' },
-            required: 2,
+            required: 2, requiredByDifficulty: { easy: 1, standard: 2, hard: 2 },
             titleKey: 'campaign.objective.suppressAirDefense.title',
             briefingKey: 'campaign.objective.suppressAirDefense.briefing',
           },
@@ -522,16 +500,9 @@ export const CAMPAIGNS = deepFreeze({
             titleKey: 'campaign.objective.ordnanceReserve.title',
             briefingKey: 'campaign.objective.ordnanceReserve.briefing',
           },
-          {
-            id: 'flight-intact', type: 'preserveForce',
-            target: { collection: 'airFriendly', role: 'wingman', labelKey: 'mission.optionalTarget.flight' },
-            minimumFraction: 1,
-            titleKey: 'campaign.objective.flightIntact.title',
-            briefingKey: 'campaign.objective.flightIntact.briefing',
-          },
         ],
-        decisive: { airControl: 7, defenseIntegrity: 4, sortieReadiness: 4, addFlags: ['local-air-defense-breached'] },
-        success: { airControl: 4, defenseIntegrity: 2, sortieReadiness: 2, addFlags: ['counterattack-window-open'] },
+        decisive: { airControl: 7, defenseIntegrity: 4, sortieReadiness: 4, addFlags: ['relay-logistics-broken', 'local-air-defense-breached'] },
+        success: { airControl: 4, defenseIntegrity: 2, sortieReadiness: 2, addFlags: ['relay-logistics-broken', 'counterattack-window-open'] },
         setback: { airControl: -8, defenseIntegrity: -5 },
         optionalObjectiveEffects: {
           'suppress-air-defense': {
@@ -542,17 +513,16 @@ export const CAMPAIGNS = deepFreeze({
             completed: { sortieReadiness: 3 },
             failed: { sortieReadiness: -2 },
           },
-          'flight-intact': {
-            completed: { sortieReadiness: 2 },
-            failed: { sortieReadiness: -2 },
-          },
         },
       }),
       chapter({
         id: 'counterstroke', day: 9, timeOfDay: 20.5, areaId: 'virolahti', baseMissionId: 'support',
         decisiveObjectiveId: 'preserve-assault-force',
         missionOverrides: {
-          objective: { type: 'holdPosition', duration: 360, setback: { type: 'friendlyStrength', minimum: 0.5 } },
+          objective: {
+            type: 'forceDefense', minimumFriendlyStrength: 0.5, maximumGroundRemaining: 3,
+            setback: { type: 'friendlyStrength', minimum: 0.5 },
+          },
         },
         optionalObjectives: [
           {
@@ -572,7 +542,7 @@ export const CAMPAIGNS = deepFreeze({
           {
             id: 'suppress-air-defense', type: 'destroyTargets',
             target: { collection: 'groundHostiles', role: 'airDefense', labelKey: 'mission.optionalTarget.airDefense' },
-            required: 2,
+            required: 2, requiredByDifficulty: { easy: 1, standard: 2, hard: 2 },
             titleKey: 'campaign.objective.suppressAirDefense.title',
             briefingKey: 'campaign.objective.suppressAirDefense.briefing',
           },
@@ -587,7 +557,7 @@ export const CAMPAIGNS = deepFreeze({
             failed: { defenseIntegrity: -6, sortieReadiness: -2 },
           },
           'cut-reinforcements': {
-            completed: { airControl: 3, addFlags: ['relay-logistics-broken'] },
+            completed: { airControl: 3 },
             failed: { airControl: -3 },
           },
           'suppress-air-defense': {
@@ -600,7 +570,16 @@ export const CAMPAIGNS = deepFreeze({
         id: 'border-holds', day: 10, timeOfDay: 12, areaId: 'virolahti', baseMissionId: 'support',
         decisiveObjectiveId: 'line-holds',
         missionOverrides: {
-          objective: { type: 'holdPosition', duration: 420, setback: { type: 'friendlyStrength', minimum: 0.45 } },
+          hostileComposition: ['su27', 'su27'],
+          hostileRoles: ['strike', 'strike'],
+          objective: {
+            type: 'staged',
+            stages: [
+              { id: 'intercept-strike', type: 'strikeDefense', titleKey: 'mission.objective.stage.interceptStrike', setback: { type: 'deadline', duration: 300 } },
+              { id: 'hold-line', type: 'forceDefense', titleKey: 'mission.objective.stage.holdLine', minimumFriendlyStrength: 0.45, maximumGroundRemaining: 3, setback: { type: 'friendlyStrength', minimum: 0.45 } },
+              { id: 'break-assault', type: 'holdPosition', titleKey: 'mission.objective.stage.breakAssault', duration: 120, setback: { type: 'deadline', duration: 180 } },
+            ],
+          },
         },
         optionalObjectives: [
           {
@@ -618,11 +597,9 @@ export const CAMPAIGNS = deepFreeze({
             briefingKey: 'campaign.objective.noBreakthrough.briefing',
           },
           {
-            id: 'flight-home', type: 'preserveForce',
-            target: { collection: 'airFriendly', role: 'wingman', labelKey: 'mission.optionalTarget.flight' },
-            minimumFraction: 1,
-            titleKey: 'campaign.objective.flightIntact.title',
-            briefingKey: 'campaign.objective.flightIntact.briefing',
+            id: 'flight-home', type: 'allWingmenReturned',
+            titleKey: 'campaign.objective.flightHome.title',
+            briefingKey: 'campaign.objective.flightHome.briefing',
           },
         ],
         decisive: groundSuccess('border-restored', 15),

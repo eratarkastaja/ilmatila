@@ -155,4 +155,55 @@ describe('MissionSystem', () => {
     expect(system.outcome).toBe(MISSION_OUTCOME.SETBACK);
     expect(system.missionFailed).toBe(true);
   });
+
+  it('advances through staged campaign objectives before opening RTB', () => {
+    let remaining = {
+      airRemaining: 1, groundRemaining: 4, priorityTargetsRemaining: 1,
+      friendlyStrengthFraction: .9, friendlyLogisticsFraction: 1,
+    };
+    const nodes = {
+      objectiveTitle: makeElement(),
+      objectiveProgress: makeElement(),
+      status: makeElement(),
+      statusText: makeElement(),
+    };
+    const stageChanges = [];
+    const system = new MissionSystem({
+      mission: { id: 'border-holds' },
+      objective: {
+        type: 'staged',
+        stages: [
+          { id: 'intercept', type: 'strikeDefense' },
+          { id: 'line', type: 'forceDefense', minimumFriendlyStrength: .45, maximumGroundRemaining: 3 },
+          { id: 'assault', type: 'holdPosition', duration: 2 },
+        ],
+      },
+      totals: { air: 2, ground: 4 },
+      getRemaining: () => remaining,
+      nodes,
+      deferCompletion: true,
+      initiallyActive: true,
+      onStageChange: (stage, index) => stageChanges.push({ stage, index }),
+    });
+
+    system.update(1);
+    expect(system.activeStageIndex).toBe(0);
+    expect(system.objectiveSatisfied).toBe(false);
+
+    remaining = { ...remaining, priorityTargetsRemaining: 0, airRemaining: 0 };
+    system.update(1);
+    expect(system.activeStageIndex).toBe(1);
+    expect(stageChanges).toHaveLength(1);
+    expect(system.outcome).toBe(MISSION_OUTCOME.ACTIVE);
+
+    remaining = { ...remaining, groundRemaining: 2 };
+    system.update(1);
+    expect(system.activeStageIndex).toBe(2);
+    expect(stageChanges).toHaveLength(2);
+
+    system.update(2);
+    expect(system.objectiveSatisfied).toBe(true);
+    expect(system.objectiveResult).toBe(MISSION_OUTCOME.COMPLETE);
+    expect(system.outcome).toBe(MISSION_OUTCOME.ACTIVE);
+  });
 });

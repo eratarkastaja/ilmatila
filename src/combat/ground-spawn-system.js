@@ -2,56 +2,101 @@ import * as THREE from 'three';
 import { createGroundVehicle, getGroundVehicleSpec } from '../ground/vehicles.js';
 import { distanceToTheaterEdge, nearestDryPoint, safeRouteAlignedSquareSpan } from './ground-combat-utils.js';
 
+const FORMATIONS = ['line', 'staggered', 'wedge', 'echelon'];
+
+function shuffled(values, rnd) {
+  for (let i = values.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [values[i], values[j]] = [values[j], values[i]];
+  }
+  return values;
+}
+
+function formationDepthProfile(formation, normalizedLane, slot, count) {
+  if (formation === 'staggered') return slot % 2 === 0 ? -1 : 1;
+  if (formation === 'wedge') return Math.abs(normalizedLane) * 1.35 - .45;
+  if (formation === 'echelon') return normalizedLane * 1.2;
+  return count > 1 ? normalizedLane * .12 : 0;
+}
+
 /** Places combat units, air defenses, and logistics vehicles in the theater. */
 export class GroundSpawnSystem {
   spawn(battle) {
     // Keep the orthophoto unobstructed and place units only on mapped dry ground.
     if(!battle.mission.groundBattle)return;
-    const rnd = battle.random;
+    // Keep formation/layout randomness independent from combat timing and AI rolls.
+    const rnd = battle.spawnRandom ?? battle.random;
     const finnishTypes=['leopard2','cv9030','pasi'];
     const russianTypes=['t72','bmp2','btr80'];
     const theaterHalf = (battle.terrain?.worldSize ?? 32000) * .5;
     const requestedFrontSpan = battle.mission.groundFrontSpan || 9800;
-    const frontRoom = safeRouteAlignedSquareSpan(
+    const initialFrontRoom = safeRouteAlignedSquareSpan(
       battle.battleCenter, battle.routeRight, battle.routeForward, theaterHalf, 900,
+    );
+    const frontOffsetLimit = Math.min(3200, initialFrontRoom * .18);
+    const lateralOffset = (rnd() - .5) * frontOffsetLimit;
+    const approachRoomFromCenter = distanceToTheaterEdge(
+      battle.battleCenter, battle.routeForward.clone().negate(), theaterHalf - 300,
+    );
+    const defenseRoomFromCenter = distanceToTheaterEdge(
+      battle.battleCenter, battle.routeForward, theaterHalf - 300,
+    );
+    const depthRoomFromCenter = Math.min(approachRoomFromCenter, defenseRoomFromCenter);
+    const depthOffsetLimit = Number.isFinite(depthRoomFromCenter)
+      ? Math.min(1000, depthRoomFromCenter * .12)
+      : 1000;
+    const depthOffset = (rnd() - .5) * depthOffsetLimit;
+    const layoutCenter = battle.battleCenter.clone()
+      .addScaledVector(battle.routeRight, lateralOffset)
+      .addScaledVector(battle.routeForward, depthOffset);
+    const frontRoom = safeRouteAlignedSquareSpan(
+      layoutCenter, battle.routeRight, battle.routeForward, theaterHalf, 900,
     );
     // CAS uses a broad frontage, while other missions keep a tighter, legible
     // engagement. The usable terrain footprint remains the final authority.
     const supportMission = battle.mission.id === 'support';
     const missionFrontage = supportMission ? 28000 : 12000;
-    const frontSpan = Math.min(requestedFrontSpan, missionFrontage, frontRoom);
+    const frontSpan = Math.min(requestedFrontSpan * (.82 + rnd() * .18), missionFrontage, frontRoom);
     const heading = Math.atan2(battle.routeForward.x,battle.routeForward.z);
-    const approachRoom = distanceToTheaterEdge(battle.battleCenter,battle.routeForward.clone().negate(),theaterHalf-300);
-    const defenseRoom = distanceToTheaterEdge(battle.battleCenter,battle.routeForward,theaterHalf-300);
+    const approachRoom = distanceToTheaterEdge(layoutCenter,battle.routeForward.clone().negate(),theaterHalf-300);
+    const defenseRoom = distanceToTheaterEdge(layoutCenter,battle.routeForward,theaterHalf-300);
     const approachDepthRoom = Math.max(0, approachRoom - 500);
     const defenseDepthRoom = Math.max(0, defenseRoom - 500);
     const russianSideRoom = supportMission ? defenseDepthRoom : approachDepthRoom;
     const finnishSideRoom = supportMission ? approachDepthRoom : defenseDepthRoom;
     const russianDepth = Math.min(3200, russianSideRoom);
     const finnishDepth = Math.min(900, finnishSideRoom);
-    const russianStagger = Math.min(460, Math.max(0, (russianSideRoom - russianDepth) / 2));
-    const finnishStagger = Math.min(130, Math.max(0, (finnishSideRoom - finnishDepth) / 2));
+    const russianStagger = Math.min(460, Math.max(0, (russianSideRoom - russianDepth) / 2)) * (.75 + rnd() * .5);
+    const finnishStagger = Math.min(130, Math.max(0, (finnishSideRoom - finnishDepth) / 2)) * (.75 + rnd() * .5);
+    const formation = FORMATIONS[Math.floor(rnd() * FORMATIONS.length)];
+    const pairCount = Math.max(0, battle.mission.groundPairs ?? 0);
+    const pairLaneOrder = shuffled(Array.from({ length: pairCount }, (_, index) => index), rnd);
+    const finnishTypeOrder = shuffled([...finnishTypes], rnd);
+    const russianTypeOrder = shuffled([...russianTypes], rnd);
     const friendlyHealthScale = battle.mission.campaignFriendlyGroundHealthScale ?? 1;
-    for(let i=0;i<battle.mission.groundPairs;i++){
-      const lane = battle.mission.groundPairs > 1 ? i / (battle.mission.groundPairs - 1) - .5 : 0;
-      const alongFront = lane * frontSpan + (rnd() - .5) * 240;
+    for(let i=0;i<pairCount;i++){
+      const slot = pairLaneOrder[i];
+      const lane = pairCount > 1 ? slot / (pairCount - 1) - .5 : 0;
+      const laneJitter = (rnd() - .5) * Math.min(900, Math.max(240, frontSpan / Math.max(pairCount, 1) * .45));
+      const alongFront = lane * frontSpan + laneJitter;
       const blueDirection = supportMission ? -1 : 1;
       const redDirection = -blueDirection;
-      const blueDepth = blueDirection * finnishDepth + ((i % 3) - 1) * finnishStagger;
-      const redDepth = redDirection * (russianDepth + (i % 3) * russianStagger);
-      const blueType=finnishTypes[i%finnishTypes.length],redType=russianTypes[i%russianTypes.length];
+      const profile = formationDepthProfile(formation, lane, slot, pairCount);
+      const blueDepth = blueDirection * finnishDepth + profile * finnishStagger;
+      const redDepth = redDirection * (russianDepth + profile * russianStagger);
+      const blueType=finnishTypeOrder[slot%finnishTypeOrder.length],redType=russianTypeOrder[slot%russianTypeOrder.length];
       const blue= createGroundVehicle(blueType,'finnish'), red=createGroundVehicle(redType,'russian');
       const blueSpec=getGroundVehicleSpec(blueType),redSpec=getGroundVehicleSpec(redType);
       const bluePos=nearestDryPoint(
         battle.terrain,
-        battle.battleCenter.x+battle.routeRight.x*alongFront+battle.routeForward.x*blueDepth,
-        battle.battleCenter.z+battle.routeRight.z*alongFront+battle.routeForward.z*blueDepth,
+        layoutCenter.x+battle.routeRight.x*alongFront+battle.routeForward.x*blueDepth,
+        layoutCenter.z+battle.routeRight.z*alongFront+battle.routeForward.z*blueDepth,
       );
-      const redAlongFront = alongFront + (rnd() - .5) * 760;
+      const redAlongFront = alongFront + (rnd() - .5) * Math.min(1400, Math.max(760, frontSpan * .06));
       const redPos=nearestDryPoint(
         battle.terrain,
-        battle.battleCenter.x+battle.routeRight.x*redAlongFront+battle.routeForward.x*redDepth,
-        battle.battleCenter.z+battle.routeRight.z*redAlongFront+battle.routeForward.z*redDepth,
+        layoutCenter.x+battle.routeRight.x*redAlongFront+battle.routeForward.x*redDepth,
+        layoutCenter.z+battle.routeRight.z*redAlongFront+battle.routeForward.z*redDepth,
       );
       if(!bluePos||!redPos)continue;
       blue.position.set(bluePos.x,bluePos.y,bluePos.z); blue.rotation.y=heading+(supportMission?0:Math.PI);
@@ -65,9 +110,11 @@ export class GroundSpawnSystem {
       battle.colliders.push(blueUnit.collider,redUnit.collider);
     }
     const convoyOffset=Math.min(2200,Math.max(0,russianSideRoom-russianDepth-700));
-    const convoyCenter=battle.battleCenter.clone().addScaledVector(
+    const convoyCenter=layoutCenter.clone()
+      .addScaledVector(battle.routeRight, (rnd() - .5) * Math.min(frontSpan * .2, 2600))
+      .addScaledVector(
       battle.routeForward,
-      (supportMission ? 1 : -1) * (russianDepth + convoyOffset),
+      (supportMission ? 1 : -1) * (russianDepth + convoyOffset) + (rnd() - .5) * 700,
     );
     const convoySpan=Math.min(
       battle.mission.convoyArea || 8200,
@@ -96,7 +143,7 @@ export class GroundSpawnSystem {
     // Finnish Masi (Sisu SA-150) 4x4 supply trucks operate behind the defence
     // line. They are scenery/logistics, not objective targets or combatants.
     const friendlyTruckCount = battle.mission.groundFriendlyTrucks ?? 0;
-    const supplyCenter = battle.battleCenter.clone().addScaledVector(
+    const supplyCenter = layoutCenter.clone().addScaledVector(
       battle.routeForward,
       (supportMission ? -1 : 1) * (finnishDepth + 1050),
     );
@@ -136,13 +183,18 @@ export class GroundSpawnSystem {
       battle.colliders.push(supply.collider);
     }
 
+    const airDefenseFlank = rnd() < .5 ? -1 : 1;
+    const airDefenseDepthPattern = FORMATIONS[Math.floor(rnd() * FORMATIONS.length)];
     const addAirDefenseVehicle = (platform, team, index, count, depth, flankSign, role = 'airDefense') => {
       const spec = getGroundVehicleSpec(platform);
-      const lane = (index - (count - 1) * 0.5) * Math.min(1500, frontSpan * 0.18) * flankSign;
+      const normalizedLane = count > 1 ? index / (count - 1) - .5 : 0;
+      const lane = normalizedLane * Math.min(1500, frontSpan * (.14 + rnd() * .08)) * flankSign;
+      const depthProfile = formationDepthProfile(airDefenseDepthPattern, normalizedLane, index, count);
+      const variedDepth = depth + depthProfile * Math.min(420, Math.max(120, Math.abs(depth) * .12));
       const position = nearestDryPoint(
         battle.terrain,
-        battle.battleCenter.x + battle.routeRight.x * lane + battle.routeForward.x * depth,
-        battle.battleCenter.z + battle.routeRight.z * lane + battle.routeForward.z * depth,
+        layoutCenter.x + battle.routeRight.x * lane + battle.routeForward.x * variedDepth,
+        layoutCenter.z + battle.routeRight.z * lane + battle.routeForward.z * variedDepth,
       );
       if (!position) return;
       const mesh = createGroundVehicle(platform, team === 'blue' ? 'finnish' : 'russian');
@@ -177,19 +229,19 @@ export class GroundSpawnSystem {
     };
     for (let i = 0; i < (battle.mission.groundIto90Count ?? 0); i++) {
       const depth = supportMission ? -finnishDepth - 720 : finnishDepth + 720;
-      addAirDefenseVehicle('ito90', 'blue', i, battle.mission.groundIto90Count, depth, 1);
+      addAirDefenseVehicle('ito90', 'blue', i, battle.mission.groundIto90Count, depth, airDefenseFlank);
     }
     for (let i = 0; i < (battle.mission.groundSergeiCount ?? 0); i++) {
       const depth = supportMission ? -finnishDepth - 980 : finnishDepth + 980;
-      addAirDefenseVehicle('sergei23', 'blue', i, battle.mission.groundSergeiCount, depth, 1);
+      addAirDefenseVehicle('sergei23', 'blue', i, battle.mission.groundSergeiCount, depth, airDefenseFlank);
     }
     for (let i = 0; i < (battle.mission.groundMlrsCount ?? 0); i++) {
       const depth = supportMission ? -finnishDepth - 1380 : finnishDepth + 1380;
-      addAirDefenseVehicle('rsrakh06', 'blue', i, battle.mission.groundMlrsCount, depth, 1, 'artillery');
+      addAirDefenseVehicle('rsrakh06', 'blue', i, battle.mission.groundMlrsCount, depth, airDefenseFlank, 'artillery');
     }
     for (let i = 0; i < (battle.mission.groundShilkaCount ?? 0); i++) {
       const depth = supportMission ? russianDepth + 760 : -russianDepth - 760;
-      addAirDefenseVehicle('zsu23-4', 'red', i, battle.mission.groundShilkaCount, depth, -1);
+      addAirDefenseVehicle('zsu23-4', 'red', i, battle.mission.groundShilkaCount, depth, -airDefenseFlank);
     }
   }
 }

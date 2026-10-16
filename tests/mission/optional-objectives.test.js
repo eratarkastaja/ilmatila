@@ -150,6 +150,57 @@ describe('MissionOptionalObjectives', () => {
     expect(tracker.update(state)[0].status).toBe('completed');
   });
 
+  it('matches authored roles even when runtime tactics mutate the role', () => {
+    const tracker = new MissionOptionalObjectives([{
+      id: 'sweep-screen',
+      type: 'destroyTargets',
+      target: { collection: 'airHostiles', role: 'sweep' },
+      required: 1,
+    }]);
+    const state = makeState({
+      airHostiles: [{ dead: true, role: 'flank', authoredRole: 'sweep' }],
+      targetCollectionsReady: { airHostiles: true },
+    });
+
+    expect(tracker.update(state, true)[0].status).toBe('completed');
+  });
+
+  it('waits for delayed target collections and snapshots the authored group once', () => {
+    const tracker = new MissionOptionalObjectives([{
+      id: 'reinforcement-relay',
+      type: 'destroyTargets',
+      target: { collection: 'groundHostiles', role: 'logistics', reinforcementSource: true },
+      required: 1,
+    }]);
+    const state = makeState({
+      groundHostiles: [],
+      targetCollectionsReady: { groundHostiles: false },
+    });
+
+    expect(tracker.update(state)[0].status).toBe('pending');
+    const authoredRelay = { dead: false, role: 'logistics', reinforcementSource: true };
+    state.groundHostiles = [authoredRelay];
+    state.targetCollectionsReady.groundHostiles = true;
+    expect(tracker.update(state)[0].status).toBe('pending');
+
+    state.groundHostiles = [{ dead: false, role: 'logistics', reinforcementSource: true }];
+    authoredRelay.dead = true;
+    expect(tracker.update(state, true)[0].status).toBe('completed');
+  });
+
+  it('fails destroy groups that cannot meet their authored requirement', () => {
+    const tracker = new MissionOptionalObjectives([{
+      id: 'sweep-pair', type: 'destroyTargets',
+      target: { collection: 'airHostiles', role: 'sweep' }, required: 2,
+    }]);
+    const state = makeState({
+      airHostiles: [{ dead: false, role: 'sweep' }],
+      targetCollectionsReady: { airHostiles: true },
+    });
+
+    expect(tracker.update(state)[0].status).toBe('failed');
+  });
+
   it('preserves force thresholds and remembers zone penetrations across frames', () => {
     const defenders = [
       { dead: false, role: 'defender' },
@@ -179,5 +230,44 @@ describe('MissionOptionalObjectives', () => {
     strike.mesh.position.x = 100;
     expect(tracker.update(state)[1].status).toBe('failed');
     expect(tracker.update({ ...state, outcome: 'complete' }, true)[0].status).toBe('completed');
+  });
+
+  it('evaluates preservation objectives independently of an accepted setback', () => {
+    const state = makeState({ outcome: 'setback', missilesRemaining: 18 });
+    const tracker = new MissionOptionalObjectives([
+      { id: 'damage', type: 'noDamage' },
+      { id: 'missiles', type: 'preserveMissiles', minimumRemaining: 16 },
+      {
+        id: 'force', type: 'preserveForce',
+        target: { collection: 'friendlyGround', role: 'defender' }, minimumAlive: 1,
+      },
+      {
+        id: 'zone', type: 'denyZone',
+        target: { collection: 'airHostiles', role: 'strike' },
+        zone: { center: 'extraction', radius: 500 }, maximumPenetrations: 0,
+      },
+    ]);
+    state.airHostiles = [{ dead: false, role: 'strike', mesh: { position: { x: 1200, y: 0, z: 0 } } }];
+
+    expect(tracker.update(state, true).map(result => result.status)).toEqual([
+      'completed', 'completed', 'completed', 'completed',
+    ]);
+
+    const failedTracker = new MissionOptionalObjectives([{
+      id: 'force', type: 'preserveForce',
+      target: { collection: 'friendlyGround', role: 'defender' }, minimumAlive: 1,
+    }]);
+    state.friendlyGround[0].dead = true;
+    expect(failedTracker.update(state, true)[0].status).toBe('failed');
+  });
+
+  it('requires every wingman to reach base for the explicit return objective', () => {
+    const tracker = new MissionOptionalObjectives([{ id: 'home', type: 'allWingmenReturned' }]);
+    const state = makeState({ outcome: 'setback', wingmenAtBase: 1 });
+
+    expect(tracker.update(state, true)[0].status).toBe('failed');
+    const returnedTracker = new MissionOptionalObjectives([{ id: 'home', type: 'allWingmenReturned' }]);
+    state.wingmenAtBase = 2;
+    expect(returnedTracker.update(state, true)[0].status).toBe('completed');
   });
 });

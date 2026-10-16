@@ -107,7 +107,7 @@ const urlParams = new URLSearchParams(location.search);
 const developmentMode = import.meta.env.DEV;
 const stressMode = developmentMode && urlParams.get('stress') === '1';
 const telemetryMode = developmentMode;
-devMissionPicker.hidden = !developmentMode;
+devMissionPicker.hidden = false;
 const areaAliases = new Map([['vironlahti', 'virolahti']]);
 let selectedMissionId = Object.hasOwn(MISSIONS, urlParams.get('mission')) ? urlParams.get('mission') : 'patrol';
 if (!developmentMode && !careerProgress.isUnlocked(selectedMissionId)) selectedMissionId = 'patrol';
@@ -322,7 +322,7 @@ function updateMenuControlLocks() {
   if (areaRow) areaRow.hidden = campaignLocked;
   if (menuDifficultyIndex) menuDifficultyIndex.textContent = campaignLocked ? '02' : '03';
   if (devMissionSelect) {
-    devMissionSelect.disabled = !developmentMode || Boolean(sortie?.launchInProgress || sortie?.started);
+    devMissionSelect.disabled = Boolean(sortie?.launchInProgress || sortie?.started);
   }
   setWeatherSelector();
 }
@@ -647,6 +647,7 @@ function setMenuWeather(weatherConfig) {
 function renderCampaignChapter() {
   if (!campaignSession) return false;
   campaignView.renderSession(campaignSession);
+  renderCampaignChapterPicker();
   if (devMissionSelect && campaignSession.currentChapter) {
     devMissionSelect.value = campaignSession.currentChapter.id;
   }
@@ -717,10 +718,29 @@ function renderCampaignChapter() {
   return true;
 }
 
-function selectDevelopmentCampaignChapter(chapterId) {
-  if (!developmentMode || playMode !== 'campaign' || !campaignSession) return false;
+function renderCampaignChapterPicker() {
+  if (!devMissionSelect || !campaignSession) return;
+  const progressChapterIndex = campaignSession.progressChapterIndex;
+  for (const [index, option] of [...devMissionSelect.options].entries()) {
+    option.disabled = !developmentMode
+      && index !== progressChapterIndex
+      && !campaignSession.isChapterCompleted(index);
+  }
+  if (campaignSession.currentChapter) devMissionSelect.value = campaignSession.currentChapter.id;
+}
+
+function selectCampaignChapter(chapterId) {
+  if (playMode !== 'campaign' || !campaignSession) return false;
   const chapterIndex = campaignSession.definition.chapters.findIndex(chapter => chapter.id === chapterId);
-  if (!campaignSession.selectDevelopmentChapter(chapterIndex)) return false;
+  const selected = developmentMode
+    ? campaignSession.selectDevelopmentChapter(chapterIndex)
+    : chapterIndex === campaignSession.progressChapterIndex
+      ? (campaignSession.exitChapterSelection() || true)
+      : campaignSession.selectCompletedChapter(chapterIndex);
+  if (!selected) {
+    renderCampaignChapterPicker();
+    return false;
+  }
   pendingCampaignResult = null;
   campaignView.hideDebrief();
   renderCampaignChapter();
@@ -919,7 +939,7 @@ menuTimeOfDaySelector?.addEventListener('change', () => {
 
 for (const card of missionCards) card.addEventListener('click', () => selectMission(card.dataset.mission));
 devMissionSelect?.addEventListener('change', () => {
-  selectDevelopmentCampaignChapter(devMissionSelect.value);
+  selectCampaignChapter(devMissionSelect.value);
 });
 campaignView.onSustainmentChoice = choiceId => {
   if (playMode !== 'campaign' || !campaignSession) return;
@@ -940,10 +960,10 @@ campaignView.onStandaloneKitOpen = () => {
     campaignView.renderStandaloneKit(getStandaloneKitState());
   });
 };
-campaignView.onNewRun = () => {
-  if (playMode !== 'campaign' || !campaignSession || !campaignSession.completed) return;
-  if (globalThis.confirm && !globalThis.confirm(t('campaign.newRunConfirm'))) return;
+campaignView.onResetCampaign = () => {
+  if (playMode !== 'campaign' || !campaignSession) return;
   const difficulty = campaignSession.difficulty;
+  campaignSession.exitChapterSelection();
   campaignProgress.clear(difficulty);
   campaignSession = new CampaignSession({ progress: campaignProgress, difficulty });
   pendingCampaignResult = null;
@@ -1179,6 +1199,7 @@ function returnToMenu() {
   setLaunchProgress(0, 'menu.launchButton', 'menu.launchReadyStatus');
   let nextCampaignArea = null;
   if (playMode === 'campaign' && campaignSession) {
+    campaignSession.exitChapterSelection();
     renderCampaignChapter();
     restoreMenuControls();
     if (!campaignSession.completed) nextCampaignArea = selectedAreaId;
@@ -1448,12 +1469,19 @@ sortie = new SortieController({
     const note = document.querySelector('#debrief-career-note');
     let debriefFocus = missionDebriefReturnButton;
     if (playMode === 'campaign' && campaignSession) {
-      const preview = campaignSession.previewResult(outcome, result);
-      pendingCampaignResult = { outcome, result, preview };
-      campaignView.renderDebrief(preview);
-      missionDebriefReturnButton.hidden = true;
-      note.hidden = true;
-      debriefFocus = preview.canAccept ? campaignView.continueButton : campaignView.retryButton;
+      if (campaignSession.isReplay) {
+        pendingCampaignResult = null;
+        campaignView.hideDebrief();
+        missionDebriefReturnButton.hidden = false;
+        note.hidden = true;
+      } else {
+        const preview = campaignSession.previewResult(outcome, result);
+        pendingCampaignResult = { outcome, result, preview };
+        campaignView.renderDebrief(preview);
+        missionDebriefReturnButton.hidden = true;
+        note.hidden = true;
+        debriefFocus = preview.canAccept ? campaignView.continueButton : campaignView.retryButton;
+      }
     } else {
       const careerUpdate = careerProgress.recordMission({ ...result, outcome });
       renderMissionProgress();

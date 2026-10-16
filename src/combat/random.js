@@ -1,4 +1,5 @@
 export const DEFAULT_RANDOM_SEED = 0x6d2b79f5;
+export const GROUND_SPAWN_LAYOUT_SEED_XOR = 0x243f6a88;
 
 let fallbackSeedCounter = 0;
 
