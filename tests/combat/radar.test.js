@@ -45,7 +45,7 @@ function makeContact(x, y, z) {
   return { mesh, dead: false };
 }
 
-function setupRadar(weather = null) {
+function setupRadar(weather = null, campaignSupport = {}) {
   const screen = makeElement();
   const indicator = { textContent: '' };
   const crosshair = makeElement();
@@ -65,7 +65,7 @@ function setupRadar(weather = null) {
     playLockLost: vi.fn(),
     playLockReady: vi.fn(),
   };
-  return { radar: new CombatRadar(player, audio, weather), player, screen, indicator, crosshair, audio };
+  return { radar: new CombatRadar(player, audio, weather, 1, {}, campaignSupport), player, screen, indicator, crosshair, audio };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -267,5 +267,14 @@ describe('combat radar target and lock logic', () => {
     expect(radar.targetDomain).toBe('ground');
     expect(radar.inLockEnvelope).toBe(false);
     expect(radar.lockCueConfirmed).toBe(false);
+  });
+
+  it('extends only air search and AMRAAM launch envelopes with AWACS', () => {
+    const { radar } = setupRadar(null, { awacs: true });
+    expect(radar.airRange).toBe(36450);
+    expect(radar.airLockRange).toBeCloseTo(13200);
+    expect(radar.groundRange).toBe(11000);
+    expect(radar.groundLockRange).toBe(6800);
+    expect(radar.trackMemoryDuration).toBeGreaterThan(1.4);
   });
 });

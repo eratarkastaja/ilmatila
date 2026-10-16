@@ -54,7 +54,7 @@ describe('CampaignSession', () => {
     expect(session.selectSustainmentChoice('sparrow-wingman')).toBe(true);
     expect(session.getStoresAfterChoice('sparrow-wingman').airMissiles)
       .toBe(4);
-    expect(session.retryReadinessCost).toBe(7);
+    expect(session.retryReadinessCost).toBe(3);
     expect(session.resolveCurrentMission().mission).toMatchObject({
       wingmen: 3,
       campaignWingmanRadioId: 'varpunen',
@@ -63,7 +63,7 @@ describe('CampaignSession', () => {
 
     expect(session.retryCurrent()).toBe(true);
 
-    expect(session.state.sortieReadiness).toBe(63);
+    expect(session.state.sortieReadiness).toBe(67);
     expect(session.state.sustainmentChoice).toBeNull();
     expect(session.state.sustainmentUsed).toBe(true);
     expect(session.selectSustainmentChoice('sparrow-wingman')).toBe(false);
@@ -345,7 +345,7 @@ describe('CampaignSession', () => {
       chaff: 3,
     };
 
-    expect(session.currentSustainmentDecision.choices).toHaveLength(4);
+    expect(session.currentSustainmentDecision.choices).toHaveLength(6);
     expect(session.selectSustainmentChoice('sergei-air-defense')).toBe(true);
     const resolved = session.resolveCurrentMission();
     expect(resolved.mission).toMatchObject({ groundBattle: true, groundSergeiCount: 3 });
@@ -366,7 +366,7 @@ describe('CampaignSession', () => {
       chaff: 15,
       fuelMinutes: 480,
     });
-    expect(session.state.sortieReadiness).toBe(71);
+    expect(session.state.sortieReadiness).toBe(76);
     expect(session.state.sustainmentChoice).toBeNull();
   });
 
@@ -400,7 +400,7 @@ describe('CampaignSession', () => {
       campaignKitHardpointDelta: 4,
       campaignKitPayloadDeltaKg: 800,
     });
-    expect(session.retryReadinessCost).toBe(8);
+    expect(session.retryReadinessCost).toBe(3);
     expect(session.selectSustainmentChoice(null)).toBe(true);
     expect(session.selectedSustainmentChoice).toBeNull();
     expect(session.retryReadinessCost).toBe(3);
@@ -536,6 +536,58 @@ describe('CampaignSession', () => {
     expect(hardMission.hostileRoles).toEqual(['sweep', 'sweep', 'strike', 'strike']);
     expect(hardMission.hostileSpawnDistance).toBe(18000);
     expect(hardMission.hostileMinimumSpawnDistance).toBe(16500);
+  });
+
+  it('gates AWACS and ITO 90 support at their strategic thresholds', () => {
+    const session = new CampaignSession({
+      progress: new CampaignProgress(memoryStorage()),
+      difficulty: 'standard',
+      seedFactory: () => 31,
+    });
+    session.state.chapterIndex = 2;
+    session.state.airControl = 69;
+    session.state.defenseIntegrity = 64;
+    expect(session.getSustainmentChoices().find(choice => choice.id === 'awacs-battlespace-link').available).toBe(false);
+    expect(session.getSustainmentChoices().find(choice => choice.id === 'ito90-air-defense').available).toBe(false);
+
+    session.state.airControl = 70;
+    session.state.defenseIntegrity = 65;
+    const metricsBeforeSupport = {
+      airControl: session.state.airControl,
+      defenseIntegrity: session.state.defenseIntegrity,
+      sortieReadiness: session.state.sortieReadiness,
+    };
+    expect(session.selectSustainmentChoice('awacs-battlespace-link')).toBe(true);
+    expect(session.state).toMatchObject(metricsBeforeSupport);
+    expect(session.resolveCurrentMission().mission.campaignSupport).toEqual({ awacs: true });
+    expect(session.selectSustainmentChoice('ito90-air-defense')).toBe(true);
+    expect(session.resolveCurrentMission().mission).toMatchObject({
+      campaignSupport: { ito90: true },
+      groundIto90Count: 1,
+    });
+  });
+
+  it('keeps ITO 90 support additive across ground mission variants', () => {
+    const session = new CampaignSession({
+      progress: new CampaignProgress(memoryStorage()),
+      difficulty: 'standard',
+      seedFactory: () => 31,
+    });
+    session.state.chapterIndex = 6;
+    session.state.defenseIntegrity = 65;
+    expect(session.selectSustainmentChoice('ito90-air-defense')).toBe(true);
+
+    const resolution = session.resolveCurrentMission();
+    expect(resolution.mission.groundIto90Count).toBe(3);
+    for (let seed = 0; seed < 100; seed++) {
+      const variantResolution = session.resolveCurrentMission();
+      if (variantResolution.preview.variant?.id === 'flank-pressure') {
+        expect(variantResolution.preview.mission.groundIto90Count).toBe(2);
+        return;
+      }
+      session.state.currentSeed = seed;
+    }
+    throw new Error('flank-pressure variant was not selected during regression sweep');
   });
 
   it('can resolve and advance through all ten campaign chapters', () => {

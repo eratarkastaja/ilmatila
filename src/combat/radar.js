@@ -12,7 +12,7 @@ const INITIAL_CONTACT_IDENTIFICATION_DELAY = 3.5;
 
 /** Owns radar contacts, search mode and the arcade-friendly weapon lock cue. */
 export class CombatRadar {
-  constructor(player, audio, weather = null, campaignSensorScale = 1, loadout = {}) {
+  constructor(player, audio, weather = null, campaignSensorScale = 1, loadout = {}, campaignSupport = {}) {
     this.player = player;
     this.audio = audio;
     this.weather = weather;
@@ -20,8 +20,11 @@ export class CombatRadar {
     this.mode = 'air';
     // Search sensors reach beyond the weapon envelopes, while launch ranges
     // stay in sync with the missile profiles.
-    this.airRange = 27000;
-    this.airLockRange = getPlayerMissileProfile('air', loadout.airMissileType).maxLaunchRange;
+    this.awacsActive = Boolean(campaignSupport.awacs);
+    this.airRange = 27000 * (this.awacsActive ? 1.35 : 1);
+    const airMissileProfile = getPlayerMissileProfile('air', loadout.airMissileType);
+    this.airLockRange = airMissileProfile.maxLaunchRange
+      * (this.awacsActive && loadout.airMissileType !== 'sidewinder' ? 1.1 : 1);
     this.groundRange = 11000;
     this.range = this.airRange;
     this.groundLockRange = getPlayerMissileProfile('ground', loadout.groundMissileType).maxLaunchRange;
@@ -35,6 +38,7 @@ export class CombatRadar {
     this.lockCueTarget = false;
     this.lockCueConfirmed = false;
     this.tracks = new Map();
+    this.trackMemoryDuration = this.awacsActive ? 2.2 : 1.4;
     this._delta = new THREE.Vector3();
     this._forward = new THREE.Vector3();
     this._lockOffset = new THREE.Vector3();
@@ -68,12 +72,12 @@ export class CombatRadar {
     this.playerHeading=playerHeading;
     for (const [key, track] of this.tracks) {
       track.age += dt;
-      if (track.age > 1.4) {
+      if (track.age > this.trackMemoryDuration) {
         track.node?.remove();
         this.tracks.delete(key);
       } else if (track.node) {
         // Let a lost return decay instead of lingering at full strength.
-        track.node.style.opacity = String(1 - track.age / 1.4);
+        track.node.style.opacity = String(1 - track.age / this.trackMemoryDuration);
       }
       if (track.identificationElapsed < INITIAL_CONTACT_IDENTIFICATION_DELAY) {
         track.identificationElapsed += dt;

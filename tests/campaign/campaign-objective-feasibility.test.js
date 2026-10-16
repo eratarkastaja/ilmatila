@@ -31,6 +31,7 @@ function targetCount(mission, target = {}) {
     if (target.role === 'defender') return mission.groundPairs ?? 0;
     if (target.role === 'logistics') return mission.groundFriendlyTrucks ?? 0;
     if (target.role === 'airDefense' && target.platform === 'sergei23') return mission.groundSergeiCount ?? 0;
+    if (target.role === 'airDefense' && target.platform === 'ito90') return mission.groundIto90Count ?? 0;
     if (target.role === 'artillery' && target.platform === 'rsrakh06') return mission.groundMlrsCount ?? 0;
   }
   return 0;

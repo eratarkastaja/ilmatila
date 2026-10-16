@@ -3,19 +3,42 @@
 This file is the maintained release record. Older beta checkpoints are
 summarized here instead of being kept as one document per pipeline attempt.
 
+## 0.3.0-beta.3
+
+This beta completes the next campaign support pass. Air Control and Defense
+Integrity now unlock the documented AWACS/battlespace-link and ITO 90 support
+windows, while the RSRAKH 06 artillery support can be called as a player
+fire mission with ground-target validation, delay, and limited salvos. Support
+availability is shown consistently in the campaign UI, briefing, HUD, and
+radio messages.
+
+The campaign metrics now use the current strategic rules without the removed
+legacy readiness-cost path. The campaign menu uses the available desktop space
+more effectively, and support names are localized cleanly: English shows
+Sparrow and Finnish shows Varpunen.
+
+### Validation
+
+- Vitest unit and integration suite passed: 387 tests.
+- ESLint passed.
+- Production Vite build passed.
+- Firefox browser smoke passed locally; the release workflow provides the full
+  Chrome, Edge, Firefox, and WebKit matrix in CI.
+
 ## 0.3.0-beta.1
 
 The first beta of the 0.3 release line contains the current campaign, sortie,
 kit-selection, weather, HUD, mission-objective, and Pages-pipeline work.
 
 This release also adds persistent between-sortie support choices: the named
-Varpunen / Sparrow reserve wingman, three friendly Sergei air-defence trucks,
+Sparrow reserve wingman, three friendly Sergei air-defence trucks,
 one lethal 298 RSRAKH 06 MLRS battery, and an expanded ordnance package with
 four additional external missile stations and 800 kg of payload capacity.
-Support choices now have visible readiness costs and can be removed before
-launch. The campaign kit selector reflects the active hardpoint and payload
-limits, while ground artillery uses the shared projectile and destruction
-systems for real area damage.
+The current support rules add metric-gated AWACS and ITO 90 windows, keep
+support selection free of strategic-metric charges, and consume a selected
+window on retry. The campaign kit selector reflects the active hardpoint and
+payload limits, while ground artillery uses the shared projectile and
+destruction systems for real area damage.
 
 ### Validation
 

@@ -7,6 +7,7 @@ const METRIC_THRESHOLDS = Object.freeze({
   ]),
   defenseIntegrity: Object.freeze([
     { value: 35, operator: 'below', effectKey: 'campaign.metric.defenseIntegrity.below35' },
+    { value: 65, operator: 'atLeast', effectKey: 'campaign.metric.defenseIntegrity.at65' },
     { value: 75, operator: 'atLeast', effectKey: 'campaign.metric.defenseIntegrity.at75' },
   ]),
   sortieReadiness: Object.freeze([

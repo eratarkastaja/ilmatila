@@ -78,11 +78,17 @@ The campaign carries remaining air-to-air missiles, air-to-ground missiles,
 cannon rounds, flares, and chaff into the next accepted sortie, while base
 resupply fills the full difficulty-specific inventory so the campaign cannot
 run out of basic equipment. Disperse, Hold the E18, and Counterstroke expose a
-sustainment choice: add the named Varpunen / Sparrow reserve wingman, deploy
+sustainment choice: add the named Sparrow reserve wingman, deploy
 three lethal friendly 23 ITK 61/95 Sergei truck-mounted air-defence guns,
-deploy one 298 RSRAKH 06 MLRS launcher for a six-rocket ground salvo, or open
-an expanded ordnance package with four additional external missile stations
-and 800 kg of payload capacity.
+deploy one ITO 90 Crotale battery, deploy one 298 RSRAKH 06 MLRS launcher, or
+open an expanded ordnance package with four additional external missile
+stations and 800 kg of payload capacity. Air Control 70 unlocks the AWACS /
+battlespace-link support window, which extends air radar by 35% and the AMRAAM
+launch envelope by 10% without changing missile flight physics. Defense
+Integrity 65 unlocks the ITO 90 window; its Crotale missiles remain finite.
+The campaign RSRAKH is player-requested with the ground radar and L key, has a
+2.4-second tasking delay, and provides two six-rocket salvos. Support windows
+do not charge strategic metrics and are consumed if the attempt is retried.
 Optional objectives can change air control, defense integrity, or sortie
 readiness when their results are accepted.
 

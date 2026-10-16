@@ -99,7 +99,7 @@ export class GroundUnitAI {
         const spec=unit.mesh.userData.vehicleSpec;
         unit.cool-=dt;
         if(nearest<getGroundWeaponRange(spec?.weapon)&&unit.cool<=0){
-          if (unit.role === 'artillery') battle.weaponAI.fireMlrs(battle, unit, target);
+          if (unit.role === 'artillery' && !unit.manualSupport) battle.weaponAI.fireMlrs(battle, unit, target);
           else battle.weaponAI.fireGround(battle, unit, target);
           const weapon = spec?.weapon ?? '';
           // Realistic reload/burst pauses let the armoured line exchange fire

@@ -26,6 +26,7 @@ export class CampaignView {
     this.title = documentObject.querySelector('#campaign-title');
     this.day = documentObject.querySelector('#campaign-day');
     this.description = documentObject.querySelector('#campaign-description');
+    this.supportBriefing = documentObject.querySelector('#campaign-support-briefing');
     this.situation = documentObject.querySelector('#campaign-situation');
     this.ending = documentObject.querySelector('#campaign-ending');
     this.resetOpen = documentObject.querySelector('#campaign-reset-open');
@@ -147,6 +148,13 @@ export class CampaignView {
       : t('campaign.progress', { current: state.chapterIndex + 1, total });
     this.day.textContent = currentChapter ? t('campaign.day', { day: currentChapter.day }) : '';
     this.renderSituation(session);
+    if (this.supportBriefing) {
+      const choices = session.getSustainmentChoices();
+      const available = choices.filter(choice => choice.available);
+      this.supportBriefing.textContent = available.length
+        ? `${t('campaign.supportBriefing')} ${available.map(choice => t(choice.titleKey)).join(' · ')}`
+        : t('campaign.supportBriefingNone');
+    }
     for (const [key, nodes] of Object.entries(this.stateNodes)) {
       const value = state[key];
       nodes.value.textContent = String(value);
@@ -521,12 +529,11 @@ export class CampaignView {
     if (!this.sustainmentChoices) return;
     this.sustainmentChoices.replaceChildren();
     if (!decision) return;
-    for (const choice of decision.choices ?? []) {
+    for (const choice of session.getSustainmentChoices()) {
       const button = this.documentObject.createElement('button');
       button.type = 'button';
       button.className = 'campaign-sustainment-choice';
-      button.disabled = session.state.sustainmentUsed
-        || session.state.sortieReadiness < choice.readinessCost;
+      button.disabled = session.state.sustainmentUsed || !choice.available;
       button.classList.toggle('selected', selected?.id === choice.id);
       button.setAttribute('aria-pressed', String(selected?.id === choice.id));
       const title = this.documentObject.createElement('strong');
@@ -534,7 +541,13 @@ export class CampaignView {
       const description = this.documentObject.createElement('span');
       description.textContent = t(choice.descriptionKey);
       const cost = this.documentObject.createElement('small');
-      cost.textContent = t('campaign.sustainment.cost', { readiness: choice.readinessCost });
+      const requirement = choice.requiredMetric;
+      const requirementText = requirement
+        ? t('campaign.sustainment.unlock', { metric: t(`campaign.${requirement.key}`), value: requirement.minimum })
+        : '';
+      cost.textContent = !choice.available
+        ? requirementText || t('campaign.sustainment.unavailable')
+        : t('campaign.sustainment.noCost');
       button.append(title, description, cost);
       button.addEventListener('click', () => this.onSustainmentChoice?.(choice.id));
       this.sustainmentChoices.append(button);

@@ -3,6 +3,7 @@ import { getCampaignStoreCaps, normalizeCampaignStores } from './campaign-progre
 import { getCampaignDefinition } from './campaigns.js';
 import { resolveCampaignMission } from './resolve-campaign-mission.js';
 import { getKitLimits, getRecommendedKit, validateKit } from './campaign-kit.js';
+import { isSupportChoiceAvailable } from './support-capabilities.js';
 
 const STATE_KEYS = ['airControl', 'defenseIntegrity', 'sortieReadiness'];
 const STORE_KEYS = ['airMissiles', 'groundMissiles', 'gunRounds', 'flares', 'chaff', 'fuelMinutes'];
@@ -149,12 +150,18 @@ export class CampaignSession {
     ));
   }
   get currentSustainmentDecision() { return this.currentChapter?.sustainmentDecision ?? null; }
+  getSustainmentChoices() {
+    return (this.currentSustainmentDecision?.choices ?? []).map(choice => ({
+      ...choice,
+      available: isSupportChoiceAvailable(choice, this.state, this.currentChapter),
+    }));
+  }
   get selectedSustainmentChoice() {
     const choices = this.currentSustainmentDecision?.choices ?? [];
     return choices.find(choice => choice.id === this.state.sustainmentChoice) ?? null;
   }
   get retryReadinessCost() {
-    return CAMPAIGN_RETRY_READINESS_COST + (this.selectedSustainmentChoice?.readinessCost ?? 0);
+    return CAMPAIGN_RETRY_READINESS_COST;
   }
 
   getCurrentStores() {
@@ -194,7 +201,8 @@ export class CampaignSession {
     if (choiceId !== null && this.state.sustainmentUsed) return false;
     const choices = this.currentSustainmentDecision?.choices ?? [];
     const choice = choices.find(item => item.id === choiceId);
-    if (choiceId !== null && (!choice || this.state.sortieReadiness < choice.readinessCost)) return false;
+    if (choiceId !== null && (!choice
+      || !isSupportChoiceAvailable(choice, this.state, this.currentChapter))) return false;
     this.state = { ...this.state, sustainmentChoice: choiceId };
     if (!this.selectionSnapshot) this.progress?.saveCampaign(this.state);
     return true;
@@ -289,11 +297,6 @@ export class CampaignSession {
       key,
       base.changes[key] + optional.changes[key],
     ]));
-    if (choice?.readinessCost) {
-      const before = next.sortieReadiness;
-      next.sortieReadiness = clamp(before - choice.readinessCost);
-      changes.sortieReadiness += next.sortieReadiness - before;
-    }
     return {
       canAccept: true,
       classification,

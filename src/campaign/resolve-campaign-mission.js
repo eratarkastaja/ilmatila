@@ -211,7 +211,23 @@ function applyMissionOverrides(mission, overrides, difficulty) {
 
 function applySustainmentChoice(mission, chapter, state) {
   const choice = chapter.sustainmentDecision?.choices?.find(item => item.id === state.sustainmentChoice);
-  return choice?.mission ? { ...mission, ...clone(choice.mission) } : mission;
+  if (!choice?.mission) return mission;
+  const resolved = { ...mission, ...clone(choice.mission) };
+  const ito90SupportCount = choice.mission.groundIto90SupportCount;
+  if (Number.isFinite(ito90SupportCount)) {
+    resolved.groundIto90Count = (resolved.groundIto90Count ?? 0) + ito90SupportCount;
+    resolved.variants = (resolved.variants ?? []).map(variant => {
+      if (!Number.isFinite(variant.changes?.groundIto90Count)) return variant;
+      return {
+        ...variant,
+        changes: {
+          ...variant.changes,
+          groundIto90Count: variant.changes.groundIto90Count + ito90SupportCount,
+        },
+      };
+    });
+  }
+  return resolved;
 }
 
 function getSelectedSustainmentChoice(chapter, state) {
@@ -268,6 +284,8 @@ export function resolveCampaignMission(definition, state, { seed = state.current
   mission = applyCampaignHistory(mission, state, chapter);
   mission = applySustainmentChoice(mission, chapter, state);
   const sustainmentChoice = getSelectedSustainmentChoice(chapter, state);
+  mission.campaignSupportId = sustainmentChoice?.id ?? null;
+  mission.campaignSupport = clone(sustainmentChoice?.mission?.campaignSupport ?? null);
   if (Number.isFinite(chapter.timeOfDay)) {
     const weather = typeof mission.weather === 'string'
       ? { preset: mission.weather }

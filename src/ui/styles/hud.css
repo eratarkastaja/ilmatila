@@ -260,6 +260,36 @@
   color: #80ada0;
 }
 
+.campaign-support-status {
+  position: absolute;
+  left: 34px;
+  bottom: 38px;
+  display: grid;
+  gap: 2px;
+  min-width: 230px;
+  padding: 9px 12px;
+  border-left: 2px solid #78cdb0;
+  background: #07171dcc;
+  color: #cde7df;
+  text-shadow: 0 1px 5px #14232b;
+}
+
+.campaign-support-status small {
+  color: #8de0be;
+  font-size: 9px;
+  letter-spacing: .12em;
+}
+
+.campaign-support-status strong,
+.campaign-support-status span {
+  font-size: 10px;
+  letter-spacing: .06em;
+}
+
+.campaign-support-status span {
+  color: #b1cbc4;
+}
+
 .reticle-label {
   position: absolute;
   bottom: 35px;

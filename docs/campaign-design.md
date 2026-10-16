@@ -56,16 +56,22 @@ Before launch, the campaign view opens a kit selector with a mission-aware
 recommended loadout or manual values. Hardpoints, payload mass, inventory, and
 fuel endurance validate the selection before it is passed to the sortie. The
 Disperse, Hold the E18, and Counterstroke chapters expose the same limited
-sustainment choice: add the Varpunen / Sparrow reserve wingman, deploy three
+sustainment choice: add the Sparrow reserve wingman, deploy three
 friendly 23 ITK 61/95 Sergei truck-mounted air-defence guns, deploy one 298
-RSRAKH 06 MLRS launcher, or open an expanded ordnance package. The RSRAKH
-fires a six-rocket, long-range salvo with lethal area damage against hostile
-ground formations. The ordnance package adds four external missile stations
-and 800 kg of payload capacity for the sortie. The ground-support choices also
-activate the local ground layer in Disperse. Each choice costs sortie readiness
-and is consumed on a retry. The selector shows current inventory, post-support
-inventory, and the chosen kit so the readiness and support tradeoff is visible
-before takeoff.
+RSRAKH 06 MLRS launcher, or open an expanded ordnance package. Strategic
+thresholds additionally unlock one ITO 90 support choice at Defense Integrity
+65 and AWACS / battlespace link at Air Control 70. AWACS extends effective air
+radar by 35% and the AMRAAM launch envelope by 10% without changing missile
+flight physics; ITO 90 uses the existing finite Crotale battery and ground
+air-defense AI. The RSRAKH fires a six-rocket, long-range salvo with lethal
+area damage against hostile ground formations. Its campaign support variant is
+manual: the player selects a live hostile ground track and presses `L`, with a
+2.4 second delay and two salvos per sortie. The ordnance package adds four
+external missile stations and 800 kg of payload capacity for the sortie. The
+ground-support choices also activate the local ground layer in Disperse. Each
+choice is consumed on a retry; support is not charged as a strategic readiness
+purchase. The selector shows current inventory, post-support
+inventory, unlock thresholds, and the chosen kit before takeoff.
 The selector offers AMRAAM or Sidewinder for air combat and JASSM-ER, AARGM-ER,
 StormBreaker, or JDAM for ground attack. Standard and Hard use four internal
 plus six external weapon stations; Easy exposes two additional arcade stations.
@@ -112,8 +118,8 @@ The tactical debrief is shown before the campaign result. The player can accept
 a committable result or retry the chapter. Retries keep the chapter seed and do
 not apply strategic effects, but each retry costs 3 points of sortie readiness.
 If a limited sustainment window was selected for the failed attempt, that
-window is consumed as well: its choice is cleared, its readiness cost is paid,
-and it is not offered again on the retry. Aircraft loss and aborted sorties
+window is consumed as well: its choice is cleared and it is not offered again
+on the retry. Aircraft loss and aborted sorties
 cannot be accepted. Accepted attempt ids make state application idempotent.
 The final ending is `border-secured`, `invasion-contained`, or
 `unresolved-front`.
@@ -189,7 +195,7 @@ only `completeBeforeTime` requires a completed primary sortie by definition.
 Support objectives are chapter-aware. They must describe a distinct contribution
 from the sustainment choice and avoid duplicating the chapter's decisive task.
 For example, the expanded-ordnance package attacks assault vehicles during
-Hold the E18 and Counterstroke, while the Sergei, RSRAKH, and reserve-wingman
+Hold the E18 and Counterstroke, while the Sergei, ITO 90, RSRAKH, and reserve-wingman
 choices use preservation criteria. A support objective's completed or failed
 result may apply a small strategic effect, so the sustainment decision remains
 meaningful after the loadout screen.
@@ -234,7 +240,8 @@ sorties expose the time selector in the normal menu.
 
 ## Data, validation, and persistence
 
-Campaign definitions live in `src/campaign/campaigns.js`; state transitions,
+Campaign definitions live in `src/campaign/campaigns.js`; support threshold
+checks are pure functions in `support-capabilities.js`; state transitions,
 sustainment, and selected kits are in `campaign-session.js`; kit limits and
 recommendations are pure functions in `campaign-kit.js`; tolerant browser
 persistence is in `campaign-progress.js`; pure chapter resolution is in

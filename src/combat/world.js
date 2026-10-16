@@ -79,6 +79,7 @@ export class CombatWorld {
     this.missionVariant=missionResolution.variant;
     this.encounters=missionResolution.encounters;
     const missionConfig={hostiles:4,wingmen:2,groundBattle:true,groundPairs:6,groundTrucks:12,...missionResolution.mission};
+    const campaignSupport=missionConfig.campaignSupport ?? {};
     this.weather = resolveWeather(missionConfig.weather);
     const campaignStores=missionConfig.campaignStores ?? {};
     this.fuelSystem=new FuelSystem({
@@ -183,6 +184,7 @@ export class CombatWorld {
       addFriendlyProjectile: shot => this.projectileSystem.addPlayerProjectile(shot),
       random: this.random,
       spawnRandom: this.groundSpawnRandom,
+      onOperationalEvent: (event, details) => this.reportSupportEvent(event, details),
     });
     this.airBattle.setGroundUnits(this.groundBattle.redUnits);
     this.airBattle.setFriendlyGroundUnits(this.groundBattle.friends);
@@ -258,7 +260,14 @@ export class CombatWorld {
       onInventoryChange: () => this.updateHud(),
     });
     this.projectileSystem.setDecoys(this.countermeasureSystem.decoys);
-    this.radar = new CombatRadar(player, audio, this.weather, missionConfig.campaignRadarRangeScale ?? 1, effectiveWeapons);
+    this.radar = new CombatRadar(
+      player,
+      audio,
+      this.weather,
+      missionConfig.campaignRadarRangeScale ?? 1,
+      effectiveWeapons,
+      campaignSupport,
+    );
     this.weaponSystem = new WeaponSystem({
       player, scene, fx, audio, radar: this.radar, playerVelocity: this.playerVelocity, weather: this.weather,
       addProjectile: shot => this.projectileSystem.addPlayerProjectile(shot),
@@ -487,6 +496,7 @@ export class CombatWorld {
       units:{air:this.enemies,ground:this.redUnits},
       radar:{
         mode:this.radar.mode,target:null,targetDomain:'air',targetLastKnownPosition:this.radar.targetLastKnownPosition,
+        sensorRange:this.radar.getSensorRange('air'),
         hasLastKnownPosition:false,targetInSensorRange:false,inLockEnvelope:false,
         lockCueConfirmed:false,lockCueTarget:false,lock:0,
       },
@@ -506,6 +516,18 @@ export class CombatWorld {
       wingmanStatus:{alive:0,total:this.allies.length},
       wingmanRescue:{wingman:null,attacker:null,remaining:0,missileInbound:false},
       supportForce:{active:false,fraction:1,unitsAlive:0,unitsTotal:0},
+      support:{
+        id: missionConfig.campaignSupportId ?? null,
+        awacs: Boolean(campaignSupport.awacs),
+        ito90: Boolean(campaignSupport.ito90),
+        mlrs: Boolean(campaignSupport.mlrs),
+        mlrsReady: false,
+        mlrsSalvosUsed: 0,
+        mlrsSalvosTotal: 2,
+        mlrsPending: false,
+        radarRange: this.radar.getSensorRange('air'),
+        airMissileRange: this.radar.airLockRange,
+      },
       score:0,
       mission:{phase:null,waypoint:null,boundaryApproach:null,boundaryCritical:false,optionalObjectives:[],protectedAsset:{active:false,fraction:0,distance:Infinity}},
       threats:{
@@ -515,6 +537,9 @@ export class CombatWorld {
       },
     };
     this.refreshHudState();
+    if (campaignSupport.awacs) this.radio.emit('campaign.awacsActive', { scope: missionConfig.campaignAttemptId ?? missionConfig.id });
+    if (campaignSupport.ito90) this.radio.emit('campaign.ito90Online', { scope: missionConfig.campaignAttemptId ?? missionConfig.id });
+    if (campaignSupport.mlrs) this.radio.emit('campaign.mlrsReady', { scope: missionConfig.campaignAttemptId ?? missionConfig.id });
     this.combatHud.update(this.hudState);
     this.restartButton = document.querySelector('#restart');
     this.onRestart = () => location.reload();
@@ -598,6 +623,7 @@ export class CombatWorld {
     state.session.gunFiring=this.input.pressed.has('Space');
     state.mission.optionalObjectives=this.optionalObjectiveTracker?.results??[];
     state.radar.mode=this.radar.mode;
+    state.radar.sensorRange=this.radar.getSensorRange(this.radar.mode);
     state.radar.target=this.radar.target;
     state.radar.targetDomain=this.radar.targetDomain;
     state.radar.hasLastKnownPosition=this.radar.hasLastKnownPosition;
@@ -614,6 +640,16 @@ export class CombatWorld {
     state.weapons.feedbackTimer=this.weaponSystem.missileFeedbackTimer;
     state.countermeasures.flares=this.countermeasureSystem.flares;
     state.countermeasures.chaff=this.countermeasureSystem.chaff;
+    const support = state.support;
+    if (support) {
+      const supportState = this.groundBattle.getSupportState();
+      support.mlrsReady = supportState.mlrsReady;
+      support.mlrsSalvosUsed = supportState.mlrsSalvosUsed;
+      support.mlrsSalvosTotal = supportState.mlrsSalvosTotal;
+      support.mlrsPending = supportState.mlrsPending;
+      support.radarRange = this.radar.getSensorRange('air');
+      support.airMissileRange = this.radar.airLockRange;
+    }
     state.wingmanOrder=this.airBattle.wingmanOrder;
     state.wingmanStatus.alive=this.allies.reduce((count,ally)=>count+(!ally.dead?1:0),0);
     state.wingmanStatus.total=this.allies.length;
@@ -699,6 +735,7 @@ export class CombatWorld {
     const flareRequested=justPressed.has('KeyF');
     const chaffRequested=justPressed.has('KeyC');
     const nightVisionRequested=justPressed.has('KeyN');
+    const mlrsRequested=justPressed.has('KeyL');
     const wingmanOrder=justPressed.has('Digit1')?'attack':justPressed.has('Digit2')?'defend':justPressed.has('Digit3')?'regroup':justPressed.has('Digit4')?'rtb':null;
     if(radarModeRequested)this.radar.toggleMode();
     if(flareRequested){
@@ -722,6 +759,11 @@ export class CombatWorld {
         this.nightVisionEnabled=false;
         this.feedback.notify('combat.nightVisionUnavailable',1.4,'info');
       }
+    }
+    if (mlrsRequested && this.radar.mode === 'ground') {
+      const response = this.groundBattle.requestMlrsFire(this.radar.target);
+      if (response.accepted) this.feedback.notify('combat.mlrsRequestAccepted', 1.4, 'friendly');
+      else this.feedback.notify(response.reasonKey ?? 'combat.mlrsRequestUnavailable', 1.4, 'warning');
     }
     if(wingmanOrder&&this.airBattle.issueWingmanOrder(wingmanOrder)){
       this.audio?.playWingmanOrder(wingmanOrder);
@@ -1012,6 +1054,19 @@ export class CombatWorld {
           intent:{key:contactIntent([unit])},
         },
       });
+    }
+  }
+
+  reportSupportEvent(event, details = {}) {
+    if (event === 'mlrs.requested') {
+      this.radio.emit('campaign.mlrsRequest', { scope: 'mlrs', priority: 4 });
+    } else if (event === 'mlrs.fired') {
+      this.radio.emit('campaign.mlrsFired', {
+        scope: 'mlrs-fired',
+        params: { remaining: String(details.salvosRemaining ?? 0) },
+      });
+    } else if (event === 'mlrs.failed') {
+      this.radio.emit('campaign.mlrsFailed', { scope: 'mlrs-failed', priority: 3 });
     }
   }
 

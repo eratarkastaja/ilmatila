@@ -13,6 +13,7 @@ describe('campaign strategic metric thresholds', () => {
     expect(getMetricThresholds('defenseIntegrity').map(({ value, operator }) => ({ value, operator })))
       .toEqual([
         { value: 35, operator: 'below' },
+        { value: 65, operator: 'atLeast' },
         { value: 75, operator: 'atLeast' },
       ]);
     expect(getMetricThresholds('sortieReadiness').map(({ value, operator }) => ({ value, operator })))
@@ -30,6 +31,10 @@ describe('campaign strategic metric thresholds', () => {
       .toEqual([false, false, false, false]);
     expect(thresholds.map(threshold => isMetricThresholdActive(threshold, 75)))
       .toEqual([false, false, true, true]);
+
+    const defenseThresholds = getMetricThresholds('defenseIntegrity');
+    expect(defenseThresholds.map(threshold => isMetricThresholdActive(threshold, 65)))
+      .toEqual([false, true, false]);
   });
 
   it('returns no thresholds for an unknown metric', () => {

@@ -217,6 +217,7 @@ export class GroundSpawnSystem {
         aaCooldown: (battle.difficulty?.groundAA?.initialDelay ?? 2) + rnd() * (battle.difficulty?.groundAA?.initialJitter ?? 5),
         aaBurstClock: 0, aaBurstRemaining: 0, aaTrackTimer: null, aaPlayerTracking: false,
         samRail: index % 4, samAmmo: 4,
+        manualSupport: Boolean(battle.mission.groundMlrsManual && role === 'artillery'),
       };
       unit.collider = {
         type: 'vehicle', mesh, x: position.x, y: position.y, z: position.z,

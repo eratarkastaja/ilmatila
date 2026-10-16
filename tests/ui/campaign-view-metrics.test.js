@@ -81,6 +81,21 @@ describe('campaign metric details', () => {
       .toEqual(['true', 'false', 'false']);
   });
 
+  it('shows the current ITO 90 support threshold in defense details', () => {
+    const { elements } = installDocument();
+    const view = new CampaignView(globalThis.document);
+    view.stateNodes.defenseIntegrity.value.textContent = '65';
+
+    view.showMetricDetails('defenseIntegrity');
+
+    const rows = elements.get('#campaign-metric-dialog-rows');
+    expect(rows.children).toHaveLength(3);
+    expect(rows.children.map(row => row.dataset.active)).toEqual(['false', 'true', 'false']);
+    expect(rows.children[1].children[2].textContent).toBe('ACTIVE');
+    expect(rows.children[1].children[1].textContent)
+      .toContain('ITO 90 support window unlocks');
+  });
+
   it('opens the reset confirmation and only invokes reset after confirmation', () => {
     const { elements } = installDocument();
     const view = new CampaignView(globalThis.document);

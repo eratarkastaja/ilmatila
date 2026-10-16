@@ -60,7 +60,6 @@ const LIMITED_SUSTAINMENT = {
         completed: { sortieReadiness: 2 },
         failed: { sortieReadiness: -2 },
       },
-      readinessCost: 4,
     },
     {
       id: 'sergei-air-defense',
@@ -82,7 +81,48 @@ const LIMITED_SUSTAINMENT = {
         completed: { defenseIntegrity: 2 },
         failed: { defenseIntegrity: -2 },
       },
-      readinessCost: 5,
+    },
+    {
+      id: 'ito90-air-defense',
+      titleKey: 'campaign.sustainment.choice.ito90AirDefense.title',
+      descriptionKey: 'campaign.sustainment.choice.ito90AirDefense.description',
+      requiredMetric: { key: 'defenseIntegrity', minimum: 65 },
+      mission: {
+        groundBattle: true,
+        groundIto90SupportCount: 1,
+        campaignSupport: { ito90: true },
+        supportRequiresGroundBattle: true,
+      },
+      optionalObjective: {
+        id: 'support-ito90', type: 'preserveForce',
+        target: { collection: 'friendlyGround', role: 'airDefense', platform: 'ito90', labelKey: 'mission.optionalTarget.ito90' },
+        minimumAlive: 1,
+        titleKey: 'campaign.objective.supportIto90.title',
+        briefingKey: 'campaign.objective.supportIto90.briefing',
+      },
+      optionalObjectiveByChapter: {
+        'disperse': {
+          id: 'support-ito90', type: 'preserveForce',
+          target: { collection: 'friendlyGround', role: 'airDefense', platform: 'ito90', labelKey: 'mission.optionalTarget.ito90' },
+          minimumAlive: 1,
+          titleKey: 'campaign.objective.supportIto90.title',
+          briefingKey: 'campaign.objective.supportIto90.briefing',
+        },
+      },
+      optionalObjectiveEffects: {
+        completed: { defenseIntegrity: 2 },
+        failed: { defenseIntegrity: -2 },
+      },
+    },
+    {
+      id: 'awacs-battlespace-link',
+      titleKey: 'campaign.sustainment.choice.awacs.title',
+      descriptionKey: 'campaign.sustainment.choice.awacs.description',
+      requiredMetric: { key: 'airControl', minimum: 70 },
+      mission: {
+        campaignSupport: { awacs: true },
+        supportRequiresAirCombat: true,
+      },
     },
     {
       id: 'rsrakh-mlrs',
@@ -91,6 +131,9 @@ const LIMITED_SUSTAINMENT = {
       mission: {
         groundBattle: true,
         groundMlrsCount: 1,
+        campaignSupport: { mlrs: true },
+        groundMlrsManual: true,
+        supportRequiresGroundBattle: true,
       },
       optionalObjective: {
         id: 'support-rsrakh',
@@ -104,7 +147,6 @@ const LIMITED_SUSTAINMENT = {
         completed: { defenseIntegrity: 2 },
         failed: { defenseIntegrity: -2 },
       },
-      readinessCost: 6,
     },
     {
       id: 'expanded-ordnance-capacity',
@@ -144,7 +186,6 @@ const LIMITED_SUSTAINMENT = {
         completed: { airControl: 2 },
         failed: { airControl: -1 },
       },
-      readinessCost: 5,
     },
   ],
 };

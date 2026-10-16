@@ -59,6 +59,11 @@ export class CombatHud {
     this.boundaryWarningText = document.querySelector('#boundary-warning-text');
     this.boundaryWarningDistance = document.querySelector('#boundary-warning-distance');
     this.radarTime = document.querySelector('#radar-time');
+    this.radarRange = document.querySelector('.radar-footer > span');
+    this.campaignSupport = document.querySelector('#campaign-support-status');
+    this.campaignSupportLabel = document.querySelector('#campaign-support-label');
+    this.campaignSupportDetail = document.querySelector('#campaign-support-detail');
+    this.campaignSupportAction = document.querySelector('#campaign-support-action');
     this.nightVisionStatus = document.querySelector('#night-vision-status');
     this.optionalObjectivesHud = document.querySelector('#mission-optional-objectives-hud');
     this.optionalObjectivesList = document.querySelector('#mission-optional-objective-hud-list');
@@ -90,6 +95,35 @@ export class CombatHud {
 
   update(state) {
     if (this.radarTime && state.environment) setTextIfChanged(this.radarTime, formatTimeOfDay(state.environment.timeOfDay));
+    if (this.radarRange && state.radar?.sensorRange) {
+      setTextIfChanged(this.radarRange, t('hud.radarRangeValue', {
+        range: Math.round(state.radar.sensorRange / 1000),
+      }));
+    }
+    const support = state.support;
+    setHiddenIfChanged(this.campaignSupport, !support?.id);
+    if (support?.id) {
+      const key = support.awacs ? 'awacs' : support.ito90 ? 'ito90' : 'mlrs';
+      setTextIfChanged(this.campaignSupportLabel, t(`hud.campaignSupport.${key}.label`));
+      if (support.awacs) {
+        setTextIfChanged(this.campaignSupportDetail, t('hud.campaignSupport.awacs.detail', {
+          radar: Math.round(support.radarRange / 1000),
+          missile: Math.round(support.airMissileRange / 1000),
+        }));
+        setTextIfChanged(this.campaignSupportAction, '');
+      } else if (support.ito90) {
+        setTextIfChanged(this.campaignSupportDetail, t('hud.campaignSupport.ito90.detail'));
+        setTextIfChanged(this.campaignSupportAction, '');
+      } else {
+        setTextIfChanged(this.campaignSupportDetail, t('hud.campaignSupport.mlrs.detail', {
+          used: support.mlrsSalvosUsed,
+          total: support.mlrsSalvosTotal,
+        }));
+        setTextIfChanged(this.campaignSupportAction, support.mlrsPending
+          ? t('hud.campaignSupport.mlrs.pending')
+          : support.mlrsReady ? t('hud.campaignSupport.mlrs.action') : t('hud.campaignSupport.mlrs.empty'));
+      }
+    }
     setHiddenIfChanged(this.nightVisionStatus, !state.environment?.nightVision);
     const gunEmpty = state.weapons.gunAmmoRemaining === 0;
     setTextIfChanged(this.weapon, gunEmpty

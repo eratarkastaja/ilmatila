@@ -78,7 +78,7 @@ describe('RadioSystem', () => {
       wingmanId: 'varpunen',
       scope: 'formation-sparrow',
     })).toBe(true);
-    expect(radio.callsign.textContent).toBe('VARPUNEN / SPARROW');
+    expect(radio.callsign.textContent).toBe('SPARROW');
   });
 
   it('reports reaching ingress with the active language and localized callsign', () => {

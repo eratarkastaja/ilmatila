@@ -144,13 +144,13 @@
   margin: 0 auto;
   padding: clamp(24px,4vh,42px) 0 32px;
   display: grid;
-  grid-template-columns: minmax(440px,570px) minmax(270px,1fr);
+  grid-template-columns: minmax(0,1fr) minmax(0,1fr);
   align-items: center;
-  gap: clamp(38px,8vw,150px);
+  gap: clamp(36px,5vw,90px);
 }
 
 .launch-panel {
-  max-width: 570px;
+  max-width: none;
   padding: 0;
 }
 
@@ -228,7 +228,7 @@
 }
 
 .campaign-overview {
-  padding: 15px;
+  padding: 18px;
   border: 1px solid rgba(161,193,179,.28);
   background: linear-gradient(145deg,#132626e8,#071117e8);
 }
@@ -255,20 +255,20 @@
 .campaign-overview h2 {
   margin: 2px 0 0;
   color: #e9f1e9;
-  font: 700 25px Barlow Condensed,sans-serif;
+  font: 700 28px Barlow Condensed,sans-serif;
   letter-spacing: .06em;
 }
 
 .campaign-overview>p {
-  margin: 10px 0 13px;
+  margin: 11px 0 14px;
   color: #c0cbc4;
-  font: 500 14px/1.4 Rajdhani,sans-serif;
+  font: 500 15px/1.48 Rajdhani,sans-serif;
 }
 
 .campaign-overview>.campaign-situation {
   margin-top: -4px;
   color: #9fb7ab;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .campaign-state-grid {
@@ -279,7 +279,7 @@
 
 .campaign-state-grid button {
   min-width: 0;
-  padding: 8px 8px 7px;
+  padding: 10px 10px 9px;
   border: 1px solid transparent;
   color: inherit;
   text-align: left;
@@ -296,14 +296,14 @@
 
 .campaign-state-grid button span>b {
   color: #dce9df;
-  font: 700 19px/1 Rajdhani,sans-serif;
+  font: 700 22px/1 Rajdhani,sans-serif;
   font-variant-numeric: tabular-nums;
 }
 
 .campaign-state-grid small {
   min-width: 0;
   color: #b6ccc0;
-  font: 700 12px Rajdhani,sans-serif;
+  font: 700 13px Rajdhani,sans-serif;
   letter-spacing: .1em;
 }
 
@@ -1887,7 +1887,7 @@
 
 .theater-panel {
   align-self: start;
-  width: min(100%,480px);
+  width: min(100%,680px);
   margin: 0 0 0 auto;
   color: #d9e5dc;
   text-shadow: 0 1px 8px #071015;

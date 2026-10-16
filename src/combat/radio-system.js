@@ -23,6 +23,12 @@ export const WINGMAN_COMMAND_EVENTS = Object.freeze({
 export const RADIO_EVENTS = Object.freeze({
   'mission.departure': { messageKey: 'radio.phase.departure', crew: 'flightLead', priority: 1, duration: 3 },
   'campaign.chapterBriefing': { messageKey: 'campaign.radio.generic', crew: 'groundControl', priority: 3, duration: 4.2 },
+  'campaign.awacsActive': { messageKey: 'radio.campaign.awacsActive', crew: 'groundControl', priority: 3, duration: 3.2 },
+  'campaign.ito90Online': { messageKey: 'radio.campaign.ito90Online', crew: 'groundControl', priority: 3, duration: 3.2 },
+  'campaign.mlrsReady': { messageKey: 'radio.campaign.mlrsReady', crew: 'groundControl', priority: 3, duration: 3.2 },
+  'campaign.mlrsRequest': { messageKey: 'radio.campaign.mlrsRequest', crew: 'groundControl', priority: 4, duration: 2.8 },
+  'campaign.mlrsFired': { messageKey: 'radio.campaign.mlrsFired', crew: 'groundControl', priority: 4, duration: 3.2 },
+  'campaign.mlrsFailed': { messageKey: 'radio.campaign.mlrsFailed', crew: 'groundControl', priority: 3, duration: 2.8 },
   'mission.controlIngress': { messageKey: 'radio.control.ingress', crew: 'groundControl', priority: 2, duration: 3.2, cooldown: 10 },
   'mission.controlContact': { messageKey: 'radio.control.contact', crew: 'groundControl', priority: 2, duration: 3.4, cooldown: 8 },
   'mission.controlEngagement': { messageKey: 'radio.control.engagement', crew: 'groundControl', priority: 2, duration: 3.4, cooldown: 8 },

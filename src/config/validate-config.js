@@ -918,7 +918,7 @@ function validateCampaignSustainmentDecision(decision, path, errors) {
     }
     const choiceKeys = new Set([
       'id', 'titleKey', 'descriptionKey', 'restore', 'mission', 'optionalObjective',
-      'optionalObjectiveByChapter', 'optionalObjectiveEffects', 'readinessCost',
+      'optionalObjectiveByChapter', 'optionalObjectiveEffects', 'requiredMetric',
     ]);
     for (const key of Object.keys(choice)) {
       if (!choiceKeys.has(key)) errors.push(`${choicePath}.${key} is not a recognized setting`);
@@ -928,7 +928,19 @@ function validateCampaignSustainmentDecision(decision, path, errors) {
     ids.add(choice.id);
     validateNode(choice.titleKey, string, `${choicePath}.titleKey`, errors);
     validateNode(choice.descriptionKey, string, `${choicePath}.descriptionKey`, errors);
-    validateNode(choice.readinessCost, number(0, 100), `${choicePath}.readinessCost`, errors);
+    if (choice.requiredMetric !== undefined) {
+      const metric = choice.requiredMetric;
+      if (!metric || typeof metric !== 'object' || Array.isArray(metric)) {
+        errors.push(`${choicePath}.requiredMetric must be an object`);
+      } else {
+        const metricKeys = new Set(['key', 'minimum']);
+        for (const key of Object.keys(metric)) {
+          if (!metricKeys.has(key)) errors.push(`${choicePath}.requiredMetric.${key} is not a recognized setting`);
+        }
+        validateNode(metric.key, string, `${choicePath}.requiredMetric.key`, errors);
+        validateNode(metric.minimum, number(0, 100), `${choicePath}.requiredMetric.minimum`, errors);
+      }
+    }
     if (choice.restore !== undefined && (!choice.restore || typeof choice.restore !== 'object' || Array.isArray(choice.restore))) {
       errors.push(`${choicePath}.restore must be an object`);
     } else if (choice.restore) {
@@ -943,6 +955,8 @@ function validateCampaignSustainmentDecision(decision, path, errors) {
     } else if (choice.mission) {
       const missionKeys = new Set([
         'campaignWingmanDelta', 'campaignWingmanRadioId', 'groundBattle', 'groundSergeiCount', 'groundMlrsCount',
+        'groundIto90SupportCount', 'campaignSupport', 'groundMlrsManual', 'supportRequiresGroundBattle',
+        'supportRequiresAirCombat',
         'campaignKitHardpointDelta', 'campaignKitPayloadDeltaKg',
       ]);
       for (const key of Object.keys(choice.mission)) {
@@ -956,6 +970,27 @@ function validateCampaignSustainmentDecision(decision, path, errors) {
       }
       if (choice.mission.groundMlrsCount !== undefined) {
         validateNode(choice.mission.groundMlrsCount, number(0, 100, true), `${choicePath}.mission.groundMlrsCount`, errors);
+      }
+      if (choice.mission.groundIto90SupportCount !== undefined) {
+        validateNode(choice.mission.groundIto90SupportCount, number(0, 100, true), `${choicePath}.mission.groundIto90SupportCount`, errors);
+      }
+      if (choice.mission.groundMlrsManual !== undefined) {
+        validateNode(choice.mission.groundMlrsManual, boolean, `${choicePath}.mission.groundMlrsManual`, errors);
+      }
+      for (const key of ['supportRequiresGroundBattle', 'supportRequiresAirCombat']) {
+        if (choice.mission[key] !== undefined) validateNode(choice.mission[key], boolean, `${choicePath}.mission.${key}`, errors);
+      }
+      if (choice.mission.campaignSupport !== undefined) {
+        const support = choice.mission.campaignSupport;
+        if (!support || typeof support !== 'object' || Array.isArray(support)) {
+          errors.push(`${choicePath}.mission.campaignSupport must be an object`);
+        } else {
+          for (const key of Object.keys(support)) {
+            if (!['awacs', 'ito90', 'mlrs'].includes(key)) {
+              errors.push(`${choicePath}.mission.campaignSupport.${key} is not a recognized setting`);
+            } else validateNode(support[key], boolean, `${choicePath}.mission.campaignSupport.${key}`, errors);
+          }
+        }
       }
       if (choice.mission.campaignKitHardpointDelta !== undefined) {
         validateNode(choice.mission.campaignKitHardpointDelta, number(0, 20, true), `${choicePath}.mission.campaignKitHardpointDelta`, errors);
