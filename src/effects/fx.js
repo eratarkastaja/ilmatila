@@ -60,6 +60,7 @@ export class FlightFX {
         varying float vAlpha;
         varying float vGlow;
         varying vec3 vColor;
+        uniform float nightVision;
         void main() {
           float radius = length(gl_PointCoord - vec2(0.5));
           float softEdge = 1.0 - smoothstep(0.12, 0.5, radius);

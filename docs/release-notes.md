@@ -3,6 +3,21 @@
 This file is the maintained release record. Older beta checkpoints are
 summarized here instead of being kept as one document per pipeline attempt.
 
+## 0.3.0-beta.5
+
+This follow-up release fixes a WebGL compatibility regression in the night
+vision particle shader. The night-vision uniform is now declared in the
+fragment shader as well as the vertex shader, so tracer, flare, and other
+particle glow effects compile correctly in Chrome, Edge, Firefox, and WebKit.
+
+### Validation
+
+- Vitest unit and integration suite passed: 391 tests.
+- ESLint passed.
+- Production Vite build passed.
+- The release pipeline must pass the full browser smoke matrix before Pages
+  deployment.
+
 ## 0.3.0-beta.4
 
 This beta makes campaign support operational and readable in the sortie. Sergei
