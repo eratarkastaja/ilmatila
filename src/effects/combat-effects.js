@@ -110,6 +110,11 @@ export class CombatEffects {
     this.activeEffects = [];
     this.sparkPool = [];
     this.explosionPool = [];
+    this.nightVision = false;
+  }
+
+  setNightVision(enabled) {
+    this.nightVision = Boolean(enabled);
   }
 
   get activeCount() {
@@ -140,7 +145,8 @@ export class CombatEffects {
     effect.intensity = intensity;
     effect.life = 1.65;
     effect.maxLife = 1.65;
-    effect.core.scale.setScalar(36 * intensity);
+    const nightGlow = this.nightVision ? 1.3 : 1;
+    effect.core.scale.setScalar(36 * intensity * nightGlow);
     effect.core.material.opacity = 1;
     effect.fireball.scale.setScalar(9 * intensity);
     effect.fireball.material.opacity = .94;
@@ -149,7 +155,7 @@ export class CombatEffects {
     effect.smoke.scale.setScalar(26 * intensity);
     effect.smoke.material.opacity = .42;
     effect.ring.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-    effect.ring.scale.setScalar(10 * intensity);
+    effect.ring.scale.setScalar(10 * intensity * nightGlow);
     effect.ring.material.opacity = .86;
     effect.innerColor.set('#fff0ab');
     effect.outerColor.set('#a72d18');
@@ -196,8 +202,9 @@ export class CombatEffects {
         effect.mesh.scale.setScalar(5 + progress * 9);
       } else {
         const intensity = effect.intensity;
-        effect.core.material.opacity = 1 - THREE.MathUtils.smoothstep(progress, .02, .3);
-        effect.core.scale.setScalar(intensity * (34 + progress * 25));
+        const nightGlow = this.nightVision ? 1.3 : 1;
+        effect.core.material.opacity = Math.min(1, (1 - THREE.MathUtils.smoothstep(progress, .02, .3)) * nightGlow);
+        effect.core.scale.setScalar(intensity * nightGlow * (34 + progress * 25));
         effect.fireball.scale.setScalar(intensity * (9 + progress * 54));
         effect.fireball.material.opacity = .88 * (1 - THREE.MathUtils.smoothstep(progress, .08, .78));
         effect.fireball.material.color.copy(effect.innerColor).lerp(effect.outerColor, progress);
@@ -205,7 +212,7 @@ export class CombatEffects {
         effect.smoke.position.y = intensity * (4 + progress * 30);
         effect.smoke.scale.setScalar(intensity * (24 + progress * 78));
         effect.ring.material.opacity = .76 * (1 - THREE.MathUtils.smoothstep(progress, .24, 1));
-        effect.ring.scale.setScalar(intensity * (10 + progress * 96));
+        effect.ring.scale.setScalar(intensity * nightGlow * (10 + progress * 96));
         effect.ring.rotation.z += dt * .75;
       }
     }

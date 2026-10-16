@@ -1528,6 +1528,8 @@ function animate() {
   const night = isNightTime(timeOfDay);
   const nightVision = Boolean(combat?.hudState?.environment?.nightVision && night);
   sunEffects.setTimeOfDay?.(timeOfDay);
+  sunEffects.setCloudCoverage?.(activeWeather?.cloudCoverage ?? 1);
+  sunEffects.setNightVision?.(nightVision);
   if (scene.fog) {
     const visibility = THREE.MathUtils.clamp(activeWeather?.visibility ?? 1, .05, 1);
     // Night vision raises usable contrast and lets the player read terrain
@@ -1550,6 +1552,7 @@ function animate() {
   }
   clouds.userData.setAtmosphere?.(daylight, sceneHazeColor);
   fx.setNightVision?.(nightVision);
+  combat?.combatEffects?.setNightVision?.(nightVision);
   flightHud.classList.toggle('night-vision', nightVision);
   renderer.domElement.classList.toggle('night-vision-scene', nightVision);
   if (sortie.started && !sortie.paused && combat) {

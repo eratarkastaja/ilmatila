@@ -69,9 +69,17 @@ export class GroundWeaponSystem {
         2.95 + (index % 3) * .05,
         -1.05,
       ));
-      const velocity = this._direction.copy(this._aim).sub(this._start);
+      // Clone the reusable scratch vector before storing it on the projectile.
+      // Otherwise every rocket in the salvo would share the last rocket's
+      // velocity and later launch calculations would redirect earlier rockets.
+      const velocity = this._direction.copy(this._aim).sub(this._start).clone();
+      // The horizontal displacement still needs to be divided by flight time,
+      // but the vertical component is already an initial velocity calculated
+      // for the ballistic arc. Dividing it again made every rocket lose most
+      // of its lift and hit the ground before reaching the impact point.
+      velocity.x /= flightTime;
+      velocity.z /= flightTime;
       velocity.y = (this._aim.y - this._start.y + .5 * MLRS_GRAVITY * flightTime ** 2) / flightTime;
-      velocity.multiplyScalar(1 / flightTime);
       const rocket = new THREE.Mesh(mlrsRocketGeo, mlrsRocketMaterial);
       rocket.position.copy(this._start);
       rocket.quaternion.setFromUnitVectors(rocketAxis, velocity.clone().normalize());

@@ -2,8 +2,54 @@ import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { GroundAirDefenseAI } from '../../src/combat/ground-air-defense-ai.js';
 import { HelicopterAI } from '../../src/combat/helicopter-ai.js';
+import { createGroundVehicle, disposeGroundVehicleVisual } from '../../src/ground/vehicles.js';
 
 describe('hostile threat escalation', () => {
+  it('routes Sergei fire into friendly projectiles and marks it as support fire', () => {
+    const ai = new GroundAirDefenseAI(() => .5);
+    const unit = {
+      mesh: createGroundVehicle('sergei23', 'finnish'),
+      role: 'airDefense',
+      armed: true,
+      airAaCooldown: 0,
+      airAaBurstClock: 0,
+      airAaBurstRemaining: 0,
+      airAaTarget: null,
+    };
+    const target = {
+      mesh: new THREE.Group(),
+      velocity: new THREE.Vector3(),
+      dead: false,
+    };
+    target.mesh.position.set(0, 300, 1800);
+    const addFriendlyProjectile = vi.fn();
+    const addProjectile = vi.fn();
+    const battle = {
+      airDefenseActive: true,
+      enemies: [target],
+      terrain: { sampleHeight: () => 0 },
+      scene: new THREE.Scene(),
+      addFriendlyProjectile,
+      addProjectile,
+      onOperationalEvent: vi.fn(),
+      fx: { addMovingTracer: vi.fn(), emitParticle: vi.fn() },
+      audio: { playDistantGun: vi.fn() },
+    };
+
+    ai.updateFriendlyAntiAir(battle, unit, .01);
+
+    expect(addFriendlyProjectile).toHaveBeenCalledOnce();
+    expect(addProjectile).not.toHaveBeenCalled();
+    expect(addFriendlyProjectile.mock.calls[0][0]).toMatchObject({
+      ally: true,
+      groundAA: true,
+      sourceUnit: unit,
+      target,
+    });
+    expect(battle.onOperationalEvent).toHaveBeenCalledWith('airDefense.sergeiFiring', { unit, target });
+    disposeGroundVehicleVisual(unit.mesh);
+  });
+
   it('shows ground AA tracking before the first burst', () => {
     const ai = new GroundAirDefenseAI(() => .5);
     const fireAntiAir = vi.spyOn(ai, 'fireAntiAir').mockImplementation(() => {});

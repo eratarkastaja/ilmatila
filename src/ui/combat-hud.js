@@ -103,7 +103,7 @@ export class CombatHud {
     const support = state.support;
     setHiddenIfChanged(this.campaignSupport, !support?.id);
     if (support?.id) {
-      const key = support.awacs ? 'awacs' : support.ito90 ? 'ito90' : 'mlrs';
+      const key = support.awacs ? 'awacs' : support.ito90 ? 'ito90' : support.sergei ? 'sergei' : 'mlrs';
       setTextIfChanged(this.campaignSupportLabel, t(`hud.campaignSupport.${key}.label`));
       if (support.awacs) {
         setTextIfChanged(this.campaignSupportDetail, t('hud.campaignSupport.awacs.detail', {
@@ -113,6 +113,9 @@ export class CombatHud {
         setTextIfChanged(this.campaignSupportAction, '');
       } else if (support.ito90) {
         setTextIfChanged(this.campaignSupportDetail, t('hud.campaignSupport.ito90.detail'));
+        setTextIfChanged(this.campaignSupportAction, '');
+      } else if (support.sergei) {
+        setTextIfChanged(this.campaignSupportDetail, t('hud.campaignSupport.sergei.detail'));
         setTextIfChanged(this.campaignSupportAction, '');
       } else {
         setTextIfChanged(this.campaignSupportDetail, t('hud.campaignSupport.mlrs.detail', {

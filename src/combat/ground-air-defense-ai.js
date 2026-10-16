@@ -11,7 +11,7 @@ const muzzleFlashVelocity = new THREE.Vector3(0, 0.35, 0);
 const antiAirRoundAxis = new THREE.Vector3(0, 1, 0);
 const missileForward = new THREE.Vector3(0, 0, 1);
 const stationaryVelocity = new THREE.Vector3();
-const FRIENDLY_AA_TRACER_OPTIONS = { life: .16, trailTime: .065 };
+const FRIENDLY_AA_TRACER_OPTIONS = { life: .28, trailTime: .16 };
 const AA_TRACER_OPTIONS = { life: .34, trailTime: .22 };
 const SHILKA_TRACER_OPTIONS = { life: .82, trailTime: .6 };
 const AA_TRACKING_WARNING_SECONDS = 1.5;
@@ -74,6 +74,9 @@ export class GroundAirDefenseAI {
       unit.airAaBurstClock=0;
       unit.airAaCooldown=profile.cooldown+this.random()*profile.jitter;
       battle.audio?.playDistantGun(range,'ground');
+      if (unit.mesh.userData.platform === 'sergei23') {
+        battle.onOperationalEvent?.('airDefense.sergeiFiring', { unit, target });
+      }
     }
     unit.airAaBurstClock-=dt;
     while(unit.airAaBurstRemaining>0&&unit.airAaBurstClock<=0){
@@ -105,18 +108,20 @@ export class GroundAirDefenseAI {
     if (!target) return;
     const range = unit.mesh.position.distanceTo(target.mesh.position);
     if (range < 1000 || range > 8500 || unit.airAaCooldown > 0) return;
-    this.fireCrotaleMissile(battle, unit, target, range);
+    const launched = this.fireCrotaleMissile(battle, unit, target, range);
+    if (!launched) return;
     unit.samAmmo--;
     // A restrained reload keeps the battery useful without solving the air
     // objective for the player. A four-round launcher has finite ready shots.
     unit.samRail = (unit.samRail + 1) % 4;
     unit.airAaCooldown = 23 + this.random() * 8;
+    battle.onOperationalEvent?.('airDefense.ito90Firing', { unit, target });
   }
 
   fireCrotaleMissile(battle, unit, target, range) {
     const traverse = unit.mesh.userData.aaTraverse;
     const mount = unit.mesh.userData.aaMount;
-    if (!mount || !traverse) return;
+    if (!mount || !traverse) return false;
     unit.mesh.updateWorldMatrix(true, false);
     const flightTime = range / 940;
     this.aaAim.copy(target.mesh.position).addScaledVector(target.velocity ?? this.aaLeadPoint.set(0, 0, 0), flightTime * 0.55);
@@ -146,14 +151,25 @@ export class GroundAirDefenseAI {
     const speed = 940;
     battle.addFriendlyProjectile({
       projectile: true, missile: true, homing: true, seeker: 'radar', mesh: missile,
-      velocity: direction.multiplyScalar(speed), speed, turnRate: .48, life: 10,
+      velocity: direction.multiplyScalar(speed), speed, turnRate: .6, life: 12,
       burnRemaining: 7.5, coastDrag: 0.035, motorBurning: true, guidanceActive: true,
-      damage: 2.1, proximityRadius: 34, proximityDamage: 0.95, target,
+      guidanceAfterBurnout: true,
+      damage: 3.1, proximityRadius: 48, proximityDamage: 1.1, target,
       targetDomain: 'air', decoyTarget: null, decoyAttempts: new Set(), trail: 0,
       ally: true, sourceUnit: unit,
     });
     battle.audio?.playMissileLaunch();
     battle.audio?.startMissileFlight(missile.id);
+    battle.fx?.emitParticle(
+      this.aaStart,
+      muzzleFlashVelocity,
+      antiAirMuzzleGlow,
+      .12,
+      2.6,
+      .95,
+      2.2,
+    );
+    return true;
   }
 
   fireFriendlyAntiAir(battle, unit,target,range,profile) {
@@ -191,11 +207,20 @@ export class GroundAirDefenseAI {
     line.position.copy(this.aaStart);
     line.quaternion.setFromUnitVectors(antiAirRoundAxis,direction);
     battle.scene.add(line);
+    battle.fx?.emitParticle(
+      this.aaStart,
+      muzzleFlashVelocity,
+      antiAirMuzzleGlow,
+      .075,
+      unit.mesh.userData.platform === 'sergei23' ? 1.9 : 1.25,
+      .92,
+      unit.mesh.userData.platform === 'sergei23' ? 1.8 : 1.4,
+    );
     const velocity=direction.multiplyScalar(profile.speed);
     battle.fx?.addMovingTracer(this.aaStart,velocity,'#ffd28b',FRIENDLY_AA_TRACER_OPTIONS);
-    battle.addProjectile({
-      projectile:true,groundAA:true,mesh:line,velocity,life:flightTime+.4,
-      target,damage:profile.damage,
+    battle.addFriendlyProjectile({
+      projectile:true,groundAA:true,ally:true,mesh:line,velocity,life:flightTime+.4,
+      target,damage:profile.damage,sourceUnit:unit,
     });
   }
 

@@ -33,7 +33,10 @@ export class FlightFX {
     geometry.setAttribute('glow', new THREE.BufferAttribute(this.glows, 1).setUsage(THREE.DynamicDrawUsage));
     geometry.setDrawRange(0, this.maxParticles);
     const material = new THREE.ShaderMaterial({
-      uniforms: { pixelRatio: { value: Math.min(globalThis.devicePixelRatio ?? 1, 2) } },
+      uniforms: {
+        pixelRatio: { value: Math.min(globalThis.devicePixelRatio ?? 1, 2) },
+        nightVision: { value: 0 },
+      },
       vertexShader: `
         attribute float size;
         attribute float alpha;
@@ -43,6 +46,7 @@ export class FlightFX {
         varying float vGlow;
         varying vec3 vColor;
         uniform float pixelRatio;
+        uniform float nightVision;
         void main() {
           vAlpha = alpha;
           vGlow = glow;
@@ -60,7 +64,8 @@ export class FlightFX {
           float radius = length(gl_PointCoord - vec2(0.5));
           float softEdge = 1.0 - smoothstep(0.12, 0.5, radius);
           float hotCore = exp(-radius * radius * 42.0) * vGlow;
-          gl_FragColor = vec4(vColor * (1.0 + hotCore * 2.2), vAlpha * softEdge);
+          float glowBoost = mix(1.0, 1.85, nightVision);
+          gl_FragColor = vec4(vColor * (1.0 + hotCore * 2.2 * glowBoost), vAlpha * softEdge);
         }
       `,
       transparent: true,
@@ -405,6 +410,9 @@ export class FlightFX {
 
   setNightVision(enabled) {
     this.nightVision = Boolean(enabled);
+    if (this.particles?.material?.uniforms?.nightVision) {
+      this.particles.material.uniforms.nightVision.value = this.nightVision ? 1 : 0;
+    }
     if (this.tracerLines?.material) {
       this.tracerLines.material.opacity = this.nightVision ? 1 : .92;
     }
@@ -1146,7 +1154,7 @@ export class FlightFX {
       this.tracerPositions[offset + 4] = end.y;
       this.tracerPositions[offset + 5] = end.z;
       const fade = Math.min(1, tracer.life / tracer.maxLife);
-      const nightVisionIntensity = this.nightVision ? 1.72 : 1;
+      const nightVisionIntensity = this.nightVision ? 2.15 : 1;
       for (let vertex = 0; vertex < 2; vertex++) {
         const colorOffset = offset + vertex * 3;
         this.tracerColors[colorOffset] = tracer.color.r * fade * nightVisionIntensity;

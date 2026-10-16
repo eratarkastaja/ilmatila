@@ -986,7 +986,7 @@ function validateCampaignSustainmentDecision(decision, path, errors) {
           errors.push(`${choicePath}.mission.campaignSupport must be an object`);
         } else {
           for (const key of Object.keys(support)) {
-            if (!['awacs', 'ito90', 'mlrs'].includes(key)) {
+            if (!['awacs', 'ito90', 'mlrs', 'sergei'].includes(key)) {
               errors.push(`${choicePath}.mission.campaignSupport.${key} is not a recognized setting`);
             } else validateNode(support[key], boolean, `${choicePath}.mission.campaignSupport.${key}`, errors);
           }

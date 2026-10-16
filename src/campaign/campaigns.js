@@ -68,6 +68,7 @@ const LIMITED_SUSTAINMENT = {
       mission: {
         groundBattle: true,
         groundSergeiCount: 3,
+        campaignSupport: { sergei: true },
       },
       optionalObjective: {
         id: 'support-sergei',

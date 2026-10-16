@@ -521,6 +521,7 @@ export class CombatWorld {
         awacs: Boolean(campaignSupport.awacs),
         ito90: Boolean(campaignSupport.ito90),
         mlrs: Boolean(campaignSupport.mlrs),
+        sergei: Boolean(campaignSupport.sergei),
         mlrsReady: false,
         mlrsSalvosUsed: 0,
         mlrsSalvosTotal: 2,
@@ -540,6 +541,7 @@ export class CombatWorld {
     if (campaignSupport.awacs) this.radio.emit('campaign.awacsActive', { scope: missionConfig.campaignAttemptId ?? missionConfig.id });
     if (campaignSupport.ito90) this.radio.emit('campaign.ito90Online', { scope: missionConfig.campaignAttemptId ?? missionConfig.id });
     if (campaignSupport.mlrs) this.radio.emit('campaign.mlrsReady', { scope: missionConfig.campaignAttemptId ?? missionConfig.id });
+    if (campaignSupport.sergei) this.radio.emit('campaign.sergeiOnline', { scope: missionConfig.campaignAttemptId ?? missionConfig.id });
     this.combatHud.update(this.hudState);
     this.restartButton = document.querySelector('#restart');
     this.onRestart = () => location.reload();
@@ -1067,6 +1069,10 @@ export class CombatWorld {
       });
     } else if (event === 'mlrs.failed') {
       this.radio.emit('campaign.mlrsFailed', { scope: 'mlrs-failed', priority: 3 });
+    } else if (event === 'airDefense.sergeiFiring') {
+      this.radio.emit('campaign.sergeiFiring', { scope: 'sergei-firing' });
+    } else if (event === 'airDefense.ito90Firing') {
+      this.radio.emit('campaign.ito90Firing', { scope: 'ito90-firing' });
     }
   }
 

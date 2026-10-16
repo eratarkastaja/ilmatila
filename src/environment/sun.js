@@ -13,6 +13,8 @@ export class SunEffects {
     this._cameraPosition = new THREE.Vector3();
     this._sunScreenPosition = new THREE.Vector3();
     this._moonScreenPosition = new THREE.Vector3();
+    this.cloudCoverage = .35;
+    this.nightVision = false;
 
     this.sky = new Sky();
     this.sky.scale.setScalar(18000);
@@ -38,6 +40,12 @@ export class SunEffects {
     this.moon.renderOrder = 900;
     camera.add(this.moon);
     this.moonSprites = createMoonSprites(this.moon);
+    const starField = createStarField();
+    this.stars = starField.points;
+    this.starMaterial = starField.material;
+    this.stars.renderOrder = -900;
+    this.stars.frustumCulled = false;
+    scene.add(this.stars);
     this.setTimeOfDay(this.timeOfDay);
     this.update(camera);
   }
@@ -57,10 +65,27 @@ export class SunEffects {
     this.sky.material.uniforms.sunPosition.value.copy(this.sunDirection).multiplyScalar(10000);
   }
 
+  setCloudCoverage(coverage) {
+    this.cloudCoverage = THREE.MathUtils.clamp(Number.isFinite(coverage) ? coverage : 1, 0, 1);
+  }
+
+  setNightVision(enabled) {
+    this.nightVision = Boolean(enabled);
+  }
+
   update(camera) {
     // Keep the atmospheric sky centered on the chase camera so its horizon feels distant.
     this.sky.position.copy(camera.position);
+    this.stars.position.copy(camera.position);
     camera.updateMatrixWorld(true);
+
+    const starSolarHeight = Math.sin((this.timeOfDay - 6) / 12 * Math.PI);
+    const nightVisibility = 1 - THREE.MathUtils.smoothstep(starSolarHeight, -.06, .28);
+    const cloudVisibility = 1 - THREE.MathUtils.smoothstep(this.cloudCoverage, .35, .9);
+    const starOpacity = .78 * nightVisibility * cloudVisibility * (this.nightVision ? 1.18 : 1);
+    this.starMaterial.uniforms.opacity.value = starOpacity;
+    this.starMaterial.uniforms.nightVision.value = this.nightVision ? 1 : 0;
+    this.stars.visible = starOpacity > .005;
 
     camera.getWorldPosition(this._cameraPosition);
     camera.getWorldDirection(this._cameraForward);
@@ -142,6 +167,75 @@ export class SunEffects {
       moon.material.opacity = moon.opacity * moonVisibility;
     }
   }
+}
+
+function createStarField() {
+  const count = 260;
+  const positions = new Float32Array(count * 3);
+  const sizes = new Float32Array(count);
+  const brightness = new Float32Array(count);
+  let seed = 0x4f1a2b;
+  const random = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 0x100000000;
+  };
+  for (let index = 0; index < count; index++) {
+    // Keep the star field above the world horizon. A full sphere would place
+    // stars below the camera as well, making them visible through terrain when
+    // the player looks down.
+    const z = random();
+    const azimuth = random() * Math.PI * 2;
+    const radius = Math.sqrt(Math.max(0, 1 - z * z));
+    const offset = index * 3;
+    positions[offset] = Math.cos(azimuth) * radius * 16000;
+    positions[offset + 1] = z * 16000;
+    positions[offset + 2] = Math.sin(azimuth) * radius * 16000;
+    sizes[index] = 1.1 + random() * 2.2;
+    brightness[index] = .42 + random() * .58;
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('starSize', new THREE.BufferAttribute(sizes, 1));
+  geometry.setAttribute('starBrightness', new THREE.BufferAttribute(brightness, 1));
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      opacity: { value: 0 },
+      nightVision: { value: 0 },
+      pixelRatio: { value: Math.min(globalThis.devicePixelRatio ?? 1, 2) },
+    },
+    vertexShader: `
+      attribute float starSize;
+      attribute float starBrightness;
+      varying float vBrightness;
+      uniform float pixelRatio;
+      void main() {
+        vBrightness = starBrightness;
+        vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * viewPosition;
+        gl_PointSize = starSize * pixelRatio;
+      }
+    `,
+    fragmentShader: `
+      uniform float opacity;
+      uniform float nightVision;
+      varying float vBrightness;
+      void main() {
+        float radius = length(gl_PointCoord - vec2(0.5));
+        float disc = 1.0 - smoothstep(0.5, 0.08, radius);
+        float core = exp(-radius * radius * 42.0);
+        vec3 color = mix(vec3(0.72, 0.84, 1.0), vec3(0.68, 1.0, 0.82), nightVision);
+        gl_FragColor = vec4(color * (0.7 + core * 1.7), disc * vBrightness * opacity);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false,
+  });
+  const points = new THREE.Points(geometry, material);
+  return { points, material };
 }
 
 function createMoonSprites(parent) {

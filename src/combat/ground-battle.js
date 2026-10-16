@@ -9,6 +9,9 @@ import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
 
 // Beyond 8 km even a 10 m vehicle is about one pixel tall at the default 1080p FOV.
 const GROUND_VEHICLE_RENDER_DISTANCE = 8_000;
+// Support batteries are few, strategically placed, and need to remain visible
+// while they engage aircraft beyond the ordinary ground-unit cutoff.
+const SUPPORT_RENDER_DISTANCE = 14_000;
 const GROUND_VISIBILITY_UPDATE_INTERVAL = 0.25;
 
 /** Owns battlefield state and coordinates ground-unit simulation updates. */
@@ -80,10 +83,12 @@ export class GroundBattle {
     if (this.groundVisibilityElapsed < GROUND_VISIBILITY_UPDATE_INTERVAL) return;
     this.groundVisibilityElapsed %= GROUND_VISIBILITY_UPDATE_INTERVAL;
 
-    const maxDistanceSq = GROUND_VEHICLE_RENDER_DISTANCE ** 2;
     for (const unit of this.groundUnits) {
       if (unit.dead) continue;
-      const shouldRender = unit.mesh.position.distanceToSquared(this.player.position) <= maxDistanceSq;
+      const renderDistance = unit.role === 'airDefense' || unit.role === 'artillery'
+        ? SUPPORT_RENDER_DISTANCE
+        : GROUND_VEHICLE_RENDER_DISTANCE;
+      const shouldRender = unit.mesh.position.distanceToSquared(this.player.position) <= renderDistance ** 2;
       if (unit.mesh.visible !== shouldRender) unit.mesh.visible = shouldRender;
     }
   }

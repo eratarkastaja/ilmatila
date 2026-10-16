@@ -3,14 +3,14 @@ import { DIFFICULTY_PRESETS } from './difficulty.js';
 import { createSeededRandom, DEFAULT_RANDOM_SEED } from './random.js';
 import { randomVisual } from '../effects/visual-random.js';
 
-const flareDecoyGeo = new THREE.SphereGeometry(.3, 8, 6);
+const flareDecoyGeo = new THREE.SphereGeometry(.21, 8, 6);
 const flareDecoyMaterial = new THREE.MeshBasicMaterial({ color: '#fff0b4', toneMapped: false });
-const flarePlumeGeo = new THREE.ConeGeometry(.36, 2.25, 8, 1);
+const flarePlumeGeo = new THREE.ConeGeometry(.25, 1.65, 8, 1);
 const flarePlumeMaterial = new THREE.MeshBasicMaterial({
   color: '#ff6a24', transparent: true, opacity: .74,
   blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false,
 });
-const flareInnerPlumeGeo = new THREE.ConeGeometry(.16, 1.45, 7, 1);
+const flareInnerPlumeGeo = new THREE.ConeGeometry(.11, 1.05, 7, 1);
 const flareInnerPlumeMaterial = new THREE.MeshBasicMaterial({
   color: '#ffd16c', transparent: true, opacity: .9,
   blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false,
@@ -24,34 +24,45 @@ const flareSmokeColor = new THREE.Color('#756458');
 const chaffParticleColor = new THREE.Color('#9aa9a7');
 
 function addFlareBundle(cloud, addTransientGlow, visualRandom = randomVisual) {
-  for (let i = 0; i < 3; i++) {
-    const offset = new THREE.Vector3((i - 1) * 1.35, (visualRandom() - .5) * .7, (visualRandom() - .5) * .8);
-    const scale = .82 + visualRandom() * .28;
+  // A single dispenser press releases two short four-flare strings. Keeping
+  // the bundle in one decoy object preserves the existing seeker gameplay,
+  // while the paired lateral spacing makes the release read like a real
+  // aircraft salvo instead of one oversized glowing cluster.
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 4; i++) {
+      const offset = new THREE.Vector3(
+        side * (1.35 + i * .34),
+        (visualRandom() - .5) * .58,
+        (i - 1.5) * .62 + (visualRandom() - .5) * .35,
+      );
+      const scale = .58 + visualRandom() * .18;
 
-    const plume = new THREE.Mesh(flarePlumeGeo, flarePlumeMaterial);
-    plume.position.copy(offset).addScaledVector(localForward, -1.1 * scale);
-    plume.rotation.x = -Math.PI / 2;
-    plume.scale.setScalar(scale);
-    plume.userData.flarePlume = true;
-    cloud.add(plume);
+      const plume = new THREE.Mesh(flarePlumeGeo, flarePlumeMaterial);
+      plume.position.copy(offset).addScaledVector(localForward, -.8 * scale);
+      plume.rotation.x = -Math.PI / 2;
+      plume.scale.setScalar(scale);
+      plume.userData.flarePlume = true;
+      cloud.add(plume);
 
-    const innerPlume = new THREE.Mesh(flareInnerPlumeGeo, flareInnerPlumeMaterial);
-    innerPlume.position.copy(offset).addScaledVector(localForward, -.72 * scale);
-    innerPlume.rotation.x = -Math.PI / 2;
-    innerPlume.scale.setScalar(scale);
-    innerPlume.userData.flarePlume = true;
-    cloud.add(innerPlume);
+      const innerPlume = new THREE.Mesh(flareInnerPlumeGeo, flareInnerPlumeMaterial);
+      innerPlume.position.copy(offset).addScaledVector(localForward, -.53 * scale);
+      innerPlume.rotation.x = -Math.PI / 2;
+      innerPlume.scale.setScalar(scale);
+      innerPlume.userData.flarePlume = true;
+      cloud.add(innerPlume);
 
-    const core = new THREE.Mesh(flareDecoyGeo, flareDecoyMaterial);
-    core.position.copy(offset);
-    core.scale.set(.78, .78, 1.05).multiplyScalar(scale);
-    cloud.add(core);
+      const core = new THREE.Mesh(flareDecoyGeo, flareDecoyMaterial);
+      core.position.copy(offset);
+      core.scale.set(.78, .78, 1.05).multiplyScalar(scale);
+      core.userData.flareCore = true;
+      cloud.add(core);
 
-    const glow = addTransientGlow(cloud, '#fff0c0', 8.5 + visualRandom() * 2.5, .94);
-    glow.position.copy(offset);
-    glow.userData.baseSize = glow.scale.x;
-    glow.userData.flareGlow = true;
-    glow.userData.flickerPhase = visualRandom() * Math.PI * 2;
+      const glow = addTransientGlow(cloud, '#fff0c0', 5.2 + visualRandom() * 1.8, .94);
+      glow.position.copy(offset);
+      glow.userData.baseSize = glow.scale.x;
+      glow.userData.flareGlow = true;
+      glow.userData.flickerPhase = visualRandom() * Math.PI * 2;
+    }
   }
 }
 

@@ -33,14 +33,14 @@ The provisional beta gate is p95 ≤ 33 ms for normal missions. All three normal
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | Training | 3 | 0 | 0 / 0 | 0 / 0 | 58 / 18 / 22 | 40 / 1,472,027 |
 | Patrol | 3 | 0 | 0 / 0 | 0 / 0 | 58 / 18 / 22 | 40 / 1,472,027 |
-| Support | 3 | 44 (26 rendered within 8 km) | 0 / 0 | 0 / 0 | 420 / 18 / 23 | 306 / 1,495,951 |
+| Support | 3 | 44 (ordinary vehicles culled beyond 8 km; support units remain visible to 14 km) | 0 / 0 | 0 / 0 | 420 / 18 / 23 | 306 / 1,495,951 |
 | Stress | 45 (25 hostile active) | 52 | 159 / 0 | 10 / 173 | 415 / 24 / 30 | 627 / 1,966,168 |
 
 ### Measured change
 
 Support was the normal-mission bottleneck. Before the change, repeated profiles measured p95 at 33.2–37.6 ms, with 44 active ground vehicles, about 542 vehicle meshes, and 486 render calls. Chrome's CPU samples repeatedly put Three.js `projectObject`, `renderBufferDirect`, and `updateMatrixWorld` among the busiest game-side functions. At the measured player position, 26 vehicles were within 8 km and 18 were farther away; at 1080p those distant vehicle models project to roughly a pixel or less.
 
-`GroundBattle` now hides vehicle models beyond 8 km and checks visibility four times per second. It leaves the units and their combat simulation active, and restores their models as the player approaches. In the final Support profile, calls fell from 486 to 306 (37%), renderer-tracked geometries from 600 to 420 (30%), and p95 from the 33.2–37.6 ms baseline range to 20.6 ms. A repeat after the instrumentation-only snapshot change measured p95 at 21.5 ms, consistent with that result. This distance cull is the only gameplay-rendering optimization made from these measurements.
+`GroundBattle` hides ordinary vehicle models beyond 8 km and checks visibility four times per second, while the few air-defense and artillery support units remain visible to 14 km so their engagement is readable. It leaves all units and their combat simulation active, and restores models as the player approaches. The measured Support profile above predates the support-distance exception; its 486-to-306 call reduction and 600-to-420 geometry reduction remain the recorded ordinary-vehicle cull result. This distance cull is the only gameplay-rendering optimization made from these measurements.
 
 The stress case remained around 57–58 ms p95. Its eight-second CPU sample was led by Three.js `getParameters` (515 ms), `getProgram` (361 ms), and `buildMissileTrailGeometry` (348 ms); it also rendered over 600 calls with 36 hostile aircraft, 52 ground vehicles, and about 160 projectiles. This is the deliberately overloaded developer scenario, not a normal mission, so it remains outside the 33 ms beta gate. The stress cleanup probe recorded 316 geometries before and after removing sample units (316 one second later); peak geometry count during the active workload was 415.
 

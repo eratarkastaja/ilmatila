@@ -60,6 +60,11 @@ describe('CountermeasureSystem', () => {
     expect(decoys.map(decoy => [decoy.team, decoy.type])).toEqual([['player', 'ir']]);
     expect(decoys[0].source).toBe(system.player);
     expect(scene.children).toHaveLength(1);
+    const flareCores = scene.children[0].children.filter(child => child.userData.flareCore);
+    expect(flareCores).toHaveLength(8);
+    expect(flareCores.some(core => core.position.x < 0)).toBe(true);
+    expect(flareCores.some(core => core.position.x > 0)).toBe(true);
+    expect(Math.max(...flareCores.map(core => core.scale.x))).toBeLessThan(1);
     expect(audio.playCountermeasure).toHaveBeenCalledOnce();
     expect(onInventoryChange).toHaveBeenCalledOnce();
   });

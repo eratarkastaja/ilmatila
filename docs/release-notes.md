@@ -3,6 +3,29 @@
 This file is the maintained release record. Older beta checkpoints are
 summarized here instead of being kept as one document per pipeline attempt.
 
+## 0.3.0-beta.4
+
+This beta makes campaign support operational and readable in the sortie. Sergei
+23 mm batteries now route friendly air-defense fire correctly, Crotale launches
+guide and resolve more reliably, and support batteries remain visible farther
+across the battlefield. Support firing now has visible muzzle/tracer/missile
+feedback, radio calls, and truthful Sergei HUD status.
+
+Countermeasure and night presentation were also refined: flare deployment now
+shows paired eight-flare strings with smaller individual flares, clear night
+skies contain stars only above the horizon, and night vision intensifies
+cannon tracers, air-defense fire, explosions, particles, and afterburners.
+The MLRS salvo targeting and ballistic release fixes are included in this
+release.
+
+### Validation
+
+- Vitest unit and integration suite passed: 391 tests.
+- ESLint passed.
+- Production Vite build passed.
+- The tag pipeline provides the staging preflight and deployed Chrome, Edge,
+  Firefox, and WebKit smoke gate.
+
 ## 0.3.0-beta.3
 
 This beta completes the next campaign support pass. Air Control and Defense

@@ -365,7 +365,7 @@ export function createAfterburnerFlame({ radius = 0.45, length = 2.5 } = {}) {
   core.position.z = -0.015;
   flame.add(core);
   flame.userData.setNightVision = enabled => {
-    const intensity = enabled ? 1.72 : 1;
+    const intensity = enabled ? 2.2 : 1;
     for (const entry of nightVisionMaterials) {
       entry.material.opacity = Math.min(1, entry.opacity * intensity);
     }

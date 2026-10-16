@@ -13,6 +13,7 @@ import {
 
 const gunTracerRoundGeo = new THREE.CylinderGeometry(.004, .012, .16, 6);
 const gunTracerRoundMaterial = new THREE.MeshBasicMaterial({ color: '#ffc45e', toneMapped: false });
+const gunMuzzleGlow = new THREE.Color('#fff0b0');
 const forward = new THREE.Vector3(0, 0, 1);
 const localRight = new THREE.Vector3(1, 0, 0);
 const localUp = new THREE.Vector3(0, 1, 0);
@@ -155,6 +156,7 @@ export class WeaponSystem {
       const shotDirection=tracerDirection.copy(velocity).normalize();
       shot.mesh.quaternion.setFromUnitVectors(localBulletAxis,shotDirection);
       this.scene.add(shot.mesh);
+      this.fx?.emitParticle(start, this._up.set(0, 0, 0), gunMuzzleGlow, .055, .95, .95, 1.25);
       // Keep the visible streak at the barrel opening while clipping any part
       // that has not yet cleared the airframe. Projectile physics still start
       // at the exact muzzle position.

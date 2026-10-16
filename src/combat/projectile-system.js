@@ -264,6 +264,16 @@ export class ProjectileSystem {
           shot.proximityDamage ?? .8,
         );
       }
+      if (!impact && shot.life > 0 && shot.groundAA && shot.target) {
+        impact = this.collision.findMissileProximityImpact(
+          previous,
+          shot.mesh.position,
+          dt,
+          shot.target,
+          shot.proximityRadius ?? 24,
+          1,
+        );
+      }
       if (!impact && shot.life > 0 && shot.mlrs && shot.target && !shot.target.dead) {
         impact = this.collision.findMissileProximityImpact(
           previous,
@@ -289,6 +299,8 @@ export class ProjectileSystem {
         if (shot.mlrs) {
           shot.impactTarget = target;
           this.onGroundImpact?.(impactPosition, shot);
+        } else if (shot.groundAA) {
+          this.addExplosion(impactPosition, .6);
         }
         if (!shot.ally && shot.ballistic) {
           this.onPlayerHit?.(target, {
