@@ -290,6 +290,46 @@
   color: #b1cbc4;
 }
 
+/* Campaign support is part of the lower-left systems bay. Keeping it in the
+   weapons panel makes the panel grow with its own content instead of letting
+   an absolute card collide with the area label or the panel above it. */
+.weapons>.campaign-support-status {
+  position: static;
+  min-width: 0;
+  margin-top: 7px;
+  padding: 7px 4px 1px 9px;
+  border-top: 1px solid #91b4a526;
+  border-left: 2px solid #78cdb0;
+  background: linear-gradient(90deg,#78cdb010,transparent 88%);
+  box-shadow: none;
+  text-shadow: none;
+}
+
+.weapons>.campaign-support-status[hidden] {
+  display: none;
+}
+
+.weapons>.campaign-support-status small {
+  color: #8de0be;
+  font-size: 8px;
+  letter-spacing: .12em;
+}
+
+.weapons>.campaign-support-status strong,
+.weapons>.campaign-support-status span {
+  font-size: 9px;
+  letter-spacing: .06em;
+  line-height: 1.2;
+}
+
+.weapons>.campaign-support-status strong {
+  color: #d7eee2;
+}
+
+.weapons>.campaign-support-status span {
+  color: #a9c9bc;
+}
+
 .reticle-label {
   position: absolute;
   bottom: 35px;

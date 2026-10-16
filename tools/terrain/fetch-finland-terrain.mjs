@@ -110,7 +110,7 @@ async function fetchRegion(region) {
     ...detailLayout,
     includeBase: !DETAIL_ONLY,
   });
-  await removeLegacyCenterTiles(out, metadata.nearOrthoGrid);
+  await removeObsoleteNearOrthoTiles(out, metadata.nearOrthoGrid);
   const downloadedAt = new Date().toISOString().slice(0, 10);
   const retrievalDates = [...new Set([...(metadata.retrievalDates ?? [metadata.downloadedAt]), downloadedAt])].sort();
   delete metadata.nearOrthoAreaMeters;
@@ -132,8 +132,8 @@ async function fetchRegion(region) {
   console.log(`${region.label}: moving theater detail ready (${detailPixels} px/tile).`);
 }
 
-async function removeLegacyCenterTiles(out, oldGrid = 2) {
-  const grid = Number.isInteger(oldGrid) ? Math.min(Math.max(oldGrid, 2), 4) : 2;
+async function removeObsoleteNearOrthoTiles(out, previousGrid = 2) {
+  const grid = Number.isInteger(previousGrid) ? Math.min(Math.max(previousGrid, 2), 4) : 2;
   const files = [];
   for (let row = 0; row < grid; row++) {
     for (let col = 0; col < grid; col++) {

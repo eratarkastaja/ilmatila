@@ -1,8 +1,8 @@
 # Desktop browser compatibility
 
-## Test run
+## Beta7 test run
 
-The `0.3.0-beta.1` release uses the production browser matrix in the Pages
+The `0.3.0-beta.7` release uses the production browser matrix in the Pages
 workflow. Playwright 1.63.0 drives actual browser binaries against the
 Päijänne terrain assets and aircraft GLBs; no browser implementations are
 mocked in the passing runs.
@@ -19,9 +19,9 @@ The machine also has Firefox ESR 140.12 installed, but Playwright used its Firef
 
 ## Exercised behavior
 
-The RC rerun passed 13 tests with 7 intentional skips. The Chrome, Edge, and Firefox journeys checked startup, a WebGL2 context, audio unlock after a user gesture, Pointer Lock acquisition and release, mouse-driven heading changes, keyboard input, Escape, P pause/resume, viewport resize, switching to a second browser tab and back, terrain and aircraft responses, Patrol gun fire, return to menu, and another launch without a page reload. The Chrome journey also launched every mission type: Training, Patrol, Intercept, and Support. Eight additional version/UI checks passed in all four Playwright browser projects.
+The beta7 browser smoke checked startup, a WebGL2 context, audio unlock after a user gesture, Pointer Lock acquisition and release, mouse-driven heading changes, keyboard input, Escape, P pause/resume, viewport resize, switching to a second browser tab and back, terrain and aircraft responses, Patrol gun fire, return to menu, and another launch without a page reload. The Chrome journey also launched every mission type: Training, Patrol, Intercept, and Support. Additional version and UI checks passed in all four Playwright browser projects.
 
-The Pages-style `/staging/` composition also passed the full Chrome journey against the locally served candidate path while retaining the current live root and its hashed bundles.
+The deployed `/staging/` candidate passed its full browser smoke while retaining the live root and its hashed bundles. The beta tag then passed the same staging preflight before the live Pages deployment and final beta smoke.
 
 All local terrain and aircraft requests returned successfully in the full journey. Page exceptions and browser console errors failed the tests; none were observed in the passing Chrome, Edge, or Firefox runs.
 

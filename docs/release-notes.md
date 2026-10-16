@@ -3,6 +3,24 @@
 This file is the maintained release record. Older beta checkpoints are
 summarized here instead of being kept as one document per pipeline attempt.
 
+## 0.3.0-beta.7
+
+This release consolidates the lower-left combat HUD into a single systems bay.
+Campaign support status now participates in normal document flow and cannot
+overlap the weapon, fuel, or area readouts. The terrain package tool also
+clarifies its obsolete near-orthophoto cleanup path.
+
+The maintained verification documents are synchronized with the release, and
+tests now guard both the HUD composition and release-version documentation.
+
+### Validation
+
+- Vitest unit and integration suite passed locally: 394 tests.
+- ESLint passed locally.
+- Production Vite build passed locally.
+- The release pipeline must pass the full browser smoke matrix before Pages
+  deployment.
+
 ## 0.3.0-beta.6
 
 This follow-up release fixes a WebGL compatibility regression in the night
@@ -51,7 +69,7 @@ availability is shown consistently in the campaign UI, briefing, HUD, and
 radio messages.
 
 The campaign metrics now use the current strategic rules without the removed
-legacy readiness-cost path. The campaign menu uses the available desktop space
+readiness-cost path. The campaign menu uses the available desktop space
 more effectively, and support names are localized cleanly: English shows
 Sparrow and Finnish shows Varpunen.
 
