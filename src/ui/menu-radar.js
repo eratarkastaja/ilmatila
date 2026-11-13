@@ -24,12 +24,6 @@ function addFormationContacts(contacts, positions, team, origin, heading, { rein
     const dz = position.z - origin.z;
     const range = Math.hypot(dx, dz);
     const bearing = Math.atan2(dx, dz) - heading;
-    const radius = Math.min(range / AIR_RADAR_RANGE, 1) * RADAR_RADIUS_PERCENT;
-    // Wingmen are only a few hundred metres from ownship and overlap its symbol
-    // at radar scale; preserve their true aft bearings with a small display floor.
-    const displayRadius = team === 'friendly'
-      ? Math.max(radius, FRIENDLY_MIN_RADIUS_PERCENT)
-      : radius;
     contacts.push({
       bearing,
       range,
@@ -37,8 +31,6 @@ function addFormationContacts(contacts, positions, team, origin, heading, { rein
       domain: 'air',
       position,
       reinforcement,
-      left: 50 - Math.sin(bearing) * displayRadius,
-      top: 50 - Math.cos(bearing) * displayRadius,
     });
   }
 }
@@ -173,6 +165,7 @@ export class MenuRadar {
     this.missionId = null;
     this.seed = null;
     this.contacts = [];
+    this.intel = null;
 
     this.onLanguageChange = () => {
       this.updateContactLabels();
@@ -184,6 +177,7 @@ export class MenuRadar {
 
   setScenario(missionResolution, { seed, terrain, origin = new THREE.Vector3(), heading = 0 } = {}) {
     if (!missionResolution?.mission || !this.scope) return;
+    this.intel = null;
     for (const contact of this.contacts) contact.element.remove();
     this.contacts.length = 0;
     this.missionId = missionResolution.mission.id;
@@ -194,6 +188,10 @@ export class MenuRadar {
 
   setIntel(intel, { origin = new THREE.Vector3(), heading = 0 } = {}) {
     if (!intel || !this.scope) return;
+    this.intel = {
+      minimumStrength: intel.minimumStrength,
+      maximumStrength: intel.maximumStrength,
+    };
     for (const contact of this.contacts) contact.element.remove();
     this.contacts.length = 0;
     const count = Math.min(3, Math.max(2, Math.ceil((intel.minimumStrength + intel.maximumStrength) / 2)));
@@ -214,10 +212,6 @@ export class MenuRadar {
       };
     });
     this.setContacts(contacts, origin, heading);
-    if (this.readout) this.readout.textContent = t('campaign.intel.radarReadout', {
-      minimum: intel.minimumStrength,
-      maximum: intel.maximumStrength,
-    });
   }
 
   setContacts(contacts, origin, heading) {
@@ -225,16 +219,21 @@ export class MenuRadar {
       const dx = contact.position.x - origin.x;
       const dz = contact.position.z - origin.z;
       const bearing = Math.atan2(dx, dz) - heading;
-      const radius = Math.min(contact.range / AIR_RADAR_RANGE, 1) * RADAR_RADIUS_PERCENT;
-      contact.left = 50 - Math.sin(bearing) * radius;
-      contact.top = 50 - Math.cos(bearing) * radius;
+      contact.bearing = bearing;
+      const scaleRadius = Math.min(contact.range / AIR_RADAR_RANGE, 1) * RADAR_RADIUS_PERCENT;
+      // Keep nearby wingmen visibly separate from ownship without changing bearings.
+      const displayRadius = contact.team === 'friendly'
+        ? Math.max(scaleRadius, FRIENDLY_MIN_RADIUS_PERCENT)
+        : scaleRadius;
+      contact.left = 50 - Math.sin(bearing) * displayRadius;
+      contact.top = 50 - Math.cos(bearing) * displayRadius;
       const element = document.createElement('b');
       element.className = `grid-contact contact-${contact.team} contact-air${contact.reinforcement ? ' contact-reinforcement' : ''}`;
       element.style.left = `${contact.left}%`;
       element.style.top = `${contact.top}%`;
       this.scope.append(element);
       contact.element = element;
-      contact.scanBearing = THREE.MathUtils.euclideanModulo(-THREE.MathUtils.radToDeg(contact.bearing), 360);
+      contact.scanBearing = THREE.MathUtils.euclideanModulo(-THREE.MathUtils.radToDeg(bearing), 360);
       contact.detectedUntil = -Infinity;
       contact.detected = false;
       this.contacts.push(contact);
@@ -281,10 +280,15 @@ export class MenuRadar {
   updateReadout(visibleCount) {
     if (visibleCount === this.visibleCount || !this.readout) return;
     this.visibleCount = visibleCount;
-    this.readout.textContent = t('menu.echoTrack', {
-      detected: String(visibleCount).padStart(2, '0'),
-      total: String(this.contacts.length).padStart(2, '0'),
-    });
+    this.readout.textContent = this.intel
+      ? t('campaign.intel.radarReadout', {
+          minimum: this.intel.minimumStrength,
+          maximum: this.intel.maximumStrength,
+        })
+      : t('menu.echoTrack', {
+          detected: String(visibleCount).padStart(2, '0'),
+          total: String(this.contacts.length).padStart(2, '0'),
+        });
   }
 
   dispose() {

@@ -3,6 +3,24 @@
 This file is the maintained release record. Older beta checkpoints are
 summarized here instead of being kept as one document per pipeline attempt.
 
+## In progress toward 0.3.0-beta.8 (not released)
+
+Menu radar readability corrections keep nearby wingmen visibly separate from
+ownship, preserve campaign intelligence estimates through radar sweeps and
+language changes, and align intelligence pulses with heading-up contact
+positions. Focused regressions cover each transition.
+
+The repository README now includes the ILMATILA campaign cover. The deployed
+Pages smoke also verifies the metadata and representative runtime files of all
+four terrain packages, while the staging adapter pins and validates the exact
+`deploy-pages` version whose compiled entry point it patches. Staging now uses
+the preserved live site's recorded commit instead of assuming it is the
+candidate's immediate parent.
+
+This work has not passed the complete release gate. The package version and
+verified baseline remain `0.3.0-beta.7` until the candidate passes staging,
+deployed browser smoke, and the final beta workflow.
+
 ## 0.3.0-beta.7
 
 This release consolidates the lower-left combat HUD into a single systems bay.

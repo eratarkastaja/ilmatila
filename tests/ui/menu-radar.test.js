@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { MISSIONS } from '../../src/mission/missions.js';
 import { resolveMissionVariant } from '../../src/mission/mission-variants.js';
 import { MenuRadar } from '../../src/ui/menu-radar.js';
-import { t } from '../../src/ui/i18n.js';
+import { getLanguage, setLanguage, t } from '../../src/ui/i18n.js';
 
 class MockElement {
   constructor() {
@@ -32,8 +32,11 @@ class MockElement {
 }
 
 const originalDocument = globalThis.document;
+const originalLocalStorage = globalThis.localStorage;
+const originalCustomEvent = globalThis.CustomEvent;
 
 function installDocument() {
+  const listeners = new Map();
   const elements = new Map([
     ['.radar-scope', new MockElement()],
     ['.grid-sweep', new MockElement()],
@@ -41,16 +44,40 @@ function installDocument() {
   ]);
   globalThis.document = {
     querySelector: selector => elements.get(selector),
+    querySelectorAll: () => [],
     createElement: () => new MockElement(),
-    addEventListener() {},
-    removeEventListener() {},
+    documentElement: { lang: '' },
+    title: '',
+    addEventListener(type, listener) {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type).add(listener);
+    },
+    removeEventListener(type, listener) {
+      listeners.get(type)?.delete(listener);
+    },
+    dispatchEvent(event) {
+      for (const listener of listeners.get(event.type) ?? []) listener(event);
+      return true;
+    },
+  };
+  globalThis.localStorage = { setItem() {} };
+  globalThis.CustomEvent = class extends Event {
+    constructor(type, options = {}) {
+      super(type);
+      this.detail = options.detail;
+    }
   };
   return elements;
 }
 
 afterEach(() => {
+  if (globalThis.document?.querySelectorAll) setLanguage('en');
   if (originalDocument === undefined) delete globalThis.document;
   else globalThis.document = originalDocument;
+  if (originalLocalStorage === undefined) delete globalThis.localStorage;
+  else globalThis.localStorage = originalLocalStorage;
+  if (originalCustomEvent === undefined) delete globalThis.CustomEvent;
+  else globalThis.CustomEvent = originalCustomEvent;
 });
 
 describe('MenuRadar sortie preview', () => {
@@ -77,6 +104,11 @@ describe('MenuRadar sortie preview', () => {
         .reduce((count, encounter) => count + encounter.response.hostiles, 0),
     );
     expect(friendlies.every(contact => contact.position.z < 0 && contact.top > 50)).toBe(true);
+    expect(friendlies.every(contact => (
+      Math.hypot(contact.left - 50, contact.top - 50) >= 4.99
+      && contact.element.style.left === `${contact.left}%`
+      && contact.element.style.top === `${contact.top}%`
+    ))).toBe(true);
     expect(hostiles.filter(contact => !contact.reinforcement)
       .every(contact => contact.position.z > 0 && contact.top < 50)).toBe(true);
     expect(hostiles.filter(contact => !contact.reinforcement)
@@ -91,6 +123,60 @@ describe('MenuRadar sortie preview', () => {
     }));
     expect(radar.seed).toBe(seed);
 
+    radar.dispose();
+  });
+
+  it('keeps campaign intelligence estimates through sweeps and an actual language change', () => {
+    const elements = installDocument();
+    const radar = new MenuRadar();
+    const intel = {
+      minimumStrength: 3,
+      maximumStrength: 7,
+      sectorKey: 'campaign.intel.sector.north',
+    };
+    radar.setIntel(intel);
+    const readout = elements.get('.radar-readout');
+    const initialText = t('campaign.intel.radarReadout', { minimum: 3, maximum: 7 });
+    expect(readout.textContent).toBe(initialText);
+
+    radar.update(5);
+    expect(radar.detectedCount).toBeGreaterThan(0);
+    expect(readout.textContent).toBe(initialText);
+
+    setLanguage(getLanguage() === 'en' ? 'fi' : 'en');
+    expect(readout.textContent).toBe(t('campaign.intel.radarReadout', { minimum: 3, maximum: 7 }));
+    expect(readout.textContent).not.toBe(initialText);
+
+    const seed = 0x0ddba11;
+    radar.setScenario(resolveMissionVariant(MISSIONS.patrol, seed), {
+      seed,
+      terrain: { worldSize: 32000, operationBounds: { minX: -16000, maxX: 16000, minZ: -16000, maxZ: 16000 } },
+    });
+    expect(readout.textContent).toBe(t('menu.echoTrack', {
+      detected: '00',
+      total: String(radar.contacts.length).padStart(2, '0'),
+    }));
+    radar.dispose();
+  });
+
+  it('keeps intelligence contact pulses aligned with heading-up positions', () => {
+    installDocument();
+    const radar = new MenuRadar();
+    radar.setIntel({
+      minimumStrength: 3,
+      maximumStrength: 7,
+      sectorKey: 'campaign.intel.sector.north',
+    }, {
+      origin: new THREE.Vector3(120, 0, -80),
+      heading: Math.PI / 2,
+    });
+
+    for (const contact of radar.contacts) {
+      const displayRadius = Math.hypot(contact.left - 50, contact.top - 50);
+      const sweepBearing = THREE.MathUtils.degToRad(-contact.scanBearing);
+      expect(contact.left).toBeCloseTo(50 - Math.sin(sweepBearing) * displayRadius);
+      expect(contact.top).toBeCloseTo(50 - Math.cos(sweepBearing) * displayRadius);
+    }
     radar.dispose();
   });
 

@@ -3,6 +3,13 @@ import { readFileSync } from 'node:fs';
 
 const { version: appVersion } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const expectedAppVersion = process.env.PLAYWRIGHT_EXPECTED_APP_VERSION || appVersion;
+const verifyAllTerrains = process.env.PLAYWRIGHT_VERIFY_ALL_TERRAINS === 'true';
+const terrainIds = ['paijanne', 'vironlahti', 'ilomantsi', 'kuusamo'];
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:4173/';
+const assetBaseURL = new URL(
+  process.env.PLAYWRIGHT_ASSET_BASE_PATH ?? new URL(baseURL).pathname,
+  baseURL,
+);
 
 async function expectAppVersion(locator) {
   if (expectedAppVersion === '*') {
@@ -11,6 +18,34 @@ async function expectAppVersion(locator) {
   }
   await expect(locator).toHaveText(expectedAppVersion);
 }
+
+test('deployed site exposes every verified terrain package', async ({ request }, testInfo) => {
+  test.skip(!verifyAllTerrains, 'The full terrain package check runs against deployed Pages artifacts.');
+  test.skip(testInfo.project.name !== 'chrome', 'One HTTP client is enough to verify shared terrain assets.');
+
+  const indexResponse = await request.get(new URL('terrain/index.json', assetBaseURL).href);
+  expect(indexResponse.ok()).toBe(true);
+  const index = await indexResponse.json();
+  expect(index.areas.map(area => area.id)).toEqual(terrainIds);
+
+  for (const areaId of terrainIds) {
+    const areaBaseURL = new URL(`terrain/areas/${areaId}/`, assetBaseURL);
+    const metadataResponse = await request.get(new URL('terrain.json', areaBaseURL).href);
+    expect(metadataResponse.ok(), `${areaId} terrain metadata`).toBe(true);
+    const metadata = await metadataResponse.json();
+    expect(metadata.id).toBe(areaId);
+
+    const heightResponse = await request.get(new URL('height.f32', areaBaseURL).href);
+    expect(heightResponse.ok(), `${areaId} elevation data`).toBe(true);
+    expect((await heightResponse.body()).byteLength).toBe(metadata.width * metadata.height * 4);
+
+    for (const asset of ['ortho-0-0.png', 'water-0-0.bin', 'detail-ortho-0-0.jpg']) {
+      const response = await request.get(new URL(asset, areaBaseURL).href);
+      expect(response.ok(), `${areaId} ${asset}`).toBe(true);
+      expect((await response.body()).byteLength).toBeGreaterThan(0);
+    }
+  }
+});
 
 test('first visit quick start is keyboard accessible and returns focus from controls', async ({ page }) => {
   const pageErrors = [];

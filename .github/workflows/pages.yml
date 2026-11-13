@@ -227,18 +227,23 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: actions/deploy-pages
-          ref: v5
+          # The staging adapter patches this action's compiled entry point below.
+          ref: v5.0.1
           path: .github/deploy-pages-action
 
       - name: Prepare staging Pages action
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'staging'
         run: |
-          staging_build_version="$(git rev-parse HEAD^)"
+          staging_build_version="${PRESERVED_LIVE_COMMIT:-$(git rev-parse HEAD^)}"
+          deploy_action=.github/deploy-pages-action/dist/index.js
+          grep -q 'process\.env\.GITHUB_SHA' "$deploy_action"
           perl -0pi -e 's/process\.env\.GITHUB_SHA/process.env.ILMATILA_PAGES_BUILD_VERSION || process.env.GITHUB_SHA/g' \
-            .github/deploy-pages-action/dist/index.js
+            "$deploy_action"
+          grep -q 'process\.env\.ILMATILA_PAGES_BUILD_VERSION || process\.env\.GITHUB_SHA' "$deploy_action"
           echo "ILMATILA_PAGES_BUILD_VERSION=$staging_build_version" >> "$GITHUB_ENV"
           echo "Deploying staging Pages version $staging_build_version"
         env:
+          PRESERVED_LIVE_COMMIT: ${{ needs.build.outputs.live_commit }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
@@ -257,7 +262,7 @@ jobs:
       - name: Deploy beta Pages artifact
         id: deployment
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.target != 'staging'
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@v5.0.1
 
   staging-smoke:
     if: >-

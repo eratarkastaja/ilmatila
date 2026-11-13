@@ -79,6 +79,7 @@ jobs:
           PLAYWRIGHT_BASE_URL: ${{ inputs.base_url }}
           PLAYWRIGHT_ASSET_BASE_PATH: ${{ inputs.asset_base_path }}
           PLAYWRIGHT_EXPECTED_APP_VERSION: ${{ inputs.expected_version }}
+          PLAYWRIGHT_VERIFY_ALL_TERRAINS: 'true'
 
       - name: Upload browser smoke diagnostics
         if: failure()

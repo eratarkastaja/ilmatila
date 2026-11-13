@@ -1,5 +1,9 @@
 # ILMATILA
 
+<p align="center">
+  <img src="public/branding/ilmatila-cover.png" alt="ILMATILA – Rajan Varjo" width="100%">
+</p>
+
 ILMATILA is an independent browser-based air-combat game by ERÄGAMES. The current public beta is **0.3.0-beta.7**. Missions, combat, progression, aircraft handling, radar, and weapons are playable; balance and mission pacing may still change during beta. The simulation is fictional and is not intended for real-world training or operational use.
 
 **[Play ILMATILA in your browser](https://eratarkastaja.github.io/ilmatila/).**
