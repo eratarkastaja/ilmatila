@@ -176,10 +176,15 @@ test('desktop browser completes the menu, controls, combat, and repeat-sortie pa
 
   await launchMission(page, 'patrol');
   const gunAmmo = page.locator('#gun-ammo-count');
+  await page.mouse.click(20, 20);
+  await expect.poll(() => page.evaluate(() => document.pointerLockElement?.tagName)).toBe('CANVAS');
   const gunAmmoBefore = await gunAmmo.textContent();
-  await page.keyboard.down('Space');
-  await expect.poll(() => gunAmmo.textContent(), { timeout: 15_000 }).not.toBe(gunAmmoBefore);
-  await page.keyboard.up('Space');
+  await page.mouse.down();
+  try {
+    await expect.poll(() => gunAmmo.textContent(), { timeout: 15_000 }).not.toBe(gunAmmoBefore);
+  } finally {
+    await page.mouse.up();
+  }
   await returnToMenu(page);
 
   if (testInfo.project.name === 'chrome') {
