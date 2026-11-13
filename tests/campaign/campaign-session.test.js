@@ -43,8 +43,10 @@ describe('CampaignSession', () => {
   });
 
   it('consumes a selected sustainment window when retrying and does not restore it', () => {
+    const storage = memoryStorage();
+    const progress = new CampaignProgress(storage);
     const session = new CampaignSession({
-      progress: new CampaignProgress(memoryStorage()),
+      progress,
       difficulty: 'standard',
       seedFactory: () => 321,
     });
@@ -77,6 +79,23 @@ describe('CampaignSession', () => {
       airMissileType: 'amraam',
       groundMissileType: 'aargm',
     });
+
+    expect(session.retryCurrent()).toBe(true);
+    expect(session.state.sortieReadiness).toBe(64);
+    expect(session.state.chapterRetryCount).toBe(2);
+    expect(session.state.sustainmentUsed).toBe(true);
+    expect(session.selectSustainmentChoice('sparrow-wingman')).toBe(false);
+
+    const reloaded = new CampaignSession({
+      progress: new CampaignProgress(storage),
+      difficulty: 'standard',
+      seedFactory: () => {
+        throw new Error('A persisted retry must not generate a new seed');
+      },
+    });
+    expect(reloaded.state.currentSeed).toBe(321);
+    expect(reloaded.state.sustainmentUsed).toBe(true);
+    expect(reloaded.selectSustainmentChoice('sparrow-wingman')).toBe(false);
   });
 
   it('authors an acceptable operational setback for every campaign chapter', () => {

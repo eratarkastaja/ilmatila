@@ -3,12 +3,17 @@
 This file is the maintained release record. Older beta checkpoints are
 summarized here instead of being kept as one document per pipeline attempt.
 
-## In progress toward 0.3.0-beta.8 (not released)
+## 0.3.0-beta.8
 
 Menu radar readability corrections keep nearby wingmen visibly separate from
 ownship, preserve campaign intelligence estimates through radar sweeps and
 language changes, and align intelligence pulses with heading-up contact
 positions. Focused regressions cover each transition.
+
+Campaign retries now keep a consumed sustainment window unavailable through
+repeated retries and save reloads. The RTB regression coverage also verifies
+that losing the aircraft after objective resolution still ends the sortie once
+as a failure rather than allowing extraction to overwrite the result.
 
 The repository README now includes the ILMATILA campaign cover. The deployed
 Pages smoke also verifies the metadata and representative runtime files of all
@@ -17,9 +22,16 @@ four terrain packages, while the staging adapter pins and validates the exact
 the preserved live site's recorded commit instead of assuming it is the
 candidate's immediate parent.
 
-This work has not passed the complete release gate. The package version and
-verified baseline remain `0.3.0-beta.7` until the candidate passes staging,
-deployed browser smoke, and the final beta workflow.
+The local release candidate passed the focused and full Vitest suites, ESLint,
+and the production build. The staging and tagged beta browser-matrix results
+are recorded below after the GitHub Actions release gate completes.
+
+### Validation
+
+- Local Vitest: 397 tests passed.
+- Local ESLint passed.
+- Local production Vite build passed.
+- GitHub Actions staging and tagged beta browser smoke: pending release gate.
 
 ## 0.3.0-beta.7
 

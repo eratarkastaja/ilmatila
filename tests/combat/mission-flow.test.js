@@ -165,4 +165,30 @@ describe('MissionFlowSystem', () => {
     expect(flow.outcome).toBe(MISSION_OUTCOME.SETBACK);
     expect(onEnd).toHaveBeenCalledWith(MISSION_OUTCOME.SETBACK, expect.any(Number));
   });
+
+  it('fails once when the aircraft is lost during RTB', () => {
+    const { flow, player, onEnd } = createFlow({
+      hostiles: 0,
+      departureDuration: 0,
+      navigationDistance: 100,
+      navigationRadius: 20,
+      extractionRadius: 20,
+      objectiveReportDuration: 0,
+    });
+    flow.update(0);
+    player.position.copy(flow.ingress);
+    flow.update(0, { objectiveSatisfied: true });
+    expect(flow.phase).toBe(MISSION_PHASE.RTB);
+
+    flow.update(0.1, { objectiveSatisfied: true, destroyed: true });
+
+    expect(flow.phase).toBe(MISSION_PHASE.DEBRIEF);
+    expect(flow.outcome).toBe(MISSION_OUTCOME.FAILED);
+    expect(onEnd).toHaveBeenCalledOnce();
+    expect(onEnd).toHaveBeenCalledWith(MISSION_OUTCOME.FAILED, expect.any(Number));
+
+    player.position.copy(flow.home);
+    flow.update(0.1, { objectiveSatisfied: true });
+    expect(onEnd).toHaveBeenCalledOnce();
+  });
 });

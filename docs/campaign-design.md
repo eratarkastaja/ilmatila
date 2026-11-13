@@ -119,7 +119,8 @@ a committable result or retry the chapter. Retries keep the chapter seed and do
 not apply strategic effects, but each retry costs 3 points of sortie readiness.
 If a limited sustainment window was selected for the failed attempt, that
 window is consumed as well: its choice is cleared and it is not offered again
-on the retry. Aircraft loss and aborted sorties
+on any later retry of the same chapter, including after reloading the save.
+Aircraft loss and aborted sorties
 cannot be accepted. Accepted attempt ids make state application idempotent.
 The final ending is `border-secured`, `invasion-contained`, or
 `unresolved-front`.

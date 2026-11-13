@@ -375,7 +375,7 @@ export class CampaignSession {
       retryCount: this.state.retryCount + 1,
       chapterRetryCount: this.state.chapterRetryCount + 1,
       sustainmentChoice: null,
-      sustainmentUsed: Boolean(sustainmentChoice),
+      sustainmentUsed: this.state.sustainmentUsed || Boolean(sustainmentChoice),
     };
     this.state.currentAttemptId = createAttemptId(
       this.definition,

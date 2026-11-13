@@ -1,11 +1,12 @@
-# Verified baseline — 2026-10-16
+# Release candidate baseline — 2026-11-13
 
-This records the verified beta baseline for the 0.3 release line.
+This records the `0.3.0-beta.8` release candidate. The GitHub Actions staging
+and tagged beta browser evidence is added after the release gate completes.
 
 ## Source and toolchain
 
 - Repository branch: `master`; `origin/master` points to the same commit. This checkout has no branch named `main`.
-- Release: `0.3.0-beta.7`, validated through the master, staging, and beta GitHub Actions paths.
+- Release: `0.3.0-beta.8`, with local checks complete and deployed browser validation pending.
 - Local Node.js: `v20.19.2`; the release jobs use Node.js 22 and install with `npm ci`.
 - Local verification uses the npm CLI supplied through Corepack. No package manager files or application dependencies were changed by that setup.
 
@@ -13,21 +14,14 @@ This records the verified beta baseline for the 0.3 release line.
 
 | Command | Result |
 | --- | --- |
-| `npm ci` | Passed in the release quality job. |
-| `npm run lint` | Passed; no warnings. |
-| `npm test` | Passed locally with 394 tests; the beta7 release pipeline must pass the same suite. |
-| `npm run build` | Passed; Vite 7.3.6 transformed 98 modules and built in 9.86 seconds locally; no warnings. |
+| `npm ci` | Pending the beta8 release quality job. |
+| `npm run lint` | Passed locally; no warnings. |
+| `npm test` | Passed locally with 397 tests. |
+| `npm run build` | Passed locally; Vite 7.3.6 transformed 98 modules with no warnings. |
 
 ## Production browser smoke
 
-The beta7 release pipeline served the production build and exercised it in the Chrome, Edge, Firefox, and WebKit matrix:
-
-- The mission menu opened and Training could be selected.
-- A Training sortie started.
-- Pressing P opened pause; Resume returned to flight and reacquired pointer lock on the canvas.
-- Returning to mission selection worked.
-- Combat Air Patrol started from the menu.
-- After returning to the menu again, another sortie started without reloading the page (one top-level navigation total).
-- No browser console errors, uncaught page errors, or failed requests were observed.
-
-The staging candidate and tagged beta deployment both passed their deployed smoke gates. No release-blocking failures remained in the verified baseline.
+The beta8 staging and tagged beta browser matrix is pending. It must exercise
+the production build in Chrome, Edge, Firefox, and WebKit, including the
+launch, pause/resume, RTB, return-to-menu, repeated-launch, and terrain-package
+checks documented in [testing](testing.md).
