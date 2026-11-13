@@ -116,9 +116,17 @@ test('desktop browser completes the menu, controls, combat, and repeat-sortie pa
 
   const heading = page.locator('#heading');
   const headingBeforeMouse = await heading.textContent();
-  await page.mouse.move(300, 280);
-  await page.mouse.move(510, 280, { steps: 12 });
-  await expect.poll(() => heading.textContent(), { timeout: 8_000 }).not.toBe(headingBeforeMouse);
+  if (await page.evaluate(() => document.pointerLockElement !== document.querySelector('#game canvas'))) {
+    await page.mouse.click(20, 20);
+    await expect.poll(() => page.evaluate(() => document.pointerLockElement?.tagName)).toBe('CANVAS');
+  }
+  // Firefox can drop the first synthetic relative-motion batch immediately
+  // after Pointer Lock is granted. Use a short sweep sequence so the assertion
+  // checks the control path rather than that one browser timing window.
+  for (const [x, y] of [[300, 280], [510, 280], [700, 280], [360, 280], [600, 280]]) {
+    await page.mouse.move(x, y, { steps: 12 });
+  }
+  await expect.poll(() => heading.textContent(), { timeout: 12_000 }).not.toBe(headingBeforeMouse);
 
   const speedBeforeKeyboard = Number(await page.locator('#speed').textContent());
   await page.keyboard.down('Shift');
