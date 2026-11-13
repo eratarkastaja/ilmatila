@@ -25,7 +25,10 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
-  retries: 0,
+  // Pointer Lock and WebGL can occasionally lose one synthetic input event on
+  // the hosted Firefox runner. Keep local runs deterministic while allowing
+  // CI to retry that environment-only browser smoke failure once.
+  retries: process.env.CI ? 1 : 0,
   workers: 1,
   reporter: 'list',
   outputDir: 'test-results',
