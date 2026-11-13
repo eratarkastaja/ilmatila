@@ -30,6 +30,8 @@ async function launchMission(page, missionId) {
   await page.locator('#launch-mission').click();
   await expect(page.locator('#flight-hud')).toBeVisible({ timeout: 120_000 });
   await expect(page.locator('#start-menu')).toBeHidden();
+  await page.bringToFront();
+  await page.locator('#game canvas').hover();
   await expect.poll(() => page.evaluate(() => document.pointerLockElement?.tagName)).toBe('CANVAS');
   await expect(page.locator('#mission-objective-title')).not.toBeEmpty();
 }
