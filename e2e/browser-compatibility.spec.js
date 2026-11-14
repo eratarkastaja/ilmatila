@@ -131,6 +131,10 @@ test('desktop browser completes the menu, controls, combat, and repeat-sortie pa
   await expect.poll(() => heading.textContent(), { timeout: 12_000 }).not.toBe(headingBeforeMouse);
 
   const speedBeforeKeyboard = Number(await page.locator('#speed').textContent());
+  // Firefox can leave the content window unfocused after a locked mouse sweep.
+  // Refocus the active flight surface before sending the keyboard control input.
+  await page.bringToFront();
+  await page.locator('#game canvas').hover();
   await page.keyboard.down('Shift');
   await expect.poll(async () => Number(await page.locator('#speed').textContent()), { timeout: 8_000 })
     .toBeGreaterThan(speedBeforeKeyboard);
