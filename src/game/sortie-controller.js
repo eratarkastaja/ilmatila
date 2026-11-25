@@ -6,6 +6,7 @@ import { TacticalHud } from '../ui/hud.js';
 import { MISSIONS } from '../mission/missions.js';
 import { createSortieSeed } from '../combat/random.js';
 import { planAirIngressStart } from '../combat/air-combat-utils.js';
+import { resolveTheaterMissionLayout } from '../mission/theater-layout.js';
 
 function withTimeout(promise, milliseconds, reason, onTimeout) {
   let timer;
@@ -188,7 +189,7 @@ export class SortieController {
             convoyArea: 11600,
             variants: [],
           }
-        : baseMission;
+        : resolveTheaterMissionLayout(baseMission, replacement);
       this.installTerrain(replacement);
       pendingTerrain = null;
       this.pendingTerrain = null;

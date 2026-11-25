@@ -9,6 +9,7 @@ const setClassIfChanged = (node, className, enabled) => {
 };
 
 const INITIAL_CONTACT_IDENTIFICATION_DELAY = 3.5;
+const GROUND_CONTACT_UPDATE_INTERVAL = 1 / 15;
 
 /** Owns radar contacts, search mode and the arcade-friendly weapon lock cue. */
 export class CombatRadar {
@@ -38,6 +39,11 @@ export class CombatRadar {
     this.lockCueTarget = false;
     this.lockCueConfirmed = false;
     this.tracks = new Map();
+    this.trackNodePool = [];
+    this.elapsed = 0;
+    // Populate the ground picture immediately after a mode switch, then
+    // sample slow-moving ground returns at a lower cadence.
+    this.groundContactElapsed = GROUND_CONTACT_UPDATE_INTERVAL;
     this.trackMemoryDuration = this.awacsActive ? 2.2 : 1.4;
     this._delta = new THREE.Vector3();
     this._forward = new THREE.Vector3();
@@ -53,6 +59,7 @@ export class CombatRadar {
     this.audio?.playRadarMode(this.mode);
     this.range = this.mode === 'air' ? this.airRange : this.groundRange;
     this.clearTracks();
+    this.groundContactElapsed = GROUND_CONTACT_UPDATE_INTERVAL;
     if (this.mode === 'ground') this.clearLock();
     this.renderMode();
   }
@@ -69,29 +76,55 @@ export class CombatRadar {
   }
 
   updateContacts(dt, playerHeading, { airFriendly, airHostile, groundFriendly, groundHostile }) {
-    this.playerHeading=playerHeading;
-    for (const [key, track] of this.tracks) {
-      track.age += dt;
-      if (track.age > this.trackMemoryDuration) {
-        track.node?.remove();
-        this.tracks.delete(key);
-      } else if (track.node) {
-        // Let a lost return decay instead of lingering at full strength.
-        track.node.style.opacity = String(1 - track.age / this.trackMemoryDuration);
-      }
+    const deltaTime = Number.isFinite(dt) ? Math.max(0, dt) : 0;
+    this.playerHeading = playerHeading;
+    this.elapsed += deltaTime;
+    this.groundContactElapsed += deltaTime;
+    const groundScanDue = this.mode !== 'ground'
+      || this.groundContactElapsed >= GROUND_CONTACT_UPDATE_INTERVAL;
+    if (this.mode === 'ground' && groundScanDue) {
+      this.groundContactElapsed %= GROUND_CONTACT_UPDATE_INTERVAL;
+    }
+
+    for (const track of this.tracks.values()) {
       if (track.identificationElapsed < INITIAL_CONTACT_IDENTIFICATION_DELAY) {
-        track.identificationElapsed += dt;
+        track.identificationElapsed += deltaTime;
       }
     }
 
-    if(this.mode==='ground'){
-      this.updateContactList(groundFriendly,'friendly','ground');
-      this.updateContactList(groundHostile,'hostile','ground');
-      this.updateContactList(airHostile,'hostile','air',true);
-      this.updateContactList(airFriendly,'friendly','air',false,true);
-    }else{
-      this.updateContactList(airFriendly,'friendly','air');
-      this.updateContactList(airHostile,'hostile','air');
+    if (this.mode === 'ground') {
+      if (groundScanDue) {
+        this.updateContactList(groundFriendly, 'friendly', 'ground');
+        this.updateContactList(groundHostile, 'hostile', 'ground');
+      }
+      // Pop-up air contacts stay responsive while the pilot is on the ground
+      // scope; only the slow-moving ground picture is sampled less often.
+      this.updateContactList(airHostile, 'hostile', 'air', true);
+      this.updateContactList(airFriendly, 'friendly', 'air', false, true);
+    } else {
+      this.updateContactList(airFriendly, 'friendly', 'air');
+      this.updateContactList(airHostile, 'hostile', 'air');
+    }
+
+    for (const [key, track] of this.tracks) {
+      const age = Math.max(0, this.elapsed - (track.lastSeenAt ?? this.elapsed));
+      track.age = age;
+      // Ground tracks are sampled at 15 Hz. Do not fade or remove them on
+      // skipped frames between samples.
+      const mayAgeGroundTrack = track.domain !== 'ground' || groundScanDue;
+      if (!mayAgeGroundTrack) continue;
+      if (age > this.trackMemoryDuration) {
+        track.node?.remove();
+        this.recycleTrackNode(track.node);
+        this.tracks.delete(key);
+      } else if (track.node && age > 0) {
+        // Let a lost return decay instead of lingering at full strength.
+        const opacity = String(1 - age / this.trackMemoryDuration);
+        if (track.opacity !== opacity) {
+          track.node.style.opacity = opacity;
+          track.opacity = opacity;
+        }
+      }
     }
   }
 
@@ -117,12 +150,17 @@ export class CombatRadar {
           age: 0,
           identificationElapsed: 0,
           initialUncertainty: hostileReturn,
-          node: document.createElement('span'),
+          lastSeenAt: this.elapsed,
+          left: null,
+          top: null,
+          opacity: null,
+          node: this.takeTrackNode(),
         };
         this.screen?.append(track.node);
         this.tracks.set(mesh, track);
       }
       track.age = 0;
+      track.lastSeenAt = this.elapsed;
       track.domain = domain;
       track.team = unit.identified === false ? 'unknown' : unit.radarTeam ?? team;
       const uncertain = track.team === 'unknown'
@@ -145,10 +183,34 @@ export class CombatRadar {
         : `radar-contact ${domain} ${trackTeam}${rescueClass}${missionTargetClass}`;
       if(track.node.className!==className)track.node.className=className;
       const radius = THREE.MathUtils.clamp(distance / sensorRange, 0, 1) * 43;
-      track.node.style.left = `${50 - Math.sin(bearing) * radius}%`;
-      track.node.style.top = `${50 - Math.cos(bearing) * radius}%`;
-      if(track.node.style.opacity!=='1')track.node.style.opacity = '1';
+      const left = `${50 - Math.sin(bearing) * radius}%`;
+      const top = `${50 - Math.cos(bearing) * radius}%`;
+      if (track.left !== left) {
+        track.node.style.left = left;
+        track.left = left;
+      }
+      if (track.top !== top) {
+        track.node.style.top = top;
+        track.top = top;
+      }
+      if (track.opacity !== '1') {
+        track.node.style.opacity = '1';
+        track.opacity = '1';
+      }
     }
+  }
+
+  takeTrackNode() {
+    const node = this.trackNodePool.pop() ?? document.createElement('span');
+    node.className = '';
+    node.style.left = '';
+    node.style.top = '';
+    node.style.opacity = '';
+    return node;
+  }
+
+  recycleTrackNode(node) {
+    if (node) this.trackNodePool.push(node);
   }
 
   cycleTarget(enemies, groundHostiles, direction = 1) {
@@ -246,7 +308,10 @@ export class CombatRadar {
   }
 
   clearTracks() {
-    for (const track of this.tracks.values()) track.node?.remove();
+    for (const track of this.tracks.values()) {
+      track.node?.remove();
+      this.recycleTrackNode(track.node);
+    }
     this.tracks.clear();
   }
 
@@ -255,6 +320,7 @@ export class CombatRadar {
     this.clearLock();
     this.screen?.classList.remove('ground-mode');
     this.screen?.querySelectorAll('.radar-contact').forEach(node => node.remove());
+    this.trackNodePool.length = 0;
   }
 
 }

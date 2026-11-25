@@ -17,11 +17,12 @@ import { RadioSystem } from './radio-system.js';
 import { ScoreSystem } from './score-system.js';
 import { DestructionSystem } from './destruction-system.js';
 import { applyAirframeCondition } from './airframe-condition.js';
-import { getBoundaryApproach } from './boundary-warning.js';
+import { getBoundaryApproach, getBoundaryLineFade } from './boundary-warning.js';
 import { getDifficultyPreset } from './difficulty.js';
 import { createSeededRandom, DEFAULT_RANDOM_SEED, GROUND_SPAWN_LAYOUT_SEED_XOR } from './random.js';
 import { calculateDebriefGrade } from '../mission/debrief-grade.js';
 import { MissionOptionalObjectives, scaleMissileReserveObjectives } from '../mission/optional-objectives.js';
+import { segmentIntersectsCircle } from '../mission/zone-geometry.js';
 import { resolveMissionVariant } from '../mission/mission-variants.js';
 import { addTransientGlow, CombatEffects, disposeCombatEffectResources } from '../effects/combat-effects.js';
 import { CombatHud } from '../ui/combat-hud.js';
@@ -152,6 +153,8 @@ export class CombatWorld {
     this.nightVisionEnabled=false;
     this.terrain=terrain; this.playerHeading=0; this.previousPlayerPosition=player.position.clone();
     this.objectiveAnchor=player.position.clone();
+    this.protectedAssetBreaches=new Set();
+    this.protectedAssetPreviousPositions=new Map();
     this._fallbackBoundaryBounds=terrain.operationBounds??{
       minX:-terrain.worldSize*.5,maxX:terrain.worldSize*.5,
       minZ:-terrain.worldSize*.5,maxZ:terrain.worldSize*.5,
@@ -188,6 +191,8 @@ export class CombatWorld {
     });
     this.airBattle.setGroundUnits(this.groundBattle.redUnits);
     this.airBattle.setFriendlyGroundUnits(this.groundBattle.friends);
+    // Zone objectives and hostile Strike routing must refer to the same stable target.
+    this.objectiveAnchor.copy(this.airBattle.strikeTarget);
     this.encounterContext={
       primaryGroupRemaining:0,
       primaryGroundRemaining:0,
@@ -323,14 +328,15 @@ export class CombatWorld {
         if(activeObjectiveType==='airPolicing'){
           this.airBattle.getOperationalState(state);
         }else if(activeObjectiveType==='assetDefense'){
-          const targetIndex=missionConfig.objective.target?.index??0;
+          const activeObjective=this.missionSystem?.activeObjective??missionConfig.objective;
+          const targetIndex=activeObjective.target?.index??0;
           const target=this.enemies[targetIndex];
           state.priorityTargetsRemaining=!this.airBattle.hostilesSpawned||Boolean(target&&!target.dead)?1:0;
+          state.protectedAssetLost=Boolean(target&&this.protectedAssetBreaches.has(target));
           if(target&&!target.dead){
             const dx=target.mesh.position.x-this.objectiveAnchor.x;
             const dz=target.mesh.position.z-this.objectiveAnchor.z;
-            const radius=missionConfig.objective.zoneRadius??7200;
-            state.protectedAssetLost=dx*dx+dz*dz<=radius*radius;
+            const radius=activeObjective.zoneRadius??7200;
             state.protectedAssetDistance=Math.hypot(dx,dz);
             const warningRange=Math.max(radius*3,18000);
             state.protectedAssetThreat=THREE.MathUtils.clamp(
@@ -349,6 +355,11 @@ export class CombatWorld {
               .filter(role=>role==='strike').length;
           }else{
             state.priorityTargetsRemaining=this.enemies.filter(enemy=>enemy.missionRole==='strike'&&!enemy.dead).length;
+          }
+          const activeObjective=this.missionSystem?.activeObjective??missionConfig.objective;
+          if(activeObjective.zoneRadius){
+            const strikeTargets=this.enemies.filter(enemy=>enemy.missionRole==='strike');
+            state.protectedAssetLost=strikeTargets.some(target=>this.protectedAssetBreaches.has(target));
           }
         }
         if(tracksFriendlyStrength){
@@ -723,6 +734,28 @@ export class CombatWorld {
     contactApproach.count=approachingCount;
     contactApproach.distance=nearestApproachDistance;
   }
+  trackProtectedAssetBreaches(){
+    const objective=this.missionSystem?.activeObjective;
+    const radius=objective?.zoneRadius;
+    if((objective?.type!=='assetDefense'&&objective?.type!=='strikeDefense')||!(radius>0))return;
+    const targets=objective.type==='assetDefense'
+      ? [this.enemies[objective.target?.index??0]]
+      : this.enemies.filter(enemy=>enemy.missionRole==='strike');
+    for(const target of targets){
+      const position=target?.mesh?.position;
+      if(!position)continue;
+      const previous=this.protectedAssetPreviousPositions.get(target);
+      if(segmentIntersectsCircle(previous,position,this.objectiveAnchor,radius)){
+        this.protectedAssetBreaches.add(target);
+      }
+      if(previous){
+        previous.x=position.x;
+        previous.z=position.z;
+      }else{
+        this.protectedAssetPreviousPositions.set(target,{x:position.x,z:position.z});
+      }
+    }
+  }
   update(dt){
     this.frameDelta=dt;
     this.missileLaunchTimer=Math.max(0,this.missileLaunchTimer-dt);
@@ -799,6 +832,7 @@ export class CombatWorld {
     }
     this._airPlayerThreat.lockedTarget=this.radar.targetDomain==='air'&&this.radar.lockCueConfirmed?this.radar.target:null;
     this.airBattle.update(dt,this._airPlayerThreat);
+    this.trackProtectedAssetBreaches();
     this.groundBattle.update(dt);
     this.countermeasureSystem.update(dt);
     this.projectileSystem.update(dt);
@@ -1409,7 +1443,7 @@ export class CombatWorld {
     this.boundaryCritical=critical;
     const boundaryLine=this.terrain.boundaryLine;
     if(!boundaryLine)return;
-    const lineFade=1-THREE.MathUtils.smoothstep(clearance,8_000,22_000);
+    const lineFade=getBoundaryLineFade(clearance);
     const lineVisible=!this.destroyed&&lineFade>0;
     boundaryLine.visible=lineVisible;
     const state=boundaryLine.userData;

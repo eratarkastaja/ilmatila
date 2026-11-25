@@ -4,7 +4,7 @@
   <img src="public/branding/ilmatila-cover.png" alt="ILMATILA – Rajan Varjo" width="100%">
 </p>
 
-ILMATILA is an independent browser-based air-combat game by ERÄGAMES. The current public beta is **0.3.0-beta.8**. Missions, combat, progression, aircraft handling, radar, and weapons are playable; balance and mission pacing may still change during beta. The simulation is fictional and is not intended for real-world training or operational use.
+ILMATILA is an independent browser-based air-combat game by ERÄGAMES. The current public beta is **0.3.0-beta.9**. Missions, combat, progression, aircraft handling, radar, and weapons are playable; balance and mission pacing may still change during beta. The simulation is fictional and is not intended for real-world training or operational use.
 
 **[Play ILMATILA in your browser](https://eratarkastaja.github.io/ilmatila/).**
 
@@ -65,6 +65,7 @@ The mission menu and pause menu open a **Show Controls** dialog with the flight 
 | F | Deploy flares against infrared threats |
 | C | Deploy chaff against radar tracking and radar-guided missiles |
 | N | Toggle the night-vision display during night sorties |
+| L | Request an RSRAKH fire mission when that campaign support is active and a live hostile ground track is selected |
 | 1 / 2 / 3 / 4 | Order wingmen: attack / defend / formation / return |
 | Move mouse | Steer the aircraft |
 | Left / right mouse button | Fire cannon / launch a missile |

@@ -125,10 +125,16 @@ export class AirSpawnSystem {
     const hostileCount = Math.max(0, mission.hostiles ?? 0);
     const altitudeOffsets = [-110, 95, -45, 145, -160, 65];
     const configuredMinimumDistance = mission.hostileMinimumSpawnDistance;
-    const requestedDistance = getAirSpawnDistance(mission.hostileSpawnDistance ?? 12000, configuredMinimumDistance);
+    const maximumDistance = battle.terrain?.sortieLayout?.maximumAirSpawnDistance;
+    const requestedDistance = getAirSpawnDistance(
+      mission.hostileSpawnDistance ?? 12000,
+      configuredMinimumDistance,
+      maximumDistance,
+    );
     const minimumDistance = getAirSpawnDistance(
       mission.hostileMinimumSpawnDistance ?? 10000,
       configuredMinimumDistance,
+      maximumDistance,
     );
     const spawnMargin = getAirSpawnMargin(minimumDistance);
     const lateralSpacing = mission.hostileLateralSpacing ?? 560;
@@ -280,13 +286,16 @@ export class AirSpawnSystem {
     if (!count) return;
     const lateralSpacing = battle.mission.hostileHelicopterLateralSpacing ?? 850;
     const configuredMinimumDistance = mission.hostileHelicopterMinimumSpawnDistance;
+    const maximumDistance = battle.terrain?.sortieLayout?.maximumAirSpawnDistance;
     const requestedDistance = getAirSpawnDistance(
       mission.hostileHelicopterSpawnDistance ?? 9500,
       configuredMinimumDistance,
+      maximumDistance,
     );
     const minimumDistance = getAirSpawnDistance(
       mission.hostileHelicopterMinimumSpawnDistance ?? 8500,
       configuredMinimumDistance,
+      maximumDistance,
     );
     const spawnMargin = getAirSpawnMargin(minimumDistance);
     const formation = planAirFormation({

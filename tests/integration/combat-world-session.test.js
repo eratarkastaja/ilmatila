@@ -158,6 +158,57 @@ function createAircraftAsset() {
 }
 
 describe('CombatWorld sortie lifecycle', () => {
+  it('uses the hostile Strike aim point as the protected ground-battle anchor', async () => {
+    installBrowserGlobals();
+    const { CombatWorld } = await import('../../src/combat/world.js');
+    const scene = new THREE.Scene();
+    const player = new THREE.Group();
+    player.position.set(0, 100, 0);
+    const world = new CombatWorld(
+      scene, player, createTerrain(), null, createAircraftAsset(), createMission(),
+      null, vi.fn(), 'standard', null, 123,
+    );
+
+    expect(world.objectiveAnchor.toArray()).toEqual(world.airBattle.strikeTarget.toArray());
+    expect(world.objectiveAnchor.distanceTo(player.position)).toBeGreaterThan(0);
+    world.dispose();
+  });
+
+  it('turns a Strike segment crossing the primary protected zone into a setback', async () => {
+    installBrowserGlobals();
+    const { CombatWorld } = await import('../../src/combat/world.js');
+    const scene = new THREE.Scene();
+    const player = new THREE.Group();
+    player.position.set(0, 100, 0);
+    const mission = {
+      ...createMission(),
+      id: 'intercept',
+      groundBattle: false,
+      deferredHostiles: false,
+      hostileRoles: ['strike'],
+      objective: {
+        type: 'strikeDefense',
+        zoneRadius: 500,
+        setback: { type: 'assetLost', graceDuration: 0 },
+      },
+    };
+    const world = new CombatWorld(
+      scene, player, createTerrain(), null, createAircraftAsset(), mission,
+      null, vi.fn(), 'standard', null, 124,
+    );
+    const strike = world.enemies[0];
+    strike.mesh.position.set(900, 300, 0);
+    world.trackProtectedAssetBreaches();
+    strike.mesh.position.x = -900;
+    world.trackProtectedAssetBreaches();
+    world.missionSystem.activate();
+    world.missionSystem.update(0);
+
+    expect(world.protectedAssetBreaches.has(strike)).toBe(true);
+    expect(world.missionSystem.objectiveResult).toBe('setback');
+    world.dispose();
+  });
+
   it('repeats the gameplay simulation from the same sortie seed, independent of visual effects', async () => {
     installBrowserGlobals();
     const { CombatWorld } = await import('../../src/combat/world.js');

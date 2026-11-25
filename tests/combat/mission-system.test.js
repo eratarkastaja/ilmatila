@@ -175,7 +175,11 @@ describe('MissionSystem', () => {
         stages: [
           { id: 'intercept', type: 'strikeDefense' },
           { id: 'line', type: 'forceDefense', minimumFriendlyStrength: .45, maximumGroundRemaining: 3 },
-          { id: 'assault', type: 'holdPosition', duration: 2 },
+          {
+            id: 'assault', type: 'holdPosition', duration: 2,
+            minimumFriendlyStrength: .45, maximumGroundRemaining: 0,
+            setback: { type: 'friendlyStrength', minimum: .45 },
+          },
         ],
       },
       totals: { air: 2, ground: 4 },
@@ -201,9 +205,46 @@ describe('MissionSystem', () => {
     expect(system.activeStageIndex).toBe(2);
     expect(stageChanges).toHaveLength(2);
 
+    remaining = { ...remaining, groundRemaining: 0 };
     system.update(2);
     expect(system.objectiveSatisfied).toBe(true);
     expect(system.objectiveResult).toBe(MISSION_OUTCOME.COMPLETE);
     expect(system.outcome).toBe(MISSION_OUTCOME.ACTIVE);
+  });
+
+  it('turns a defensive-line loss during the final hold stage into a setback', () => {
+    let remaining = {
+      airRemaining: 0, groundRemaining: 0, priorityTargetsRemaining: 0,
+      friendlyStrengthFraction: .8, friendlyLogisticsFraction: 1,
+    };
+    const system = new MissionSystem({
+      mission: { id: 'border-holds' },
+      objective: {
+        type: 'staged',
+        stages: [
+          { id: 'intercept', type: 'strikeDefense' },
+          { id: 'line', type: 'forceDefense', minimumFriendlyStrength: .45, maximumGroundRemaining: 3 },
+          {
+            id: 'assault', type: 'holdPosition', duration: 2,
+            minimumFriendlyStrength: .45, maximumGroundRemaining: 0,
+            setback: { type: 'friendlyStrength', minimum: .45 },
+          },
+        ],
+      },
+      totals: { air: 2, ground: 4 },
+      getRemaining: () => remaining,
+      nodes: {},
+      deferCompletion: true,
+      initiallyActive: true,
+    });
+
+    system.update(0);
+    system.update(0);
+    expect(system.activeStageIndex).toBe(2);
+    remaining = { ...remaining, friendlyStrengthFraction: 0 };
+    system.update(2);
+
+    expect(system.objectiveSatisfied).toBe(true);
+    expect(system.objectiveResult).toBe(MISSION_OUTCOME.SETBACK);
   });
 });

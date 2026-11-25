@@ -53,8 +53,9 @@ const OPTIONAL_OBJECTIVE_COLLECTIONS = {
   denyZone: null,
 };
 const OPTIONAL_OBJECTIVE_OPTIONAL_FIELDS = {
-  preserveForce: ['minimumAlive', 'minimumFraction'],
-  destroyTargets: ['requiredByDifficulty'],
+  preserveForce: ['minimumAlive', 'minimumFraction', 'targetLifecycle'],
+  destroyTargets: ['requiredByDifficulty', 'targetLifecycle'],
+  denyZone: ['targetLifecycle'],
 };
 
 const difficultySchema = object({
@@ -333,15 +334,27 @@ function validateObjective(objective, path, errors) {
     errors.push(`${path}.type is not a recognized mission objective type`);
     return;
   }
-  const keys = ['id', 'type', 'titleKey', 'setback', ...fields];
-  for (const key of keys) {
-    if (!['id', 'titleKey', 'setback'].includes(key) && !(key in objective)) errors.push(`${path}.${key} is required`);
+  const optionalFieldsByType = {
+    holdPosition: ['minimumFriendlyStrength', 'maximumGroundRemaining'],
+    strikeDefense: ['zoneRadius'],
+  };
+  const keys = ['id', 'type', 'titleKey', 'setback', ...fields, ...(optionalFieldsByType[objective.type] ?? [])];
+  for (const key of ['type', ...fields]) {
+    if (!(key in objective)) errors.push(`${path}.${key} is required`);
   }
   for (const key of Object.keys(objective)) {
     if (!keys.includes(key)) errors.push(`${path}.${key} is not valid for ${objective.type}`);
   }
   if (objective.type === 'training') validateNode(objective.duration, number(1, 3600), `${path}.duration`, errors);
-  if (objective.type === 'holdPosition') validateNode(objective.duration, number(1, 3600), `${path}.duration`, errors);
+  if (objective.type === 'holdPosition') {
+    validateNode(objective.duration, number(1, 3600), `${path}.duration`, errors);
+    if (objective.minimumFriendlyStrength !== undefined) {
+      validateNode(objective.minimumFriendlyStrength, number(0, 1), `${path}.minimumFriendlyStrength`, errors);
+    }
+    if (objective.maximumGroundRemaining !== undefined) {
+      validateNode(objective.maximumGroundRemaining, number(0, 200, true), `${path}.maximumGroundRemaining`, errors);
+    }
+  }
   if (objective.type === 'protectUntilProgress') {
     validateNode(objective.duration, number(1, 3600), `${path}.duration`, errors);
     validateNode(objective.minimumLogisticsFraction, number(0, 1), `${path}.minimumLogisticsFraction`, errors);
@@ -369,6 +382,9 @@ function validateObjective(objective, path, errors) {
   if (objective.type === 'forceDefense') {
     validateNode(objective.minimumFriendlyStrength, number(0, 1), `${path}.minimumFriendlyStrength`, errors);
     validateNode(objective.maximumGroundRemaining, number(0, 200, true), `${path}.maximumGroundRemaining`, errors);
+  }
+  if (objective.type === 'strikeDefense' && objective.zoneRadius !== undefined) {
+    validateNode(objective.zoneRadius, number(100, 100000), `${path}.zoneRadius`, errors);
   }
   if (objective.setback !== undefined) validateObjectiveSetback(objective.setback, `${path}.setback`, errors);
 }
@@ -419,7 +435,10 @@ function validateOptionalObjectiveTarget(target, path, expectedCollection, error
     errors.push(`${path} must be an object`);
     return;
   }
-  const allowedKeys = ['collection', 'index', 'role', 'team', 'armed', 'labelKey', 'radioId', 'platform', 'reinforcementSource'];
+  const allowedKeys = [
+    'collection', 'index', 'role', 'team', 'armed', 'labelKey', 'radioId', 'platform',
+    'reinforcementSource', 'encounterGroupId',
+  ];
   for (const key of Object.keys(target)) {
     if (!allowedKeys.includes(key)) errors.push(`${path}.${key} is not a recognized target selector setting`);
   }
@@ -433,6 +452,9 @@ function validateOptionalObjectiveTarget(target, path, expectedCollection, error
   if (target.labelKey !== undefined) validateNode(target.labelKey, string, `${path}.labelKey`, errors);
   if (target.radioId !== undefined) validateNode(target.radioId, string, `${path}.radioId`, errors);
   if (target.platform !== undefined) validateNode(target.platform, string, `${path}.platform`, errors);
+  if (target.encounterGroupId !== undefined) {
+    validateNode(target.encounterGroupId, string, `${path}.encounterGroupId`, errors);
+  }
   if (target.reinforcementSource !== undefined) {
     validateNode(target.reinforcementSource, boolean, `${path}.reinforcementSource`, errors);
   }
@@ -456,6 +478,10 @@ function validateObjectivePresentation(objective, path, errors) {
 }
 
 function validateOptionalObjectiveSpecificFields(objective, path, errors) {
+  if (objective.targetLifecycle !== undefined
+    && !['continuous', 'snapshot'].includes(objective.targetLifecycle)) {
+    errors.push(`${path}.targetLifecycle must be continuous or snapshot`);
+  }
   if (objective.type === 'destroyTargets') {
     validateFlexibleOptionalTarget(objective.target, `${path}.target`, errors);
     validateNode(objective.required, number(1, 500, true), `${path}.required`, errors);

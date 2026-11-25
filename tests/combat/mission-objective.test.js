@@ -55,6 +55,26 @@ describe('mission objective progression', () => {
     })).toBe(MISSION_OUTCOME.ACTIVE);
   });
 
+  it('requires a defended hold to preserve the line and break the ground assault', () => {
+    const objective = {
+      type: 'holdPosition',
+      duration: 120,
+      minimumFriendlyStrength: .45,
+      maximumGroundRemaining: 0,
+      setback: { type: 'friendlyStrength', minimum: .45 },
+    };
+
+    expect(evaluateMissionObjective(objective, {
+      elapsed: 120, friendlyStrengthFraction: .8, groundRemaining: 1,
+    })).toBe(MISSION_OUTCOME.ACTIVE);
+    expect(evaluateMissionObjective(objective, {
+      elapsed: 120, friendlyStrengthFraction: .44, groundRemaining: 0,
+    })).toBe(MISSION_OUTCOME.SETBACK);
+    expect(evaluateMissionObjective(objective, {
+      elapsed: 120, friendlyStrengthFraction: .45, groundRemaining: 0,
+    })).toBe(MISSION_OUTCOME.COMPLETE);
+  });
+
   it('completes air policing after identification and a sustained escort', () => {
     const objective = { type: 'airPolicing', requiredContacts: 2, escortDuration: 12 };
 
@@ -111,6 +131,11 @@ describe('mission objective progression', () => {
       type: 'clearAir',
       setback: { type: 'assetLost', graceDuration: 3 },
     }, { elapsed: 3, protectedAssetLost: true, priorityTargetsRemaining: 1 })).toBe(MISSION_OUTCOME.SETBACK);
+
+    expect(evaluateMissionObjective({
+      type: 'strikeDefense',
+      setback: { type: 'assetLost', graceDuration: 0 },
+    }, { protectedAssetLost: true, priorityTargetsRemaining: 1 })).toBe(MISSION_OUTCOME.SETBACK);
 
     expect(evaluateMissionObjective({
       type: 'protectUntilProgress', duration: 300, minimumLogisticsFraction: .5,

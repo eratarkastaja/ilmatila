@@ -62,4 +62,53 @@ describe('air formation placement', () => {
       && position.z <= terrain.operationBounds.maxZ - 1200
     ))).toBe(true);
   });
+
+  it('keeps the Virolahti departure and opening formation away from the map edge', () => {
+    const virolahtiTerrain = {
+      ...terrain,
+      sortieLayout: {
+        minimumStartEdgeClearance: 10000,
+        maximumAirSpawnDistance: 16000,
+      },
+    };
+    const mission = {
+      hostiles: 4,
+      navigationDistance: 5000,
+      hostileSpawnDistance: 15500,
+      hostileMinimumSpawnDistance: 14000,
+    };
+    const origin = planAirIngressStart(
+      new THREE.Vector3(0, 0, 0), virolahtiTerrain, 0, mission,
+    );
+    const ingress = origin.clone().add(new THREE.Vector3(0, 0, mission.navigationDistance));
+    const spawnDistance = getAirSpawnDistance(
+      mission.hostileSpawnDistance,
+      mission.hostileMinimumSpawnDistance,
+      virolahtiTerrain.sortieLayout.maximumAirSpawnDistance,
+    );
+    const formation = planAirFormation({
+      origin: ingress,
+      forward: new THREE.Vector3(0, 0, 1),
+      right: new THREE.Vector3(1, 0, 0),
+      terrain: virolahtiTerrain,
+      count: mission.hostiles,
+      requestedDistance: spawnDistance,
+      minimumDistance: spawnDistance,
+      lateralSpacing: 1250,
+      forwardLaneSpacing: 90,
+      margin: getAirSpawnMargin(spawnDistance),
+      random: () => .4,
+    });
+
+    expect(origin.z).toBe(-6000);
+    expect(spawnDistance).toBe(16000);
+    expect(formation.positions.every(position => position.distanceTo(ingress) >= 16000))
+      .toBe(true);
+    expect(formation.positions.every(position => (
+      position.x >= terrain.operationBounds.minX + 1200
+      && position.x <= terrain.operationBounds.maxX - 1200
+      && position.z >= terrain.operationBounds.minZ + 1200
+      && position.z <= terrain.operationBounds.maxZ - 1200
+    ))).toBe(true);
+  });
 });

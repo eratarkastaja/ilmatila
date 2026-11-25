@@ -146,6 +146,26 @@ describe('CampaignSession', () => {
     expect(highMission.campaignWingmanRadioIds).toContain('owl');
   });
 
+  it('keeps the Virolahti ground campaign inside a centered tactical window', () => {
+    const session = new CampaignSession({
+      progress: new CampaignProgress(memoryStorage()),
+      difficulty: 'standard',
+      seedFactory: () => 988,
+    });
+
+    for (const chapterIndex of [5, 6, 7, 8, 9]) {
+      session.state.chapterIndex = chapterIndex;
+      const resolved = session.resolveCurrentMission();
+
+      expect(resolved.areaId).toBe('virolahti');
+      expect(resolved.mission).toMatchObject({
+        battlefieldIngressOffset: 1000,
+        groundFrontSpan: 20000,
+        convoyArea: 18000,
+      });
+    }
+  });
+
   it('previews and commits a decisive result exactly once', () => {
     let nextSeed = 100;
     const progress = new CampaignProgress(memoryStorage());
@@ -346,7 +366,43 @@ describe('CampaignSession', () => {
     });
     session.state.chapterIndex = 4;
 
-    expect(session.resolveCurrentMission().mission.objective.type).toBe('strikeDefense');
+    expect(session.resolveCurrentMission().mission.objective).toMatchObject({
+      type: 'strikeDefense',
+      zoneRadius: 7200,
+      setback: expect.arrayContaining([{ type: 'assetLost', graceDuration: 0 }]),
+    });
+  });
+
+  it('aligns the logistical and final chapters with their narrated operational outcomes', () => {
+    const session = new CampaignSession({
+      progress: new CampaignProgress(memoryStorage()),
+      difficulty: 'standard',
+      seedFactory: () => 77,
+    });
+
+    session.state.chapterIndex = 2;
+    expect(session.resolveCurrentMission().mission.objective).toMatchObject({
+      type: 'protectUntilProgress',
+      duration: 240,
+      minimumLogisticsFraction: .5,
+    });
+
+    session.state.chapterIndex = 6;
+    expect(session.resolveCurrentMission().mission.objective).toMatchObject({
+      type: 'protectUntilProgress',
+      duration: 300,
+      minimumLogisticsFraction: .5,
+    });
+
+    session.state.chapterIndex = 9;
+    const finalStage = session.resolveCurrentMission().mission.objective.stages.at(-1);
+    expect(finalStage).toMatchObject({
+      id: 'break-assault',
+      type: 'holdPosition',
+      minimumFriendlyStrength: .45,
+      maximumGroundRemaining: 0,
+      setback: expect.arrayContaining([{ type: 'friendlyStrength', minimum: .45 }]),
+    });
   });
 
   it('offers operational support and resupplies the next sortie', () => {

@@ -21,11 +21,15 @@ export function getAirSpawnMargin() {
 }
 
 /** Applies the long-range ingress rule to authored mission distances. */
-export function getAirSpawnDistance(distance, configuredMinimum = 0) {
+export function getAirSpawnDistance(distance, configuredMinimum = 0, maximumDistance = Infinity) {
   const authoredDistance = Number.isFinite(distance) ? distance : 0;
   const authoredMinimum = Number(configuredMinimum);
-  if (!Number.isFinite(authoredMinimum) || authoredMinimum < 9000) return authoredDistance;
-  return Math.max(authoredDistance, AIR_INGRESS_MINIMUM_SPAWN_DISTANCE);
+  const longRangeDistance = !Number.isFinite(authoredMinimum) || authoredMinimum < 9000
+    ? authoredDistance
+    : Math.max(authoredDistance, AIR_INGRESS_MINIMUM_SPAWN_DISTANCE);
+  return Number.isFinite(maximumDistance)
+    ? Math.min(longRangeDistance, Math.max(0, maximumDistance))
+    : longRangeDistance;
 }
 
 /** Keeps the long-range opening leg inside the theater from the opposite edge. */
@@ -45,7 +49,12 @@ export function planAirIngressStart(origin, terrain, heading, mission = {}) {
   const configuredMinimum = mission.hostileMinimumSpawnDistance;
   if (!Number.isFinite(Number(configuredMinimum)) || Number(configuredMinimum) < 9000) return origin.clone();
 
-  const distance = getAirSpawnDistance(mission.hostileSpawnDistance ?? 12000, configuredMinimum);
+  const sortieLayout = terrain.sortieLayout ?? {};
+  const distance = getAirSpawnDistance(
+    mission.hostileSpawnDistance ?? 12000,
+    configuredMinimum,
+    sortieLayout.maximumAirSpawnDistance,
+  );
   const ingressDistance = getMissionIngressDistance(mission, terrain);
   const edgeMargin = 1200;
   const headingForward = forwardOfHeading(heading);
@@ -68,7 +77,15 @@ export function planAirIngressStart(origin, terrain, heading, mission = {}) {
     maxRight = Math.max(maxRight, rightProjection);
   }
 
-  const desiredForward = maxForward - distance - ingressDistance - edgeMargin;
+  const minimumStartEdgeClearance = THREE.MathUtils.clamp(
+    sortieLayout.minimumStartEdgeClearance ?? edgeMargin,
+    edgeMargin,
+    Math.max(edgeMargin, (maxForward - minForward) * .5),
+  );
+  const desiredForward = Math.max(
+    maxForward - distance - ingressDistance - edgeMargin,
+    minForward + minimumStartEdgeClearance,
+  );
   const homeForward = THREE.MathUtils.clamp(desiredForward, minForward + edgeMargin, maxForward - edgeMargin);
   const currentRight = origin.x * headingRight.x + origin.z * headingRight.z;
   const homeRight = THREE.MathUtils.clamp(currentRight, minRight + edgeMargin, maxRight - edgeMargin);

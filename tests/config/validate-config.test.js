@@ -111,6 +111,8 @@ describe('game configuration validation', () => {
     campaigns['shadow-border'].chapters[2].decisiveObjectiveId = 'missing-objective';
     campaigns['shadow-border'].chapters[3].timeOfDay = 25;
     campaigns['shadow-border'].chapters[0].missionOverrides.rulesOfEngagement = 'freeFire';
+    campaigns['shadow-border'].chapters[3].optionalObjectives[0].targetLifecycle = 'rolling';
+    campaigns['shadow-border'].chapters[3].optionalObjectives[0].target.encounterGroupId = 4;
 
     const errors = validateGameConfig({
       difficulties: DIFFICULTY_PRESETS,
@@ -132,6 +134,12 @@ describe('game configuration validation', () => {
     );
     expect(errors).toContain(
       'campaigns.shadow-border.chapters[3].timeOfDay must be between 0 and 24',
+    );
+    expect(errors).toContain(
+      'campaigns.shadow-border.chapters[3].optionalObjectives[0].targetLifecycle must be continuous or snapshot',
+    );
+    expect(errors).toContain(
+      'campaigns.shadow-border.chapters[3].optionalObjectives[0].target.encounterGroupId must be a non-empty string',
     );
   });
 });

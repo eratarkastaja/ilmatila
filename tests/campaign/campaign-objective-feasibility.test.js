@@ -65,11 +65,13 @@ function assertObjectiveFeasible(resolved) {
     const count = targetCount(mission, objective.target);
     if (objective.type === 'destroyTargets' || objective.type === 'destroyOptionalGroundTarget') {
       expect(count, `${resolved.chapter.id}/${objective.id} target count`).toBeGreaterThanOrEqual(objective.required ?? 1);
+      if (objective.type === 'destroyTargets') expect(objective.targetLifecycle).toBe('snapshot');
     }
     if (objective.type === 'preserveForce') {
       expect(count, `${resolved.chapter.id}/${objective.id} force count`).toBeGreaterThan(0);
       expect(objective.minimumAlive ?? 0).toBeLessThanOrEqual(count);
       expect(objective.minimumFraction ?? 0).toBeLessThanOrEqual(1);
+      expect(objective.targetLifecycle).toBe('snapshot');
     }
     if (objective.type === 'allWingmenSurvive' || objective.type === 'allWingmenReturned') {
       expect(mission.wingmen ?? 0, `${resolved.chapter.id}/${objective.id} wingmen`).toBeGreaterThan(0);

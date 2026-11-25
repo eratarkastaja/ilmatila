@@ -169,6 +169,7 @@ describe('MissionOptionalObjectives', () => {
     const tracker = new MissionOptionalObjectives([{
       id: 'reinforcement-relay',
       type: 'destroyTargets',
+      targetLifecycle: 'snapshot',
       target: { collection: 'groundHostiles', role: 'logistics', reinforcementSource: true },
       required: 1,
     }]);
@@ -191,6 +192,7 @@ describe('MissionOptionalObjectives', () => {
   it('fails destroy groups that cannot meet their authored requirement', () => {
     const tracker = new MissionOptionalObjectives([{
       id: 'sweep-pair', type: 'destroyTargets',
+      targetLifecycle: 'snapshot',
       target: { collection: 'airHostiles', role: 'sweep' }, required: 2,
     }]);
     const state = makeState({
@@ -199,6 +201,26 @@ describe('MissionOptionalObjectives', () => {
     });
 
     expect(tracker.update(state)[0].status).toBe('failed');
+  });
+
+  it('keeps continuous destroy groups open for later matching arrivals', () => {
+    const first = { dead: false, role: 'strike' };
+    const tracker = new MissionOptionalObjectives([{
+      id: 'strike-package', type: 'destroyTargets',
+      target: { collection: 'airHostiles', role: 'strike' }, required: 2,
+    }]);
+    const state = makeState({
+      airHostiles: [first],
+      targetCollectionsReady: { airHostiles: true },
+    });
+
+    expect(tracker.update(state)[0].status).toBe('pending');
+    const reinforcement = { dead: false, role: 'strike' };
+    state.airHostiles.push(reinforcement);
+    first.dead = true;
+    expect(tracker.update(state)[0].status).toBe('pending');
+    reinforcement.dead = true;
+    expect(tracker.update(state)[0].status).toBe('completed');
   });
 
   it('preserves force thresholds and remembers zone penetrations across frames', () => {
@@ -230,6 +252,23 @@ describe('MissionOptionalObjectives', () => {
     strike.mesh.position.x = 100;
     expect(tracker.update(state)[1].status).toBe('failed');
     expect(tracker.update({ ...state, outcome: 'complete' }, true)[0].status).toBe('completed');
+  });
+
+  it('records a zone penetration when a fast target crosses between updates', () => {
+    const strike = { dead: false, role: 'strike', mesh: { position: { x: 900, y: 0, z: 0 } } };
+    const tracker = new MissionOptionalObjectives([{
+      id: 'zone', type: 'denyZone',
+      target: { collection: 'airHostiles', role: 'strike' },
+      zone: { center: 'protectedAsset', radius: 500 }, maximumPenetrations: 0,
+    }]);
+    const state = makeState({
+      airHostiles: [strike],
+      protectedAssetCenter: { x: 0, z: 0 },
+    });
+
+    expect(tracker.update(state)[0].status).toBe('pending');
+    strike.mesh.position.x = -900;
+    expect(tracker.update(state)[0].status).toBe('failed');
   });
 
   it('evaluates preservation objectives independently of an accepted setback', () => {

@@ -22,7 +22,16 @@ const terrainLeaseDisposers = new WeakMap();
 
 export const TERRAIN_AREAS = [
   { id: 'paijanne', label: 'Päijänne' },
-  { id: 'virolahti', dataId: 'vironlahti', label: 'Virolahti' },
+  {
+    id: 'virolahti', dataId: 'vironlahti', label: 'Virolahti',
+    sortieLayout: Object.freeze({
+      minimumStartEdgeClearance: 10000,
+      maximumAirSpawnDistance: 16000,
+      battlefieldIngressOffset: 1000,
+      maximumGroundFrontSpan: 20000,
+      maximumConvoyArea: 18000,
+    }),
+  },
   { id: 'ilomantsi', label: 'Ilomantsi' },
   { id: 'kuusamo', label: 'Kuusamo' },
 ];
@@ -127,6 +136,7 @@ export async function createTerrain({ areaId, fallback = true, onProgress, signa
     const terrain = {
       id:areaConfig?.id ?? selected.id, label:areaConfig?.label ?? selected.label, mesh, real: true, metadata,
       worldSize:operationSize, terrainSize:areaMeters, operationBounds: coverage.bounds,
+      sortieLayout:areaConfig?.sortieLayout ?? null,
       coverageCellMeters: coverage.cellMeters,
       isPlayableArea: (x, z) => isInCoverage(coverage, x, z),
       getBoundaryClearance: (x, z) => coverageClearance(coverage, x, z),

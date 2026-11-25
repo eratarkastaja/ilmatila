@@ -1,3 +1,11 @@
+import * as THREE from 'three';
+
+/** Fades the world-space boundary marker in only near the operational edge. */
+export function getBoundaryLineFade(clearance) {
+  if (!Number.isFinite(clearance)) return 0;
+  return 1 - THREE.MathUtils.smoothstep(Math.max(0, clearance), 1_500, 6_000);
+}
+
 /** Returns the nearest operational edge the aircraft is actively closing on. */
 export function getBoundaryApproach(position, velocity, bounds, warningRange = 5_000, minimumOutwardSpeed = 25, result) {
   let clearance = Infinity;

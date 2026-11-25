@@ -3,6 +3,30 @@
 This file is the maintained release record. Older beta checkpoints are
 summarized here instead of being kept as one document per pipeline attempt.
 
+## 0.3.0-beta.9
+
+The Border Holds ground-radar workload is now frame-budgeted: ground contacts
+are sampled at 15 Hz, their DOM nodes are pooled and reused, and the static
+ground-contact presentation no longer runs the air-contact pulse filter. Radar
+contact positioning also avoids redundant DOM writes. This keeps the dense
+ground-object mission responsive when switching to the ground display without
+changing air-contact cadence or target-selection behavior.
+
+The release also includes the Virolahti battlefield placement and objective
+geometry corrections, the Counterstroke soundtrack asset, and the associated
+mission, campaign, terrain, HUD, audio, and documentation updates. The local
+candidate passed the complete Vitest suite, ESLint, the production build, and
+diff validation. The Pages workflow remains the authoritative deployed release
+gate for the staging and beta browser matrix.
+
+### Validation
+
+- Local Vitest: 412 tests passed.
+- Local ESLint passed.
+- Local production Vite build passed.
+- GitHub Actions staging, browser-smoke, deployment, and live beta smoke are
+  required before this beta is considered published.
+
 ## 0.3.0-beta.8
 
 Menu radar readability corrections keep nearby wingmen visibly separate from
@@ -23,15 +47,16 @@ the preserved live site's recorded commit instead of assuming it is the
 candidate's immediate parent.
 
 The local release candidate passed the focused and full Vitest suites, ESLint,
-and the production build. The staging and tagged beta browser-matrix results
-are recorded below after the GitHub Actions release gate completes.
+and the production build. Follow-up browser-smoke stabilization landed after
+the tag, and the release gate completed successfully for commit `06b98dd`.
 
 ### Validation
 
 - Local Vitest: 397 tests passed.
 - Local ESLint passed.
 - Local production Vite build passed.
-- GitHub Actions staging and tagged beta browser smoke: pending release gate.
+- GitHub Actions quality and Chrome, Edge, Firefox, and WebKit browser smoke passed.
+- The deployed staging preflight, beta deployment, build-identity check, and live beta smoke passed on 2026-11-14.
 
 ## 0.3.0-beta.7
 

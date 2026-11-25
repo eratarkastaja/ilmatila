@@ -51,6 +51,7 @@ const LIMITED_SUSTAINMENT = {
       optionalObjective: {
         id: 'support-varpunen',
         type: 'preserveForce',
+        targetLifecycle: 'snapshot',
         target: { collection: 'airFriendly', role: 'wingman', radioId: 'varpunen', labelKey: 'mission.optionalTarget.varpunen' },
         minimumAlive: 1,
         titleKey: 'campaign.objective.supportVarpunen.title',
@@ -73,6 +74,7 @@ const LIMITED_SUSTAINMENT = {
       optionalObjective: {
         id: 'support-sergei',
         type: 'preserveForce',
+        targetLifecycle: 'snapshot',
         target: { collection: 'friendlyGround', role: 'airDefense', platform: 'sergei23', labelKey: 'mission.optionalTarget.sergei' },
         minimumAlive: 2,
         titleKey: 'campaign.objective.supportSergei.title',
@@ -95,7 +97,7 @@ const LIMITED_SUSTAINMENT = {
         supportRequiresGroundBattle: true,
       },
       optionalObjective: {
-        id: 'support-ito90', type: 'preserveForce',
+        id: 'support-ito90', type: 'preserveForce', targetLifecycle: 'snapshot',
         target: { collection: 'friendlyGround', role: 'airDefense', platform: 'ito90', labelKey: 'mission.optionalTarget.ito90' },
         minimumAlive: 1,
         titleKey: 'campaign.objective.supportIto90.title',
@@ -103,7 +105,7 @@ const LIMITED_SUSTAINMENT = {
       },
       optionalObjectiveByChapter: {
         'disperse': {
-          id: 'support-ito90', type: 'preserveForce',
+          id: 'support-ito90', type: 'preserveForce', targetLifecycle: 'snapshot',
           target: { collection: 'friendlyGround', role: 'airDefense', platform: 'ito90', labelKey: 'mission.optionalTarget.ito90' },
           minimumAlive: 1,
           titleKey: 'campaign.objective.supportIto90.title',
@@ -139,6 +141,7 @@ const LIMITED_SUSTAINMENT = {
       optionalObjective: {
         id: 'support-rsrakh',
         type: 'preserveForce',
+        targetLifecycle: 'snapshot',
         target: { collection: 'friendlyGround', role: 'artillery', platform: 'rsrakh06', labelKey: 'mission.optionalTarget.rsrakh' },
         minimumAlive: 1,
         titleKey: 'campaign.objective.supportRsrakh.title',
@@ -160,6 +163,7 @@ const LIMITED_SUSTAINMENT = {
       optionalObjective: {
         id: 'support-expanded-ordnance',
         type: 'destroyTargets',
+        targetLifecycle: 'snapshot',
         target: { collection: 'groundHostiles', role: 'airDefense', labelKey: 'mission.optionalTarget.airDefense' },
         required: 2,
         titleKey: 'campaign.objective.supportExpandedOrdnance.title',
@@ -169,6 +173,7 @@ const LIMITED_SUSTAINMENT = {
         'hold-e18': {
           id: 'support-expanded-ordnance',
           type: 'destroyTargets',
+          targetLifecycle: 'snapshot',
           target: { collection: 'groundHostiles', role: 'assault', labelKey: 'mission.optionalTarget.assaultForce' },
           required: 3,
           titleKey: 'campaign.objective.supportExpandedOrdnance.title',
@@ -177,6 +182,7 @@ const LIMITED_SUSTAINMENT = {
         counterstroke: {
           id: 'support-expanded-ordnance',
           type: 'destroyTargets',
+          targetLifecycle: 'snapshot',
           target: { collection: 'groundHostiles', role: 'assault', labelKey: 'mission.optionalTarget.assaultForce' },
           required: 2,
           titleKey: 'campaign.objective.supportExpandedOrdnance.title',
@@ -204,6 +210,16 @@ const groundSuccess = (flag, defenseIntegrity = 6) => ({
   sortieReadiness: 1,
   addFlags: [flag],
 });
+
+// The Virolahti terrain is a compact 32 km tactical window. Keep its ground
+// campaign inside a central footprint so the orthophoto boundary does not sit
+// directly behind the main action. Strategic state may still shift the front
+// within this window through campaignDefenseFrontOffset.
+const VIROLAHTI_CENTRAL_BATTLEFIELD = {
+  battlefieldIngressOffset: 1000,
+  groundFrontSpan: 20000,
+  convoyArea: 18000,
+};
 
 export const CAMPAIGNS = deepFreeze({
   'shadow-border': {
@@ -245,6 +261,7 @@ export const CAMPAIGNS = deepFreeze({
           },
           {
             id: 'flight-intact', type: 'preserveForce',
+            targetLifecycle: 'snapshot',
             target: { collection: 'airFriendly', role: 'wingman', labelKey: 'mission.optionalTarget.flight' },
             minimumFraction: 1,
             titleKey: 'campaign.objective.flightIntact.title',
@@ -303,6 +320,7 @@ export const CAMPAIGNS = deepFreeze({
           },
           {
             id: 'flight-intact', type: 'preserveForce',
+            targetLifecycle: 'snapshot',
             target: { collection: 'airFriendly', role: 'wingman', labelKey: 'mission.optionalTarget.flight' },
             minimumFraction: 1,
             titleKey: 'campaign.objective.flightIntact.title',
@@ -339,11 +357,21 @@ export const CAMPAIGNS = deepFreeze({
           hostileHelicopterMinimumSpawnDistance: 11000,
           hostileHelicopterLateralSpacing: 1200,
           hostileHelicopterSpawnAltitude: 520,
-          objective: { type: 'holdPosition', duration: 240, setback: { type: 'deadline', duration: 300 } },
+          objective: {
+            type: 'protectUntilProgress',
+            titleKey: 'mission.objective.disperseLogistics',
+            duration: 240,
+            minimumLogisticsFraction: 0.5,
+            setback: [
+              { type: 'friendlyLogistics', minimum: 0.5 },
+              { type: 'deadline', duration: 300 },
+            ],
+          },
         },
         optionalObjectives: [
           {
             id: 'preserve-logistics', type: 'preserveForce',
+            targetLifecycle: 'snapshot',
             target: { collection: 'friendlyGround', role: 'logistics', labelKey: 'mission.optionalTarget.logisticsColumn' },
             minimumFraction: .75,
             titleKey: 'campaign.objective.preserveLogistics.title',
@@ -379,7 +407,8 @@ export const CAMPAIGNS = deepFreeze({
         optionalObjectives: [
           {
             id: 'disrupt-strike-element', type: 'destroyTargets',
-            target: { collection: 'airHostiles', role: 'strike', labelKey: 'mission.optionalTarget.strikeElement' },
+            targetLifecycle: 'snapshot',
+            target: { collection: 'airHostiles', role: 'strike', encounterGroupId: 'primary', labelKey: 'mission.optionalTarget.strikeElement' },
             required: 1,
             titleKey: 'campaign.objective.disruptStrikeElement.title',
             briefingKey: 'campaign.objective.disruptStrikeElement.briefing',
@@ -410,7 +439,14 @@ export const CAMPAIGNS = deepFreeze({
         id: 'first-wave', day: 4, timeOfDay: 5.5, areaId: 'kuusamo', baseMissionId: 'intercept',
         decisiveObjectiveId: 'zero-penetrations',
         missionOverrides: {
-          objective: { type: 'strikeDefense', setback: { type: 'deadline', duration: 300 } },
+          objective: {
+            type: 'strikeDefense',
+            zoneRadius: 7200,
+            setback: [
+              { type: 'assetLost', graceDuration: 0 },
+              { type: 'deadline', duration: 300 },
+            ],
+          },
         },
         optionalObjectives: [
           {
@@ -422,7 +458,8 @@ export const CAMPAIGNS = deepFreeze({
           },
           {
             id: 'break-sweep', type: 'destroyTargets',
-            target: { collection: 'airHostiles', role: 'sweep', labelKey: 'mission.optionalTarget.sweepElement' },
+            targetLifecycle: 'snapshot',
+            target: { collection: 'airHostiles', role: 'sweep', encounterGroupId: 'primary', labelKey: 'mission.optionalTarget.sweepElement' },
             required: 2,
             titleKey: 'campaign.objective.breakSweep.title',
             briefingKey: 'campaign.objective.breakSweep.briefing',
@@ -446,6 +483,7 @@ export const CAMPAIGNS = deepFreeze({
         id: 'border-breaks', day: 5, timeOfDay: 8, areaId: 'virolahti', baseMissionId: 'support',
         decisiveObjectiveId: 'preserve-line',
         missionOverrides: {
+          ...VIROLAHTI_CENTRAL_BATTLEFIELD,
           objective: {
             type: 'forceDefense',
             minimumFriendlyStrength: 0.4,
@@ -456,6 +494,7 @@ export const CAMPAIGNS = deepFreeze({
         optionalObjectives: [
           {
             id: 'preserve-line', type: 'preserveForce',
+            targetLifecycle: 'snapshot',
             target: { collection: 'friendlyGround', role: 'defender', labelKey: 'mission.optionalTarget.defenders' },
             minimumFraction: .75,
             titleKey: 'campaign.objective.preserveLine.title',
@@ -463,6 +502,7 @@ export const CAMPAIGNS = deepFreeze({
           },
           {
             id: 'blunt-armor', type: 'destroyTargets',
+            targetLifecycle: 'snapshot',
             target: { collection: 'groundHostiles', role: 'assault', labelKey: 'mission.optionalTarget.assaultForce' },
             required: 3,
             titleKey: 'campaign.objective.bluntArmor.title',
@@ -487,6 +527,7 @@ export const CAMPAIGNS = deepFreeze({
         id: 'hold-e18', day: 6, timeOfDay: 20.5, areaId: 'virolahti', baseMissionId: 'support',
         decisiveObjectiveId: 'keep-column',
         missionOverrides: {
+          ...VIROLAHTI_CENTRAL_BATTLEFIELD,
           objective: {
             type: 'protectUntilProgress', duration: 300, minimumLogisticsFraction: 0.5,
             setback: { type: 'friendlyLogistics', minimum: 0.5 },
@@ -495,6 +536,7 @@ export const CAMPAIGNS = deepFreeze({
         optionalObjectives: [
           {
             id: 'keep-column', type: 'preserveForce',
+            targetLifecycle: 'snapshot',
             target: { collection: 'friendlyGround', role: 'logistics', labelKey: 'mission.optionalTarget.logisticsColumn' },
             minimumFraction: .75,
             titleKey: 'campaign.objective.keepColumn.title',
@@ -502,6 +544,7 @@ export const CAMPAIGNS = deepFreeze({
           },
           {
             id: 'suppress-air-defense', type: 'destroyTargets',
+            targetLifecycle: 'snapshot',
             target: { collection: 'groundHostiles', role: 'airDefense', labelKey: 'mission.optionalTarget.airDefense' },
             required: 2, requiredByDifficulty: { easy: 1, standard: 2, hard: 2 },
             titleKey: 'campaign.objective.suppressAirDefense.title',
@@ -527,11 +570,13 @@ export const CAMPAIGNS = deepFreeze({
         id: 'blind-spear', day: 7, timeOfDay: 20.5, areaId: 'virolahti', baseMissionId: 'support',
         decisiveObjectiveId: 'suppress-air-defense',
         missionOverrides: {
+          ...VIROLAHTI_CENTRAL_BATTLEFIELD,
           objective: { type: 'logisticsStrike', setback: { type: 'deadline', duration: 300 } },
         },
         optionalObjectives: [
           {
             id: 'suppress-air-defense', type: 'destroyTargets',
+            targetLifecycle: 'snapshot',
             target: { collection: 'groundHostiles', role: 'airDefense', labelKey: 'mission.optionalTarget.airDefense' },
             required: 2, requiredByDifficulty: { easy: 1, standard: 2, hard: 2 },
             titleKey: 'campaign.objective.suppressAirDefense.title',
@@ -561,6 +606,7 @@ export const CAMPAIGNS = deepFreeze({
         id: 'counterstroke', day: 9, timeOfDay: 20.5, areaId: 'virolahti', baseMissionId: 'support',
         decisiveObjectiveId: 'preserve-assault-force',
         missionOverrides: {
+          ...VIROLAHTI_CENTRAL_BATTLEFIELD,
           objective: {
             type: 'forceDefense', minimumFriendlyStrength: 0.5, maximumGroundRemaining: 3,
             setback: { type: 'friendlyStrength', minimum: 0.5 },
@@ -569,6 +615,7 @@ export const CAMPAIGNS = deepFreeze({
         optionalObjectives: [
           {
             id: 'preserve-assault-force', type: 'preserveForce',
+            targetLifecycle: 'snapshot',
             target: { collection: 'friendlyGround', role: 'defender', labelKey: 'mission.optionalTarget.counterattackForce' },
             minimumFraction: .7,
             titleKey: 'campaign.objective.preserveAssaultForce.title',
@@ -576,6 +623,7 @@ export const CAMPAIGNS = deepFreeze({
           },
           {
             id: 'cut-reinforcements', type: 'destroyTargets',
+            targetLifecycle: 'snapshot',
             target: { collection: 'groundHostiles', role: 'logistics', reinforcementSource: true, labelKey: 'mission.optionalTarget.reinforcementLogistics' },
             required: 1,
             titleKey: 'campaign.objective.cutReinforcements.title',
@@ -583,6 +631,7 @@ export const CAMPAIGNS = deepFreeze({
           },
           {
             id: 'suppress-air-defense', type: 'destroyTargets',
+            targetLifecycle: 'snapshot',
             target: { collection: 'groundHostiles', role: 'airDefense', labelKey: 'mission.optionalTarget.airDefense' },
             required: 2, requiredByDifficulty: { easy: 1, standard: 2, hard: 2 },
             titleKey: 'campaign.objective.suppressAirDefense.title',
@@ -612,6 +661,7 @@ export const CAMPAIGNS = deepFreeze({
         id: 'border-holds', day: 10, timeOfDay: 12, areaId: 'virolahti', baseMissionId: 'support',
         decisiveObjectiveId: 'line-holds',
         missionOverrides: {
+          ...VIROLAHTI_CENTRAL_BATTLEFIELD,
           hostileComposition: ['su27', 'su27'],
           hostileRoles: ['strike', 'strike'],
           objective: {
@@ -619,13 +669,25 @@ export const CAMPAIGNS = deepFreeze({
             stages: [
               { id: 'intercept-strike', type: 'strikeDefense', titleKey: 'mission.objective.stage.interceptStrike', setback: { type: 'deadline', duration: 300 } },
               { id: 'hold-line', type: 'forceDefense', titleKey: 'mission.objective.stage.holdLine', minimumFriendlyStrength: 0.45, maximumGroundRemaining: 3, setback: { type: 'friendlyStrength', minimum: 0.45 } },
-              { id: 'break-assault', type: 'holdPosition', titleKey: 'mission.objective.stage.breakAssault', duration: 120, setback: { type: 'deadline', duration: 180 } },
+              {
+                id: 'break-assault',
+                type: 'holdPosition',
+                titleKey: 'mission.objective.stage.breakAssault',
+                duration: 120,
+                minimumFriendlyStrength: 0.45,
+                maximumGroundRemaining: 0,
+                setback: [
+                  { type: 'friendlyStrength', minimum: 0.45 },
+                  { type: 'deadline', duration: 180 },
+                ],
+              },
             ],
           },
         },
         optionalObjectives: [
           {
             id: 'line-holds', type: 'preserveForce',
+            targetLifecycle: 'snapshot',
             target: { collection: 'friendlyGround', role: 'defender', labelKey: 'mission.optionalTarget.defenders' },
             minimumFraction: .85,
             titleKey: 'campaign.objective.lineHolds.title',

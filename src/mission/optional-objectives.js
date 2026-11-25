@@ -1,3 +1,5 @@
+import { segmentIntersectsCircle } from './zone-geometry.js';
+
 const terminalStatuses = new Set(['completed', 'failed', 'notApplicable']);
 
 function isDestroyed(unit) {
@@ -38,6 +40,7 @@ function matchesSelector(unit, selector) {
   if (selector.armed !== undefined && unit.armed !== selector.armed) return false;
   if (selector.radioId && unit.radioId !== selector.radioId) return false;
   if (selector.platform && unit.platform !== selector.platform) return false;
+  if (selector.encounterGroupId && unit.encounterGroupId !== selector.encounterGroupId) return false;
   if (selector.reinforcementSource !== undefined
     && unit.reinforcementSource !== selector.reinforcementSource) return false;
   return true;
@@ -64,13 +67,15 @@ function selectedTarget(state, selector) {
   return selectTargets(state, selector)[0] ?? null;
 }
 
-function snapshotTargets(state, selector, final, runtime) {
-  if (runtime.targets === null) {
-    const targets = selectTargets(state, selector);
-    const ready = state.targetCollectionsReady?.[selector?.collection] ?? true;
-    if (targets.length === 0 && !final && !ready) return null;
-    runtime.targets = targets;
-  }
+function objectiveTargets(state, objective, final, runtime) {
+  const selector = objective.target;
+  const lifecycle = objective.targetLifecycle ?? 'continuous';
+  const ready = state.targetCollectionsReady?.[selector?.collection] ?? true;
+  if (lifecycle === 'snapshot' && !runtime.targetsClosed && !final && !ready) return null;
+
+  const matches = selectTargets(state, selector);
+  for (const target of matches) runtime.targets.add(target);
+  if (lifecycle === 'snapshot') runtime.targetsClosed = true;
   return runtime.targets;
 }
 
@@ -192,10 +197,11 @@ const evaluators = {
         'target', objective.target.labelKey);
   },
   destroyTargets(result, objective, state, final, runtime) {
-    const targets = snapshotTargets(state, objective.target, final, runtime);
+    const targets = objectiveTargets(state, objective, final, runtime);
     if (targets === null) return setResult(result, 'pending', 'mission.optionalObjective.result.waitingForTarget');
-    const total = targets.length;
-    const destroyed = targets.filter(isDestroyed).length;
+    const total = targets.size;
+    let destroyed = 0;
+    for (const target of targets) if (isDestroyed(target)) destroyed++;
     const required = Math.max(0, objective.required ?? 0);
     const remaining = Math.max(0, required - destroyed);
     if (total === 0) {
@@ -207,7 +213,7 @@ const evaluators = {
       return setResult(result, 'completed', 'mission.optionalObjective.result.targetsDestroyed',
         'destroyed', destroyed, 'required', required);
     }
-    if (total - destroyed < remaining) {
+    if ((objective.targetLifecycle === 'snapshot' || final) && total - destroyed < remaining) {
       return setResult(result, 'failed', 'mission.optionalObjective.result.targetsImpossible',
         'destroyed', destroyed, 'required', required);
     }
@@ -216,10 +222,11 @@ const evaluators = {
       'destroyed', destroyed, 'required', required);
   },
   preserveForce(result, objective, state, final, runtime) {
-    const targets = snapshotTargets(state, objective.target, final, runtime);
+    const targets = objectiveTargets(state, objective, final, runtime);
     if (targets === null) return setResult(result, 'pending', 'mission.optionalObjective.result.waitingForTarget');
-    const total = targets.length;
-    const alive = targets.filter(target => !isDestroyed(target)).length;
+    const total = targets.size;
+    let alive = 0;
+    for (const target of targets) if (!isDestroyed(target)) alive++;
     const minimumAlive = objective.minimumAlive ?? 0;
     const minimumFraction = objective.minimumFraction ?? 0;
     const fraction = total > 0 ? alive / total : 0;
@@ -230,7 +237,7 @@ const evaluators = {
         ? setResult(result, 'notApplicable', 'mission.optionalObjective.result.targetUnavailable')
         : setResult(result, 'pending', 'mission.optionalObjective.result.waitingForTarget');
     }
-    if (!meetsAlive || !meetsFraction) {
+    if ((!meetsAlive || !meetsFraction) && (objective.targetLifecycle === 'snapshot' || final)) {
       return setResult(result, 'failed', 'mission.optionalObjective.result.forceBelowThreshold',
         'alive', alive, 'total', total);
     }
@@ -243,22 +250,26 @@ const evaluators = {
       'alive', alive, 'total', total);
   },
   denyZone(result, objective, state, final, runtime) {
-    const targets = snapshotTargets(state, objective.target, final, runtime);
+    const targets = objectiveTargets(state, objective, final, runtime);
     if (targets === null) return setResult(result, 'pending', 'mission.optionalObjective.result.waitingForTarget');
     const center = resolveZoneCenter(state, objective.zone?.center);
     const radius = objective.zone?.radius ?? 0;
-    if (targets.length === 0 || !center || !(radius > 0)) {
+    if (targets.size === 0 || !center || !(radius > 0)) {
       return final
         ? setResult(result, 'notApplicable', 'mission.optionalObjective.result.targetUnavailable')
         : setResult(result, 'pending', 'mission.optionalObjective.result.waitingForTarget');
     }
-    runtime.penetrated ??= new Set();
     for (const target of targets) {
       const position = target?.mesh?.position;
       if (!position) continue;
-      const dx = position.x - center.x;
-      const dz = position.z - center.z;
-      if (dx * dx + dz * dz <= radius * radius) runtime.penetrated.add(target);
+      const previous = runtime.previousPositions.get(target);
+      if (segmentIntersectsCircle(previous, position, center, radius)) runtime.penetrated.add(target);
+      if (previous) {
+        previous.x = position.x;
+        previous.z = position.z;
+      } else {
+        runtime.previousPositions.set(target, { x: position.x, z: position.z });
+      }
     }
     const penetrations = runtime.penetrated.size;
     const maximum = Math.max(0, objective.maximumPenetrations ?? 0);
@@ -296,7 +307,12 @@ export class MissionOptionalObjectives {
       detailKey: 'mission.optionalObjective.result.pending',
       params: {},
     }));
-    this.runtime = objectives.map(() => ({ targets: null, penetrated: null }));
+    this.runtime = objectives.map(() => ({
+      targets: new Set(),
+      targetsClosed: false,
+      penetrated: new Set(),
+      previousPositions: new Map(),
+    }));
     this.finished = false;
   }
 

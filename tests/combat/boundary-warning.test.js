@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getBoundaryApproach } from '../../src/combat/boundary-warning.js';
+import { getBoundaryApproach, getBoundaryLineFade } from '../../src/combat/boundary-warning.js';
 
 describe('getBoundaryApproach', () => {
   const halfSize = 16_000;
@@ -34,5 +34,17 @@ describe('getBoundaryApproach', () => {
     const orthophotoBounds = { minX: -12_000, maxX: 12_000, minZ: -12_000, maxZ: 12_000 };
     expect(getBoundaryApproach({ x: 8_000, z: 0 }, { x: 100, z: 0 }, orthophotoBounds))
       .toEqual({ clearance: 4_000 });
+  });
+});
+
+describe('getBoundaryLineFade', () => {
+  it('keeps the boundary marker hidden from departure and objective areas', () => {
+    expect(getBoundaryLineFade(10000)).toBe(0);
+    expect(getBoundaryLineFade(6000)).toBe(0);
+  });
+
+  it('fades the marker in only near the operational edge', () => {
+    expect(getBoundaryLineFade(4000)).toBeGreaterThan(0);
+    expect(getBoundaryLineFade(1500)).toBe(1);
   });
 });

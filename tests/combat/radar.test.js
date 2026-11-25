@@ -269,6 +269,27 @@ describe('combat radar target and lock logic', () => {
     expect(radar.lockCueConfirmed).toBe(false);
   });
 
+  it('samples slow ground contact layout at a lower cadence', () => {
+    const { radar } = setupRadar();
+    const hostileVehicle = makeContact(0, 0, 7400);
+    const contacts = {
+      airFriendly: [], airHostile: [], groundFriendly: [], groundHostile: [hostileVehicle],
+    };
+
+    radar.toggleMode();
+    radar.updateContacts(0.016, 0, contacts);
+    const track = radar.tracks.get(hostileVehicle.mesh);
+    const initialLeft = track.node.style.left;
+    hostileVehicle.mesh.position.x = 1000;
+
+    // The ground scope should not rewrite every contact position every frame.
+    radar.updateContacts(0.016, 0, contacts);
+    expect(track.node.style.left).toBe(initialLeft);
+
+    radar.updateContacts(0.06, 0, contacts);
+    expect(track.node.style.left).not.toBe(initialLeft);
+  });
+
   it('extends only air search and AMRAAM launch envelopes with AWACS', () => {
     const { radar } = setupRadar(null, { awacs: true });
     expect(radar.airRange).toBe(36450);

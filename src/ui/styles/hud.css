@@ -1442,6 +1442,15 @@ canvas.night-vision-scene {
 .radar-contact.ground:before {
   inset: 1px;
   clip-path: polygon(0 0,100% 0,100% 100%,0 100%);
+  /* Ground returns are numerous and slow-moving; avoid a filter layer for
+     every vehicle while keeping the compact square contact shape. */
+  filter: none;
+}
+
+/* Identification pulsing is useful for a few air returns, but dozens of
+   simultaneous ground returns create unnecessary animation/compositor work. */
+.radar-contact.ground.unknown:before {
+  animation: none;
 }
 
 .radar-contact.ground.friendly:before {

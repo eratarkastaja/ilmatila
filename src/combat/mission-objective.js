@@ -69,6 +69,8 @@ export function evaluateMissionObjective(objective, {
     ? elapsed >= (objective.duration ?? 90)
     : objective.type === 'holdPosition'
       ? elapsed >= (objective.duration ?? 180)
+        && friendlyStrengthFraction >= (objective.minimumFriendlyStrength ?? 0)
+        && groundRemaining <= (objective.maximumGroundRemaining ?? Infinity)
       : objective.type === 'protectUntilProgress'
         ? elapsed >= (objective.duration ?? 300)
           && friendlyLogisticsFraction >= (objective.minimumLogisticsFraction ?? 0)

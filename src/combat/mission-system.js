@@ -123,10 +123,23 @@ export class MissionSystem {
       params.elapsed=Math.min(duration,Math.floor(this.stages ? this.stageElapsed : this.elapsed));
       params.duration=duration;
       progressText = t('mission.progress.training',params);
-    } else if (objective.type === 'holdPosition' || objective.type === 'protectUntilProgress') {
+    } else if (objective.type === 'holdPosition') {
       params.elapsed = Math.min(objective.duration ?? 180, Math.floor(this.stages ? this.stageElapsed : this.elapsed));
       params.duration = objective.duration ?? 180;
-      progressText = t('mission.progress.holdPosition', params);
+      params.groundRemaining=remaining.groundRemaining??0;
+      params.strength=Math.round((remaining.friendlyStrengthFraction??0)*100);
+      params.minimumStrength=Math.round((objective.minimumFriendlyStrength??0)*100);
+      params.maximumGroundRemaining=objective.maximumGroundRemaining??0;
+      progressText = objective.minimumFriendlyStrength !== undefined
+        || objective.maximumGroundRemaining !== undefined
+        ? t('mission.progress.holdPositionDefense', params)
+        : t('mission.progress.holdPosition', params);
+    } else if (objective.type === 'protectUntilProgress') {
+      params.elapsed = Math.min(objective.duration ?? 180, Math.floor(this.stages ? this.stageElapsed : this.elapsed));
+      params.duration = objective.duration ?? 180;
+      params.logistics=Math.round((remaining.friendlyLogisticsFraction??0)*100);
+      params.minimumLogistics=Math.round((objective.minimumLogisticsFraction??0)*100);
+      progressText = t('mission.progress.protectUntilProgress', params);
     } else if (objective.type === 'logisticsStrike') {
       params.remaining = remaining.priorityTargetsRemaining ?? 0;
       progressText = t('mission.progress.logisticsStrike', params);

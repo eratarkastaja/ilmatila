@@ -27,6 +27,15 @@ The four terrain packages are tactical windows into the same conflict:
 
 The campaign omits transit between regions. Briefings, radio traffic, and
 strategic state changes describe events outside the active 32 × 32 km theater.
+The five Virolahti ground chapters use a centered, narrower tactical footprint,
+leaving several kilometers between the main formations and the orthophoto
+boundary. Defense integrity and campaign flags can still shift the front inside
+that footprint without moving the action back to the terrain edge.
+Virolahti also uses a theater-specific departure inset: ownship starts at least
+10 km from the rear boundary and the opening air formation is capped at 16 km,
+instead of using the shared 25 km long-range opening that would force a 32 km
+theater's departure point against its edge. The boundary marker remains hidden
+until the player flies within 6 km of an operational edge.
 
 ## Campaign state and lifecycle
 
@@ -45,8 +54,8 @@ Each run stores three visible values from 0 to 100:
 - **Sortie readiness** represents fuel, weapons, maintenance, and road-base
   support.
 
-Accepted sorties carry the remaining air-to-air missiles, air-to-ground
-missiles, cannon rounds, flares, chaff, and fuel minutes into the next chapter,
+Accepted sorties record the remaining air-to-air missiles, air-to-ground
+missiles, cannon rounds, flares, chaff, and fuel minutes in campaign history,
 capped by the selected difficulty's normal stores. The base fully replenishes
 all finite stores before the next chapter, including cannon ammunition and
 fuel, so a long campaign cannot strand the player without equipment. The exact
@@ -89,8 +98,10 @@ authored list after variant selection. The list can use `destroyTargets`,
 damage, time, and ground-target criteria. A selected sustainment choice may
 append one more objective, such as keeping Varpunen, a Sergei screen, or an
 RSRAKH battery alive. These selectors use the live unit collection and authored
-roles/platforms, so a target group is captured when it spawns rather than
-silently switching to a later reinforcement. The implemented effects cover
+roles/platforms. Objectives declare whether their target group remains
+continuous or closes as an explicit snapshot after the collection is ready;
+initial air formations can also select the `primary` encounter group separately
+from later reinforcements. The implemented effects cover
 strike interception, wingman survival, friendly-force protection, and logistics
 destruction. A failed optional objective can reduce a state value without
 changing the primary sortie result.
@@ -146,8 +157,8 @@ The flag audit is intentionally explicit:
 | `counterattack-window-open` | Blind the Spear ordinary success | Counterstroke | Starts the counterstroke from a 600 m more favorable front position. | No |
 | `road-base-supplied` | Disperse success/decisive | Campaign history/debrief | Records that the dispersed road base was sustained. | Yes |
 
-The two narrative-only flags are retained because they make the flight record
-and debrief more specific; they are not read as hidden tactical modifiers.
+The narrative-only flag is retained because it makes the flight record and
+debrief more specific; it is not read as a hidden tactical modifier.
 
 ## Implemented chapter arc
 
@@ -155,14 +166,14 @@ and debrief more specific; they are not read as hidden tactical modifiers.
 | ---: | --- | --- | --- | --- |
 | 1 | Unknown Track | Virolahti | Patrol | Identify and escort two non-combatant contacts under weapons hold; a missed deadline is a recoverable setback. |
 | 2 | Broken Silence | Virolahti | Intercept | Protect the surveillance relay from a distant Sweep/Strike package; losing the relay triggers RTB, while the lead Strike aircraft and wingmen are optional objectives. |
-| 3 | Disperse | Päijänne | Patrol | Hold the dispersed road-base operation together for the transfer window; the sortie completes by surviving the hold period rather than clearing the airspace. |
+| 3 | Disperse | Päijänne | Patrol | Keep at least half of the logistics transfer operational through the timed road-base dispersal window; clearing the airspace is not required. |
 | 4 | Northern Feint | Ilomantsi | Intercept | Clear the air picture and meet the authored time objective; deadline expiry triggers a recoverable setback. |
-| 5 | First Wave | Kuusamo | Intercept | Stop the Strike aircraft from breaking through the sector before the deadline; surviving sweep aircraft may remain when the corridor is secure. |
+| 5 | First Wave | Kuusamo | Intercept | Stop the Strike aircraft from crossing the protected sector before the deadline; a recorded crossing is a setback even if the aircraft is destroyed later, while surviving sweep aircraft may remain. |
 | 6 | The Border Breaks | Virolahti | Support | Keep the friendly defensive line above its strength threshold while limiting hostile ground survivors; a line breach is a recoverable setback. |
 | 7 | Hold the E18 | Virolahti | Support | Keep at least half of the logistics column operational through the civilian and reserve transfer window; losing the column triggers a recoverable setback. |
 | 8 | Blind the Spear | Virolahti | Support | Destroy the marked logistics relay as the primary objective before the counterattack window closes; success opens the counterstroke and other threats can remain. |
 | 9 | Counterstroke | Virolahti | Support | Clear the immediate air threat, protect the assault force, and keep the remaining hostile ground force below the breakthrough threshold; the line loss is a recoverable setback. |
-| 10 | The Border Holds | Virolahti | Support | Intercept the strike element, hold the line, and break the final assault in three authored stages; the campaign closes after the staged proof of control. |
+| 10 | The Border Holds | Virolahti | Support | Intercept the strike element, hold the line, then keep at least 45% line strength while eliminating the remaining armed ground assault during the final timed stage. |
 
 Chapters reuse the standalone Patrol, Intercept, and Support combat systems,
 but campaign resolution selects a campaign-specific objective. `holdPosition`
@@ -187,9 +198,11 @@ the authored force is intentionally smaller on Easy.
 
 Aircraft carry both an `authoredRole` and a runtime tactical role. A flank
 mutation can change how an aircraft behaves, but it must not make an authored
-Sweep or Strike objective silently impossible. Optional objectives snapshot
-their target group when it becomes available, and preservation / zone objectives
-are evaluated independently of the primary outcome. That means an accepted
+Sweep or Strike objective silently impossible. Continuous objective groups
+admit later matching arrivals; `snapshot` groups wait until their collection is
+ready and then retain exactly that formation. Preservation / zone objectives
+are evaluated independently of the primary outcome, and zone entry is recorded
+from the complete movement segment between updates. That means an accepted
 operational setback still records a surviving convoy, reserve, or clean zone;
 only `completeBeforeTime` requires a completed primary sortie by definition.
 

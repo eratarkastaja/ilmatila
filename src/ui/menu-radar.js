@@ -62,6 +62,7 @@ function formationPositions(origin, forward, right, terrain, {
 
 function getScenarioContacts(missionResolution, terrain, origin, heading, seed = DEFAULT_RANDOM_SEED) {
   const mission = { ...DEFAULT_MISSION, ...missionResolution.mission };
+  const maximumAirSpawnDistance = terrain?.sortieLayout?.maximumAirSpawnDistance;
   const layoutSeed = Number(seed) >>> 0;
   const spawnRandom = createSeededRandom((layoutSeed ^ AIR_SPAWN_LAYOUT_SEED_XOR) >>> 0);
   const forward = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
@@ -81,16 +82,19 @@ function getScenarioContacts(missionResolution, terrain, origin, heading, seed =
     requestedDistance: getAirSpawnDistance(
       mission.hostileSpawnDistance ?? 12000,
       mission.hostileMinimumSpawnDistance,
+      maximumAirSpawnDistance,
     ),
     minimumDistance: getAirSpawnDistance(
       mission.hostileMinimumSpawnDistance ?? 10000,
       mission.hostileMinimumSpawnDistance,
+      maximumAirSpawnDistance,
     ),
     lateralSpacing: mission.hostileLateralSpacing ?? 560,
     forwardLaneSpacing: 90,
     margin: getAirSpawnMargin(getAirSpawnDistance(
       mission.hostileMinimumSpawnDistance ?? 10000,
       mission.hostileMinimumSpawnDistance,
+      maximumAirSpawnDistance,
     )),
     random: spawnRandom,
   });
@@ -107,15 +111,18 @@ function getScenarioContacts(missionResolution, terrain, origin, heading, seed =
     requestedDistance: getAirSpawnDistance(
       mission.hostileHelicopterSpawnDistance ?? 9500,
       mission.hostileHelicopterMinimumSpawnDistance,
+      maximumAirSpawnDistance,
     ),
     minimumDistance: getAirSpawnDistance(
       mission.hostileHelicopterMinimumSpawnDistance ?? 8500,
       mission.hostileHelicopterMinimumSpawnDistance,
+      maximumAirSpawnDistance,
     ),
     lateralSpacing: mission.hostileHelicopterLateralSpacing ?? 850,
     margin: getAirSpawnMargin(getAirSpawnDistance(
       mission.hostileHelicopterMinimumSpawnDistance ?? 8500,
       mission.hostileHelicopterMinimumSpawnDistance,
+      maximumAirSpawnDistance,
     )),
     random: spawnRandom,
   });
@@ -132,16 +139,19 @@ function getScenarioContacts(missionResolution, terrain, origin, heading, seed =
       requestedDistance: getAirSpawnDistance(
         response.spawnDistance ?? mission.hostileSpawnDistance ?? 12000,
         response.minimumSpawnDistance ?? mission.hostileMinimumSpawnDistance,
+        maximumAirSpawnDistance,
       ),
       minimumDistance: getAirSpawnDistance(
         response.minimumSpawnDistance ?? mission.hostileMinimumSpawnDistance ?? 10000,
         response.minimumSpawnDistance ?? mission.hostileMinimumSpawnDistance,
+        maximumAirSpawnDistance,
       ),
       lateralSpacing: response.lateralSpacing ?? mission.hostileLateralSpacing ?? 560,
       forwardLaneSpacing: 90,
       margin: getAirSpawnMargin(getAirSpawnDistance(
         response.minimumSpawnDistance ?? mission.hostileMinimumSpawnDistance ?? 10000,
         response.minimumSpawnDistance ?? mission.hostileMinimumSpawnDistance,
+        maximumAirSpawnDistance,
       )),
       random: spawnRandom,
     });
