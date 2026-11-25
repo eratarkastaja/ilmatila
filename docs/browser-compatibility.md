@@ -4,15 +4,15 @@
 
 The `0.3.0-beta.9` release uses the production browser matrix in the Pages
 workflow. Playwright drives actual browser binaries against the packaged
-terrain assets and aircraft GLBs. The staging and deployed beta results are
-recorded by the workflow run for the `v0.3.0-beta.9` tag.
+terrain assets and aircraft GLBs. The staging and deployed beta results passed
+in workflow run `#143` for tag `v0.3.0-beta.9` on 2026-11-25.
 
 | Browser project | Browser build | Result |
 | --- | --- | --- |
-| Google Chrome | CI-installed stable Chrome | Required by the release gate |
-| Microsoft Edge | CI-installed stable Edge | Required by the release gate |
-| Firefox | Playwright Firefox | Required by the release gate |
-| WebKit | Playwright Linux WebKit | Required compatibility path; Pointer Lock may be unavailable |
+| Google Chrome | CI-installed stable Chrome | Passed |
+| Microsoft Edge | CI-installed stable Edge | Passed |
+| Firefox | Playwright Firefox | Passed |
+| WebKit | Playwright Linux WebKit | Passed the recoverable compatibility path; Pointer Lock may be unavailable |
 | Apple Safari | Not available on Linux | Not tested. Do not treat Safari as verified until the matrix runs on macOS. |
 
 The beta9 candidate includes the radar workload reduction for dense ground

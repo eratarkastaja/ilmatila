@@ -16,16 +16,18 @@ The release also includes the Virolahti battlefield placement and objective
 geometry corrections, the Counterstroke soundtrack asset, and the associated
 mission, campaign, terrain, HUD, audio, and documentation updates. The local
 candidate passed the complete Vitest suite, ESLint, the production build, and
-diff validation. The Pages workflow remains the authoritative deployed release
-gate for the staging and beta browser matrix.
+diff validation. The Pages workflow completed the staging preflight, beta
+deployment, build-identity check, and live beta smoke for tag
+`v0.3.0-beta.9` in run `#143` on 2026-11-25.
 
 ### Validation
 
 - Local Vitest: 412 tests passed.
 - Local ESLint passed.
 - Local production Vite build passed.
-- GitHub Actions staging, browser-smoke, deployment, and live beta smoke are
-  required before this beta is considered published.
+- GitHub Actions quality and Chrome, Edge, Firefox, and WebKit browser smoke passed.
+- Staging preflight, beta build/deployment, build identity, and live beta smoke
+  passed in run `#143` for commit `ed7b75d` on 2026-11-25.
 
 ## 0.3.0-beta.8
 
