@@ -72,9 +72,9 @@ as a failure rather than allowing extraction to overwrite the result.
 The repository README now includes the ILMATILA campaign cover. The deployed
 Pages smoke also verifies the metadata and representative runtime files of all
 four terrain packages, while the staging adapter pins and validates the exact
-`deploy-pages` version whose compiled entry point it patches. Staging now uses
-the preserved live site's recorded commit instead of assuming it is the
-candidate's immediate parent.
+`deploy-pages` version whose compiled entry point it patches. Staging uses a
+valid ancestor commit as its Pages build version so its deployment remains
+isolated from the preserved live site and the later beta deployment.
 
 The local release candidate passed the focused and full Vitest suites, ESLint,
 and the production build. Follow-up browser-smoke stabilization landed after

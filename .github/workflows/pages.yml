@@ -234,7 +234,9 @@ jobs:
       - name: Prepare staging Pages action
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'staging'
         run: |
-          staging_build_version="${PRESERVED_LIVE_COMMIT:-$(git rev-parse HEAD^)}"
+          # Pages requires a real commit-shaped build version. Keep staging
+          # distinct from both the live deployment and the later beta deploy.
+          staging_build_version="$(git rev-parse HEAD^)"
           deploy_action=.github/deploy-pages-action/dist/index.js
           grep -q 'process\.env\.GITHUB_SHA' "$deploy_action"
           perl -0pi -e 's/process\.env\.GITHUB_SHA/process.env.ILMATILA_PAGES_BUILD_VERSION || process.env.GITHUB_SHA/g' \
@@ -243,7 +245,6 @@ jobs:
           echo "ILMATILA_PAGES_BUILD_VERSION=$staging_build_version" >> "$GITHUB_ENV"
           echo "Deploying staging Pages version $staging_build_version"
         env:
-          PRESERVED_LIVE_COMMIT: ${{ needs.build.outputs.live_commit }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
