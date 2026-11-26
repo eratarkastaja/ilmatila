@@ -126,11 +126,13 @@ test('desktop browser completes the menu, controls, combat, and repeat-sortie pa
     // Hosted Firefox intermittently drops synthetic relative-motion events
     // after Pointer Lock is granted. Its keyboard flight path still exercises
     // the same live sortie, while Chromium validates the Pointer Lock path.
-    await page.keyboard.down('KeyD');
+    await page.mouse.click(20, 20);
+    await expect.poll(() => page.evaluate(() => document.pointerLockElement?.tagName)).toBe('CANVAS');
+    await page.keyboard.down('d');
     try {
       await expect.poll(() => heading.textContent(), { timeout: 12_000 }).not.toBe(headingBeforeMouse);
     } finally {
-      await page.keyboard.up('KeyD');
+      await page.keyboard.up('d');
     }
   } else {
     for (const [x, y] of [[300, 280], [510, 280], [700, 280], [360, 280], [600, 280]]) {
