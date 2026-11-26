@@ -27,6 +27,10 @@ passed after transforming 100 modules. Firefox passed the locally available
 Playwright smoke; Chrome and Edge binaries and WebKit host libraries were not
 available. Human campaign play remains a separate follow-up check.
 
+The follow-up dependency audit updates the locked development toolchain to
+Vite 7.3.8, Vitest 4.1.12, ESLint 10.15.0, and minimatch 11.0.9. A clean
+`npm ci` and `npm audit` now report zero vulnerabilities.
+
 ## 0.3.0-beta.9
 
 The Border Holds ground-radar workload is now frame-budgeted: ground contacts

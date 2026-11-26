@@ -12,8 +12,9 @@ The final browser matrix ran for 53.1 seconds: Firefox passed 3 tests, while
 Chrome and Edge binaries were absent and WebKit lacked host libraries. Six
 tests were skipped by project conditions.
 
-The install reported six existing npm audit findings (five moderate, one high);
-dependencies were not changed. The baseline findings addressed by this pass
+The initial install reported six npm audit findings (five moderate, one high).
+The security follow-up updated the locked development toolchain and a final
+audit reports zero vulnerabilities. The baseline findings addressed by this pass
 were temporary campaign persistence during development/replay, retry consuming
 readiness/support, loadout scaling after kit selection, briefing/flying reserve
 divergence, and the missing distinct StormBreaker profile.
@@ -35,7 +36,8 @@ staging preflight, beta deployment, and live browser smoke on 2026-11-25.
 
 | Command | Result |
 | --- | --- |
-| `npm ci` | Passed locally in 6 seconds; no dependency files changed. |
+| `npm ci` | Passed locally in 5 seconds after the security lockfile update. |
+| `npm audit` | Passed with 0 vulnerabilities after the lockfile update. |
 | `npm run lint` | Passed locally; no warnings. |
 | `npm test` | Passed locally with 421 tests in 16.82 seconds. |
 | `npm run build` | Passed locally in 8.96 seconds; Vite transformed 100 modules with no warnings. |
