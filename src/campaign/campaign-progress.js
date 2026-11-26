@@ -4,7 +4,7 @@ import { KIT_STORE_KEYS } from './campaign-kit.js';
 
 export const CAMPAIGN_STORAGE_KEY = 'ilmatila-campaign-v1';
 const SAVE_VERSION = 1;
-export const CAMPAIGN_CONTENT_VERSION = '0.3.0-beta.9';
+export const CAMPAIGN_CONTENT_VERSION = '0.4.0-beta.1';
 const DIFFICULTIES = new Set(['easy', 'standard', 'hard']);
 
 const clampState = value => Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));

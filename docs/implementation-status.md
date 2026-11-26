@@ -40,7 +40,7 @@ browser and human-play limitations are listed separately.
 | H02 | Implemented, environment-limited | Playwright build passed and Firefox smoke passed; Chrome/Edge/WebKit launch was blocked by missing local browser dependencies. |
 | H03 | Implemented, environment-limited | Existing lifecycle/performance protections retained; no human full-campaign performance run was possible. |
 | H04 | Implemented, verified | Architecture, game design, campaign design, testing, baseline, release notes, browser compatibility, README, and localization were reconciled. |
-| H05 | Implemented, verified with browser exceptions | `npm ci`, test, lint, and build passed; exact E2E blockers are recorded above. No version bump or push was made. |
+| H05 | Implemented, verified with browser exceptions | `npm ci`, audit, test, lint, and build passed; exact local E2E blockers are recorded above. Release is `0.4.0-beta.1`; tagged Pages validation follows. |
 | H06 | Implemented | This file is the requested task-by-task handoff report. |
 
 ## Verification summary
@@ -52,5 +52,7 @@ browser and human-play limitations are listed separately.
 - `npm run test:e2e`: build passed; Firefox had 3 passes and 6 skips, while 15 tests were blocked by missing Chrome, Edge, or WebKit host dependencies.
 - Human play: no chapters were manually completed in this environment; use `docs/playtest-metrics.md` for the exact acceptance checklist.
 
-No dependency, asset, or push operation was performed. A local commit is safe
-to create after the final diff review.
+The security follow-up updated only the locked development toolchain; no
+application dependency or asset was added. The release commit and tag are
+published only after the local checks above pass; the final GitHub Actions
+result is recorded in the release notes and browser compatibility report.

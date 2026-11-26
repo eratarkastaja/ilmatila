@@ -1,4 +1,4 @@
-# Current implementation baseline — 2026-11-26
+# 0.4.0-beta.1 release baseline — 2026-11-26
 
 The implementation work started from commit `1ca1e33` (`docs: record beta9
 release gate`) with a clean worktree. Node.js was `v20.19.2`, npm was invoked
@@ -18,6 +18,8 @@ audit reports zero vulnerabilities. The baseline findings addressed by this pass
 were temporary campaign persistence during development/replay, retry consuming
 readiness/support, loadout scaling after kit selection, briefing/flying reserve
 divergence, and the missing distinct StormBreaker profile.
+
+- Release: `0.4.0-beta.1`, pending tagged Pages validation.
 
 ## Historical beta9 release gate
 

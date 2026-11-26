@@ -3,7 +3,7 @@
 This file is the maintained release record. Older beta checkpoints are
 summarized here instead of being kept as one document per pipeline attempt.
 
-## Unreleased implementation pass — 2026-11-26
+## 0.4.0-beta.1 — 2026-11-26
 
 Campaign development selections and replays now remain temporary: accepted
 results, retries, support choices, and kit changes cannot write a temporary

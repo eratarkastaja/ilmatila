@@ -10,7 +10,14 @@ their branded executables were absent (`/opt/google/chrome/chrome` and
 `libmanette-0.2.so.0` and `libenchant-2.so.2`. This is an environment-blocked
 local run, not a product failure or a Safari result.
 
-## Beta9 release-gate run
+## 0.4.0-beta.1 release candidate
+
+The `0.4.0-beta.1` release uses the Pages workflow for final validation. The local
+environment cannot launch Chrome or Edge and lacks WebKit host libraries; the
+available Firefox smoke passed. The definitive release result is recorded here
+after the tagged GitHub Actions run completes. Apple Safari remains unverified.
+
+## 0.3.0-beta.9 release-gate run
 
 The `0.3.0-beta.9` release uses the production browser matrix in the Pages
 workflow. Playwright drives actual browser binaries against the packaged
