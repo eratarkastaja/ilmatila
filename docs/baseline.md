@@ -19,7 +19,11 @@ were temporary campaign persistence during development/replay, retry consuming
 readiness/support, loadout scaling after kit selection, briefing/flying reserve
 divergence, and the missing distinct StormBreaker profile.
 
-- Release: `0.4.0-beta.1`, pending tagged Pages validation.
+- Release: `0.4.0-beta.1`; tag `v0.4.0-beta.1` points to `3616d1c`.
+  GitHub Actions master quality/browser smoke passed in `45849738703`, staging
+  deployment and live smoke passed in `45852843755`, and beta deployment/live
+  smoke passed in `45859570358`. The live `build-info.json` reports version
+  `0.4.0-beta.1` and deployed commit `f3772503c1f1d361222267346b680e2b34951900`.
 
 ## Historical beta9 release gate
 
@@ -27,10 +31,18 @@ This records the completed `0.3.0-beta.9` release gate. Tag `v0.3.0-beta.9`
 points to commit `ed7b75d`; GitHub Actions release run `#143` completed the
 staging preflight, beta deployment, and live browser smoke on 2026-11-25.
 
+## 0.4.0-beta.1 release gate
+
+The release tag was published after the local checks passed. The Pages workflow
+first validated the corrected master build in staging, then ran the beta
+deployment and the deployed live smoke. The tag identifies the release content;
+the final Pages deployment also includes the post-tag workflow and test-runner
+stabilization commits, without changing the application behavior or version.
+
 ## Source and toolchain
 
 - Repository branch: `master`; `origin/master` points to the same commit. This checkout has no branch named `main`.
-- Release: `0.3.0-beta.9`, with local checks and deployed validation complete.
+- Release: `0.4.0-beta.1`, with local checks and deployed validation complete.
 - Local Node.js: `v20.19.2`; the release jobs use Node.js 22 and install with `npm ci`.
 - Local verification uses the npm CLI supplied through Corepack. No package manager files or application dependencies were changed by that setup.
 

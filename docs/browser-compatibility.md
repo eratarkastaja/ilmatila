@@ -12,10 +12,22 @@ local run, not a product failure or a Safari result.
 
 ## 0.4.0-beta.1 release candidate
 
-The `0.4.0-beta.1` release uses the Pages workflow for final validation. The local
-environment cannot launch Chrome or Edge and lacks WebKit host libraries; the
-available Firefox smoke passed. The definitive release result is recorded here
-after the tagged GitHub Actions run completes. Apple Safari remains unverified.
+The `0.4.0-beta.1` release uses the Pages workflow for final validation. The
+master quality and browser-smoke run `45849738703`, staging deployment and
+staging smoke run `45852843755`, and beta deployment/live-smoke run
+`45859570358` all passed. The deployed root reports version `0.4.0-beta.1`
+and commit `f3772503c1f1d361222267346b680e2b34951900`.
+
+| Browser project | Release-gate result |
+| --- | --- |
+| Google Chrome | Passed in CI, including the full interactive input journey |
+| Microsoft Edge | Passed in CI, including the full interactive input journey |
+| Firefox | Launch, WebGL, accessibility, and recoverable paths passed; the full synthetic Pointer Lock journey is isolated because the hosted runner intermittently drops its input |
+| WebKit | Recoverable compatibility path passed in CI; Pointer Lock is unavailable in Linux headless WebKit |
+| Apple Safari | Not available on Linux; not tested |
+
+The local environment still cannot launch Chrome or Edge and lacks WebKit host
+libraries. Human campaign completion and Apple Safari remain unverified.
 
 ## 0.3.0-beta.9 release-gate run
 

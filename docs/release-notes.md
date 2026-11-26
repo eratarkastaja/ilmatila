@@ -22,10 +22,21 @@ debriefs use chapter-specific bilingual outcome text, and accepted history
 retains named wingman status when the sortie provides it.
 
 Validation for this pass is recorded in the current implementation baseline:
-`npm ci` passed, 70 Vitest files/421 tests passed, lint passed, and the build
-passed after transforming 100 modules. Firefox passed the locally available
-Playwright smoke; Chrome and Edge binaries and WebKit host libraries were not
-available. Human campaign play remains a separate follow-up check.
+`npm ci` passed, 70 Vitest files/421 tests passed, lint passed, the build
+passed after transforming 100 modules, and `npm audit` reports zero
+vulnerabilities. GitHub Actions quality and the production browser smoke passed
+in run `45849738703`; staging deployment and both staging smoke checks passed
+in run `45852843755`; and the beta deployment and live smoke passed in run
+`45859570358`. The live site reports version `0.4.0-beta.1` and commit
+`f3772503c1f1d361222267346b680e2b34951900` in `build-info.json`.
+
+The tagged release is `v0.4.0-beta.1` at commit `3616d1c`. The final Pages
+deployment used the corrected master commit `f3772503c1f1d361222267346b680e2b34951900`,
+which contains the same release content plus the Pages staging fix and hosted
+browser-smoke stabilization. The hosted Firefox runner intermittently drops
+synthetic Pointer Lock input, so the full interactive journey is isolated there;
+Firefox launch/WebGL/accessibility/recoverable checks pass, while Chrome and
+Edge cover the full input journey. Apple Safari remains unverified.
 
 The follow-up dependency audit updates the locked development toolchain to
 Vite 7.3.8, Vitest 4.1.12, ESLint 10.15.0, and minimatch 11.0.9. A clean
