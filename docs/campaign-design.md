@@ -78,8 +78,8 @@ manual: the player selects a live hostile ground track and presses `L`, with a
 2.4 second delay and two salvos per sortie. The ordnance package adds four
 external missile stations and 800 kg of payload capacity for the sortie. The
 ground-support choices also activate the local ground layer in Disperse. Each
-choice is consumed on a retry; support is not charged as a strategic readiness
-purchase. The selector shows current inventory, post-support
+choice is a no-cost per-attempt selection and remains available on retry;
+support is not charged as a strategic readiness purchase. The selector shows current inventory, post-support
 inventory, unlock thresholds, and the chosen kit before takeoff.
 The selector offers AMRAAM or Sidewinder for air combat and JASSM-ER, AARGM-ER,
 StormBreaker, or JDAM for ground attack. Standard and Hard use four internal
@@ -127,10 +127,9 @@ the menu.
 
 The tactical debrief is shown before the campaign result. The player can accept
 a committable result or retry the chapter. Retries keep the chapter seed and do
-not apply strategic effects, but each retry costs 3 points of sortie readiness.
-If a limited sustainment window was selected for the failed attempt, that
-window is consumed as well: its choice is cleared and it is not offered again
-on any later retry of the same chapter, including after reloading the save.
+not apply strategic effects; they are practice and do not cost sortie readiness
+or consume the selected sustainment choice. A new attempt id prevents stale
+results from being accepted twice.
 Aircraft loss and aborted sorties
 cannot be accepted. Accepted attempt ids make state application idempotent.
 The final ending is `border-secured`, `invasion-contained`, or

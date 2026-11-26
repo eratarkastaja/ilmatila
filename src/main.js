@@ -302,12 +302,19 @@ function missionWithSelectedWeather(mission) {
 
 function missionForLaunch(mission, { preserveAuthoredWeather = false } = {}) {
   const weatherMission = preserveAuthoredWeather ? mission : missionWithSelectedWeather(mission);
-  if (playMode === 'campaign' || !standaloneKitSelection) return weatherMission;
+  if (playMode === 'campaign') return weatherMission;
   const kit = getStandaloneKitState(mission).selected;
+  const optionalObjectives = scaleMissileReserveObjectives(
+    weatherMission.optionalObjectives,
+    kit,
+    getDifficultyPreset('standard').player.weapons,
+  );
   return {
     ...weatherMission,
     campaignStores: kit,
     campaignKit: kit,
+    campaignOptionalObjectivesResolved: true,
+    optionalObjectives,
   };
 }
 
@@ -621,10 +628,9 @@ function selectMission(id) {
   setMenuWeather(missionResolution.mission.weather);
   setWeatherSelector(missionResolution.mission);
   const standardWeapons = getDifficultyPreset('standard').player.weapons;
-  const selectedWeapons = getDifficultyPreset(careerProgress.difficulty).player.weapons;
   const optionalObjectives = scaleMissileReserveObjectives(
     missionResolution.mission.optionalObjectives,
-    selectedWeapons,
+    getStandaloneKitState(missionResolution.mission).selected,
     standardWeapons,
   );
   renderOptionalObjectives(briefingOptionalObjectiveList, optionalObjectives);
@@ -692,13 +698,7 @@ function renderCampaignChapter() {
   document.querySelector('#theater-mission-name').textContent = t(resolved.chapter.titleKey).toUpperCase();
   setMenuWeather(resolved.preview.mission.weather);
   setWeatherSelector(resolved.preview.mission);
-  const standardWeapons = getDifficultyPreset('standard').player.weapons;
-  const selectedWeapons = getDifficultyPreset(campaignSession.difficulty).player.weapons;
-  const optionalObjectives = scaleMissileReserveObjectives(
-    resolved.preview.mission.optionalObjectives,
-    selectedWeapons,
-    standardWeapons,
-  );
+  const optionalObjectives = resolved.mission.optionalObjectives ?? resolved.preview.mission.optionalObjectives;
   renderOptionalObjectives(briefingOptionalObjectiveList, optionalObjectives);
   if (briefingVariant) {
     briefingVariant.hidden = !developmentMode || !resolved.preview.variant;

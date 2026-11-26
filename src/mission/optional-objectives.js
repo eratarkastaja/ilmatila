@@ -19,10 +19,16 @@ export function scaleMissileReserveObjectives(objectives, currentWeapons, refere
   const capacity = weapons => (weapons?.airMissiles ?? 0) + (weapons?.groundMissiles ?? 0);
   const available = capacity(currentWeapons);
   const reference = capacity(referenceWeapons);
-  if (reference <= 0 || available >= reference) return rows;
-
   return rows.map(objective => {
     if (objective.type !== 'preserveMissiles') return objective;
+    if (available <= 0 || reference <= 0) {
+      return {
+        ...objective,
+        applicability: 'notApplicable',
+        notApplicableReasonKey: 'mission.optionalObjective.result.noMissileReserve',
+      };
+    }
+    if (available >= reference) return { ...objective };
     return {
       ...objective,
       minimumRemaining: Math.min(
@@ -303,8 +309,10 @@ export class MissionOptionalObjectives {
       id: objective.id,
       type: objective.type,
       ...(objective.titleKey ? { titleKey: objective.titleKey } : {}),
-      status: 'pending',
-      detailKey: 'mission.optionalObjective.result.pending',
+      status: objective.applicability === 'notApplicable' ? 'notApplicable' : 'pending',
+      detailKey: objective.applicability === 'notApplicable'
+        ? (objective.notApplicableReasonKey ?? 'mission.optionalObjective.result.notApplicable')
+        : 'mission.optionalObjective.result.pending',
       params: {},
     }));
     this.runtime = objectives.map(() => ({

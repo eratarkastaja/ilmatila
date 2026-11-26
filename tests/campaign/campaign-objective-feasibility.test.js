@@ -43,7 +43,7 @@ function variantCases(session, chapterIndex, difficulty, choiceId) {
   // Walk enough deterministic seeds to observe every variant authored by the
   // resolved mission, while keeping this a configuration matrix rather than a
   // second campaign simulation.
-  for (let seed = 0; seed < 256 && variants.size < expectedVariants; seed++) {
+  for (let seed = 0; seed < 4096 && variants.size < expectedVariants; seed++) {
     session.state = {
       ...session.state,
       chapterIndex,

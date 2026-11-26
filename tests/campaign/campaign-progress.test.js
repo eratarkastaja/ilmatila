@@ -92,7 +92,7 @@ describe('CampaignProgress', () => {
     expect(new CampaignProgress(createStorage()).getSave('standard')).toBeNull();
   });
 
-  it('does not restore a sustainment choice after a retry consumed its window', () => {
+  it('keeps legacy saves readable without preserving the removed retry lock', () => {
     const loaded = new CampaignProgress(createStorage(JSON.stringify({
       version: 1,
       saves: {
@@ -104,8 +104,8 @@ describe('CampaignProgress', () => {
       },
     }))).getSave('standard');
 
-    expect(loaded.sustainmentUsed).toBe(true);
-    expect(loaded.sustainmentChoice).toBeNull();
+    expect(loaded.sustainmentUsed).toBeUndefined();
+    expect(loaded.sustainmentChoice).toBe('sparrow-wingman');
   });
 
   it('recovers from corrupt or unavailable storage', () => {

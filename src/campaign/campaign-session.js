@@ -1,34 +1,26 @@
 import { createSortieSeed } from '../combat/random.js';
-import { getCampaignStoreCaps, normalizeCampaignStores } from './campaign-progress.js';
+import { CAMPAIGN_CONTENT_VERSION, getCampaignStoreCaps, normalizeCampaignStores } from './campaign-progress.js';
 import { getCampaignDefinition } from './campaigns.js';
 import { resolveCampaignMission } from './resolve-campaign-mission.js';
-import { getKitLimits, getRecommendedKit, validateKit } from './campaign-kit.js';
+import {
+  getKitLimits,
+  getRecommendedKit,
+  KIT_STORE_KEYS,
+  validateKit,
+} from './campaign-kit.js';
+import { scaleMissileReserveObjectives } from '../mission/optional-objectives.js';
 import { isSupportChoiceAvailable } from './support-capabilities.js';
 
 const STATE_KEYS = ['airControl', 'defenseIntegrity', 'sortieReadiness'];
-const STORE_KEYS = ['airMissiles', 'groundMissiles', 'gunRounds', 'flares', 'chaff', 'fuelMinutes'];
 const clamp = value => Math.max(0, Math.min(100, value));
-export const CAMPAIGN_RETRY_READINESS_COST = 3;
-
-function restoreStores(stores, restore, difficulty) {
-  const caps = getCampaignStoreCaps(difficulty);
-  const next = { ...stores };
-  for (const key of STORE_KEYS) {
-    if (caps[key] === null) {
-      next[key] = null;
-      continue;
-    }
-    const amount = Number(next[key]);
-    const addition = Number(restore?.[key] ?? 0);
-    next[key] = Math.max(0, Math.min(caps[key], (Number.isFinite(amount) ? amount : caps[key]) + addition));
-  }
-  return next;
-}
+// Kept as a compatibility export for integrations that displayed the old
+// value. Retry is practice and has no persistent readiness cost now.
+export const CAMPAIGN_RETRY_READINESS_COST = 0;
 
 function resupplyStoresForNextSortie(stores, difficulty) {
   const caps = getCampaignStoreCaps(difficulty);
   const next = { ...stores };
-  for (const key of STORE_KEYS) {
+  for (const key of KIT_STORE_KEYS) {
     if (caps[key] === null) {
       next[key] = null;
       continue;
@@ -53,6 +45,7 @@ function createState(definition, difficulty, seedFactory) {
     flags: [...definition.initialState.flags],
     acceptedAttemptIds: [],
     history: [],
+    roster: {},
     attemptSequence,
     currentAttemptId: createAttemptId(definition, difficulty, attemptSequence),
     currentSeed: Number(seedFactory()) >>> 0,
@@ -62,9 +55,31 @@ function createState(definition, difficulty, seedFactory) {
     ending: null,
     stores: null,
     sustainmentChoice: null,
-    sustainmentUsed: false,
     kitSelection: null,
   };
+}
+
+function scaleInventoryForReadiness(inventory, readiness) {
+  if (readiness >= 35) return { ...inventory };
+  return Object.fromEntries(KIT_STORE_KEYS.map(key => [
+    key,
+    inventory[key] === null || key === 'fuelMinutes'
+      ? inventory[key]
+      : Math.floor(inventory[key] * .8),
+  ]));
+}
+
+function mergeWingmanRoster(previous, entries) {
+  if (!Array.isArray(entries)) return { ...previous };
+  const next = { ...previous };
+  for (const entry of entries) {
+    if (!entry || typeof entry.radioId !== 'string') continue;
+    const status = ['returned', 'lost', 'survived', 'absent'].includes(entry.status)
+      ? entry.status
+      : null;
+    if (status) next[entry.radioId] = status;
+  }
+  return next;
 }
 
 function classifyResult(chapter, outcome, result) {
@@ -130,11 +145,14 @@ export class CampaignSession {
     if (!this.definition) throw new Error(`Unknown campaign: ${campaignId}`);
     this.progress = progress;
     this.seedFactory = seedFactory;
-    this.state = progress?.getSave(difficulty) ?? createState(this.definition, difficulty, seedFactory);
+    const savedState = progress?.getSave(difficulty);
+    this.state = savedState ?? createState(this.definition, difficulty, seedFactory);
     this.selectionSnapshot = null;
     this.developmentSelection = false;
     this.replaySelection = false;
-    this.progress?.saveCampaign(this.state);
+    this.replayPractice = false;
+    this.currentLaunchSnapshot = null;
+    if (!savedState) this.progress?.saveCampaign(this.state);
   }
 
   get difficulty() { return this.state.difficulty; }
@@ -142,6 +160,7 @@ export class CampaignSession {
   get completed() { return this.state.completed; }
   get progressChapterIndex() { return this.selectionSnapshot?.chapterIndex ?? this.state.chapterIndex; }
   get isReplay() { return this.replaySelection; }
+  get isReplayPractice() { return this.replayPractice; }
   isChapterCompleted(chapterIndex) {
     if (!Number.isInteger(chapterIndex) || chapterIndex < 0 || chapterIndex >= this.progressChapterIndex) return false;
     const chapterId = this.definition.chapters[chapterIndex]?.id;
@@ -170,14 +189,18 @@ export class CampaignSession {
   }
 
   getStoresAfterChoice(choiceId = null) {
-    if (!choiceId) return this.getCurrentStores();
-    const choice = this.currentSustainmentDecision?.choices?.find(item => item.id === choiceId);
-    return choice ? restoreStores(this.getCurrentStores(), choice.restore, this.difficulty) : this.getCurrentStores();
+    // Support changes the sortie composition, not the base inventory. The
+    // method remains as a tolerant boundary for older callers.
+    return this.getCurrentStores();
+  }
+
+  getEffectiveInventory() {
+    return scaleInventoryForReadiness(this.getCurrentStores(), this.state.sortieReadiness);
   }
 
   getKitState() {
     const choice = this.selectedSustainmentChoice;
-    const inventory = this.getStoresAfterChoice(choice?.id);
+    const inventory = scaleInventoryForReadiness(this.getStoresAfterChoice(choice?.id), this.state.sortieReadiness);
     const mission = resolveCampaignMission(this.definition, this.state)?.mission ?? {};
     const recommended = getRecommendedKit(inventory, mission);
     const limits = getKitLimits(this.difficulty, mission);
@@ -192,18 +215,19 @@ export class CampaignSession {
     const { inventory, limits } = this.getKitState();
     if (!validateKit(kit, inventory, limits)) return false;
     this.state = { ...this.state, kitSelection: { ...kit } };
+    if (this.replaySelection) this.replayPractice = true;
     if (!this.selectionSnapshot) this.progress?.saveCampaign(this.state);
     return true;
   }
 
   selectSustainmentChoice(choiceId) {
     if (choiceId !== null && typeof choiceId !== 'string') return false;
-    if (choiceId !== null && this.state.sustainmentUsed) return false;
     const choices = this.currentSustainmentDecision?.choices ?? [];
     const choice = choices.find(item => item.id === choiceId);
     if (choiceId !== null && (!choice
       || !isSupportChoiceAvailable(choice, this.state, this.currentChapter))) return false;
     this.state = { ...this.state, sustainmentChoice: choiceId };
+    if (this.replaySelection) this.replayPractice = true;
     if (!this.selectionSnapshot) this.progress?.saveCampaign(this.state);
     return true;
   }
@@ -216,6 +240,10 @@ export class CampaignSession {
     if (selectionType === 'replay' && chapterIndex >= progressChapterIndex) return false;
     if (this.selectionSnapshot) this.exitChapterSelection();
     const snapshot = structuredClone(this.state);
+    const replayEntry = selectionType === 'replay'
+      ? [...this.state.history].reverse().find(entry => entry.chapterId === this.definition.chapters[chapterIndex]?.id)
+      : null;
+    const replaySnapshot = replayEntry?.launchSnapshot ?? null;
     const attemptSequence = this.state.attemptSequence + 1;
     this.state = {
       ...this.state,
@@ -226,13 +254,26 @@ export class CampaignSession {
       chapterRetryCount: 0,
       completed: false,
       ending: null,
-      sustainmentChoice: null,
-      sustainmentUsed: false,
+      sustainmentChoice: replaySnapshot?.sustainmentChoice ?? null,
       kitSelection: null,
     };
+    if (replaySnapshot) {
+      this.state = {
+        ...this.state,
+        airControl: replaySnapshot.metrics.airControl,
+        defenseIntegrity: replaySnapshot.metrics.defenseIntegrity,
+        sortieReadiness: replaySnapshot.metrics.sortieReadiness,
+        flags: [...replaySnapshot.flags],
+        roster: { ...replaySnapshot.roster },
+        currentSeed: replaySnapshot.seed,
+        kitSelection: { ...replaySnapshot.kit },
+      };
+    }
     this.selectionSnapshot = snapshot;
     this.developmentSelection = selectionType === 'development';
     this.replaySelection = selectionType === 'replay';
+    this.replayPractice = selectionType === 'replay' && !replaySnapshot;
+    this.currentLaunchSnapshot = null;
     return true;
   }
 
@@ -254,6 +295,8 @@ export class CampaignSession {
     this.selectionSnapshot = null;
     this.developmentSelection = false;
     this.replaySelection = false;
+    this.replayPractice = false;
+    this.currentLaunchSnapshot = null;
     return true;
   }
 
@@ -267,10 +310,54 @@ export class CampaignSession {
     const choice = this.selectedSustainmentChoice;
     const kit = this.getKitState();
     const stores = kit.selected;
+    const optionalObjectives = scaleMissileReserveObjectives(
+      resolved.preview.mission.optionalObjectives,
+      stores,
+      getCampaignStoreCaps('standard'),
+    );
     resolved.mission.campaignStores = stores;
     resolved.mission.campaignSustainmentChoice = choice?.id ?? null;
     resolved.mission.campaignKit = kit.selected;
+    resolved.mission.campaignOptionalObjectivesResolved = true;
+    resolved.mission.campaignOptionalObjectives = optionalObjectives;
+    resolved.mission.optionalObjectives = optionalObjectives;
+    resolved.preview.mission.campaignStores = stores;
+    resolved.preview.mission.campaignSustainmentChoice = choice?.id ?? null;
+    resolved.preview.mission.campaignKit = kit.selected;
+    resolved.preview.mission.campaignOptionalObjectivesResolved = true;
+    resolved.preview.mission.campaignOptionalObjectives = optionalObjectives;
+    resolved.preview.mission.optionalObjectives = optionalObjectives;
     resolved.stores = stores;
+    this.currentLaunchSnapshot = {
+      version: 1,
+      contentVersion: CAMPAIGN_CONTENT_VERSION,
+      chapterId: resolved.chapter.id,
+      difficulty: this.difficulty,
+      seed: resolved.seed,
+      metrics: Object.fromEntries(STATE_KEYS.map(key => [key, this.state[key]])),
+      flags: [...this.state.flags],
+      roster: { ...this.state.roster },
+      kit: { ...kit.selected },
+      sustainmentChoice: choice?.id ?? null,
+      variantId: resolved.preview.variant?.id ?? null,
+      objectiveIds: optionalObjectives.map(objective => objective.id),
+    };
+    resolved.resolvedSortie = {
+      identity: {
+        campaignId: resolved.campaignId,
+        chapterId: resolved.chapter.id,
+        attemptId: resolved.attemptId,
+      },
+      seed: resolved.seed,
+      areaId: resolved.areaId,
+      mission: structuredClone(resolved.preview.mission),
+      variant: resolved.preview.variant ? { ...resolved.preview.variant } : null,
+      encounters: structuredClone(resolved.preview.encounters),
+      effectiveKit: { ...kit.selected },
+      objectives: structuredClone(optionalObjectives),
+      support: choice?.id ?? null,
+      provenance: { source: 'campaign', contentVersion: CAMPAIGN_CONTENT_VERSION },
+    };
     return resolved;
   }
 
@@ -300,7 +387,9 @@ export class CampaignSession {
     return {
       canAccept: true,
       classification,
-      narrativeKey: `campaign.debrief.narrative.${classification}`,
+      narrativeKey: chapter.debriefNarrativeKeys?.[classification]
+        ?? `campaign.debrief.narrative.${classification}`,
+      practice: this.developmentSelection || this.replaySelection,
       changes,
       optionalObjectiveChanges: optional.applied,
       nextState: next,
@@ -310,6 +399,7 @@ export class CampaignSession {
   }
 
   acceptResult(outcome, result = {}) {
+    if (this.replaySelection) return { applied: false, reason: 'replay-not-committable' };
     const attemptId = result.campaignAttemptId ?? this.state.currentAttemptId;
     if (attemptId !== this.state.currentAttemptId || this.state.acceptedAttemptIds.includes(attemptId)) {
       return { applied: false, reason: 'stale-or-duplicate' };
@@ -318,6 +408,9 @@ export class CampaignSession {
     if (!preview.canAccept) return { applied: false, reason: 'result-not-committable' };
 
     const chapter = this.currentChapter;
+    if (!this.currentLaunchSnapshot) this.resolveCurrentMission();
+    const temporary = Boolean(this.selectionSnapshot);
+    const nextRoster = mergeWingmanRoster(this.state.roster, result.wingmenRoster);
     const state = preview.nextState;
     state.acceptedAttemptIds = [...state.acceptedAttemptIds, attemptId];
     state.history = [...state.history, {
@@ -335,13 +428,15 @@ export class CampaignSession {
         : null,
       stores: result.remainingStores ? normalizeCampaignStores(result.remainingStores, state.difficulty) : state.stores,
       score: Number.isFinite(result.score) ? Math.max(0, Math.round(result.score)) : 0,
+      launchSnapshot: this.currentLaunchSnapshot ? structuredClone(this.currentLaunchSnapshot) : null,
+      wingmenRoster: result.wingmenRoster ? structuredClone(result.wingmenRoster) : null,
     }];
     if (result.remainingStores) {
       const remainingStores = normalizeCampaignStores(result.remainingStores, state.difficulty);
       state.stores = resupplyStoresForNextSortie(remainingStores, state.difficulty);
     }
+    state.roster = nextRoster;
     state.sustainmentChoice = null;
-    state.sustainmentUsed = false;
     state.kitSelection = null;
     state.chapterIndex += 1;
     state.chapterRetryCount = 0;
@@ -360,29 +455,27 @@ export class CampaignSession {
       state.currentSeed = Number(this.seedFactory()) >>> 0;
     }
     this.state = state;
-    this.progress?.saveCampaign(this.state);
+    this.currentLaunchSnapshot = null;
+    if (!temporary) this.progress?.saveCampaign(this.state);
     return { applied: true, preview, completed: state.completed, ending: state.ending };
   }
 
   retryCurrent() {
     if (this.state.completed) return false;
-    const sustainmentChoice = this.selectedSustainmentChoice;
-    const retryReadinessCost = this.retryReadinessCost;
+    const temporary = Boolean(this.selectionSnapshot);
     this.state = {
       ...this.state,
-      sortieReadiness: clamp(this.state.sortieReadiness - retryReadinessCost),
       attemptSequence: this.state.attemptSequence + 1,
       retryCount: this.state.retryCount + 1,
       chapterRetryCount: this.state.chapterRetryCount + 1,
-      sustainmentChoice: null,
-      sustainmentUsed: this.state.sustainmentUsed || Boolean(sustainmentChoice),
     };
     this.state.currentAttemptId = createAttemptId(
       this.definition,
       this.state.difficulty,
       this.state.attemptSequence,
     );
-    this.progress?.saveCampaign(this.state);
+    this.currentLaunchSnapshot = null;
+    if (!temporary) this.progress?.saveCampaign(this.state);
     return true;
   }
 }

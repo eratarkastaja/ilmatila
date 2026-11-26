@@ -35,7 +35,7 @@ npm run dev
 
 Use `npm run build` to create the production site and `npm run preview` to serve it locally. Run the automated checks with `npm test` and `npm run lint`; `npm run test:watch` runs Vitest in watch mode.
 
-The Vite development server shows a **CAMPAIGN / CAMPAIGN CHAPTER** dropdown for jumping between all ten campaign chapters and enables the time-of-day selector for those chapters; standalone missions remain selectable as well, so gameplay work can be tested without completing the unlock chain. Production builds allow replaying successfully completed campaign chapters while future chapters remain locked. The campaign menu also has a confirmed reset action for the selected difficulty, while standalone players can still choose the sortie's starting time.
+The Vite development server shows a **CAMPAIGN / CAMPAIGN CHAPTER** dropdown for jumping between all ten campaign chapters and enables the time-of-day selector for those chapters; standalone missions remain selectable as well, so gameplay work can be tested without completing the unlock chain. Production builds allow replaying successfully completed campaign chapters while future chapters remain locked. Replay restores the accepted launch snapshot when one exists and labels older snapshot-less history as practice. Campaign retry keeps the same chapter seed and selected support without spending readiness. The campaign menu also has a confirmed reset action for the selected difficulty, while standalone players can still choose the sortie's starting time.
 
 ## Current game
 

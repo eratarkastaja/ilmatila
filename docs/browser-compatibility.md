@@ -1,5 +1,15 @@
 # Desktop browser compatibility
 
+## Local implementation-pass run — 2026-11-26
+
+Command: `PATH=/home/kusivelho/.nvm/versions/node/v22.21.0/bin:$PATH npm run test:e2e`.
+The production build passed before Playwright started. Firefox passed the three
+available tests that were not skipped. Chrome and Edge could not launch because
+their branded executables were absent (`/opt/google/chrome/chrome` and
+`/opt/microsoft/msedge/msedge`). WebKit could not launch because the host lacks
+`libmanette-0.2.so.0` and `libenchant-2.so.2`. This is an environment-blocked
+local run, not a product failure or a Safari result.
+
 ## Beta9 release-gate run
 
 The `0.3.0-beta.9` release uses the production browser matrix in the Pages

@@ -1,12 +1,14 @@
 import { getCampaignDefinition } from './campaigns.js';
 import { getDifficultyPreset } from '../combat/difficulty.js';
+import { KIT_STORE_KEYS } from './campaign-kit.js';
 
 export const CAMPAIGN_STORAGE_KEY = 'ilmatila-campaign-v1';
 const SAVE_VERSION = 1;
+export const CAMPAIGN_CONTENT_VERSION = '0.3.0-beta.9';
 const DIFFICULTIES = new Set(['easy', 'standard', 'hard']);
 
 const clampState = value => Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
-export const CAMPAIGN_STORE_KEYS = ['airMissiles', 'groundMissiles', 'gunRounds', 'flares', 'chaff', 'fuelMinutes'];
+export const CAMPAIGN_STORE_KEYS = KIT_STORE_KEYS;
 
 export function getCampaignStoreCaps(difficulty = 'standard') {
   const preset = getDifficultyPreset(difficulty);
@@ -37,6 +39,53 @@ function clone(value) {
   if (Array.isArray(value)) return value.map(clone);
   if (!value || typeof value !== 'object') return value;
   return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, clone(child)]));
+}
+
+function normalizeReplaySnapshot(value, definition, expectedDifficulty) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const chapter = definition.chapters.find(item => item.id === value.chapterId);
+  if (!chapter || value.difficulty !== expectedDifficulty) return null;
+  const metrics = Object.fromEntries(['airControl', 'defenseIntegrity', 'sortieReadiness']
+    .map(key => [key, clampState(value.metrics?.[key])]));
+  const knownFlags = new Set(definition.chapters.flatMap(item => [
+    ...Object.values(item.effects).flatMap(effect => effect.addFlags ?? []),
+    ...Object.values(item.optionalObjectiveEffects ?? {})
+      .flatMap(outcomes => Object.values(outcomes).flatMap(effect => effect.addFlags ?? [])),
+  ]));
+  const flags = Array.isArray(value.flags)
+    ? [...new Set(value.flags.filter(flag => knownFlags.has(flag)))]
+    : [];
+  const roster = value.roster && typeof value.roster === 'object' && !Array.isArray(value.roster)
+    ? Object.fromEntries(Object.entries(value.roster).filter(([id, status]) => (
+      typeof id === 'string' && id.length <= 40
+      && ['unknown', 'absent', 'returned', 'lost', 'survived'].includes(status)
+    )))
+    : {};
+  const kitKeys = [...KIT_STORE_KEYS, 'airMissileType', 'groundMissileType'];
+  const kit = value.kit && typeof value.kit === 'object' && !Array.isArray(value.kit)
+    ? Object.fromEntries(Object.entries(value.kit).filter(([key, item]) => (
+      kitKeys.includes(key) && (key.endsWith('Type')
+        ? typeof item === 'string' && item.length <= 40
+        : item === null || (Number.isInteger(item) && item >= 0))
+    )))
+    : null;
+  if (!kit || !Object.hasOwn(kit, 'airMissiles') || !Object.hasOwn(kit, 'groundMissiles')) return null;
+  return {
+    version: 1,
+    contentVersion: typeof value.contentVersion === 'string' ? value.contentVersion.slice(0, 40) : CAMPAIGN_CONTENT_VERSION,
+    chapterId: chapter.id,
+    difficulty: expectedDifficulty,
+    seed: Number(value.seed) >>> 0,
+    metrics,
+    flags,
+    roster,
+    kit,
+    sustainmentChoice: typeof value.sustainmentChoice === 'string' ? value.sustainmentChoice : null,
+    variantId: typeof value.variantId === 'string' ? value.variantId : null,
+    objectiveIds: Array.isArray(value.objectiveIds)
+      ? value.objectiveIds.filter(id => typeof id === 'string').slice(0, 40)
+      : [],
+  };
 }
 
 export function normalizeCampaignSave(value, expectedDifficulty = null) {
@@ -71,8 +120,7 @@ export function normalizeCampaignSave(value, expectedDifficulty = null) {
   const completed = chapterIndex >= definition.chapters.length || Boolean(value.completed);
   const currentChapter = definition.chapters[chapterIndex] ?? null;
   const sustainmentIds = new Set(currentChapter?.sustainmentDecision?.choices?.map(choice => choice.id) ?? []);
-  const sustainmentUsed = Boolean(value.sustainmentUsed);
-  const sustainmentChoice = !sustainmentUsed && sustainmentIds.has(value.sustainmentChoice)
+  const sustainmentChoice = sustainmentIds.has(value.sustainmentChoice)
     ? value.sustainmentChoice
     : null;
   const kitKeys = new Set([...CAMPAIGN_STORE_KEYS, 'airMissileType', 'groundMissileType']);
@@ -84,6 +132,17 @@ export function normalizeCampaignSave(value, expectedDifficulty = null) {
     )).map(([key, amount]) => [key, key.endsWith('Type') ? amount : amount === null ? null : Number(amount)]))
     : null;
 
+  const normalizedHistory = history.map(entry => ({
+    ...entry,
+    launchSnapshot: normalizeReplaySnapshot(entry.launchSnapshot, definition, value.difficulty),
+  }));
+  const roster = value.roster && typeof value.roster === 'object' && !Array.isArray(value.roster)
+    ? Object.fromEntries(Object.entries(value.roster).filter(([id, status]) => (
+      typeof id === 'string' && id.length <= 40
+      && ['unknown', 'absent', 'returned', 'lost', 'survived'].includes(status)
+    )))
+    : {};
+
   return {
     version: SAVE_VERSION,
     campaignId: definition.id,
@@ -94,7 +153,8 @@ export function normalizeCampaignSave(value, expectedDifficulty = null) {
     sortieReadiness: clampState(value.sortieReadiness),
     flags,
     acceptedAttemptIds,
-    history,
+    history: normalizedHistory,
+    roster,
     attemptSequence,
     currentAttemptId: typeof value.currentAttemptId === 'string'
       ? value.currentAttemptId
@@ -106,7 +166,6 @@ export function normalizeCampaignSave(value, expectedDifficulty = null) {
     ending: completed && typeof value.ending === 'string' ? value.ending : null,
     stores: normalizeCampaignStores(value.stores, value.difficulty),
     sustainmentChoice,
-    sustainmentUsed,
     kitSelection,
   };
 }

@@ -3,6 +3,30 @@
 This file is the maintained release record. Older beta checkpoints are
 summarized here instead of being kept as one document per pipeline attempt.
 
+## Unreleased implementation pass — 2026-11-26
+
+Campaign development selections and replays now remain temporary: accepted
+results, retries, support choices, and kit changes cannot write a temporary
+chapter back into the persistent campaign. Retry keeps the chapter seed and
+does not spend readiness or support. Accepted history stores a validated launch
+snapshot for same-content-version replays, with a practice fallback for older
+history.
+
+Readiness pressure is applied before kit selection, and the accepted kit is
+used unchanged by the sortie. Briefing, HUD, objective tracking, and debrief
+share one resolved missile-reserve value. Kit validation now rejects malformed
+or fractional stores, finite-inventory `null`, unknown keys and weapon IDs;
+StormBreaker has its own combat profile while legacy Maverick remains supported.
+The kit screen offers Light, Balanced and Heavy starting packages. Campaign
+debriefs use chapter-specific bilingual outcome text, and accepted history
+retains named wingman status when the sortie provides it.
+
+Validation for this pass is recorded in the current implementation baseline:
+`npm ci` passed, 70 Vitest files/421 tests passed, lint passed, and the build
+passed after transforming 100 modules. Firefox passed the locally available
+Playwright smoke; Chrome and Edge binaries and WebKit host libraries were not
+available. Human campaign play remains a separate follow-up check.
+
 ## 0.3.0-beta.9
 
 The Border Holds ground-radar workload is now frame-budgeted: ground contacts

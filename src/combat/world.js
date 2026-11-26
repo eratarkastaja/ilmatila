@@ -88,27 +88,31 @@ export class CombatWorld {
       ...(Number.isFinite(campaignStores.fuelMinutes) ? { enduranceMinutes: campaignStores.fuelMinutes } : {}),
       ...(missionConfig.campaignKit ? { payloadMassKg: getKitWeight(missionConfig.campaignKit) } : {}),
     });
-    const loadoutScale=missionConfig.campaignLoadoutScale ?? 1;
-    const scaleLoadout=value=>Number.isFinite(value)?Math.max(0,Math.floor(value*loadoutScale)):value;
+    // Readiness is resolved into the selectable inventory before launch. The
+    // combat world consumes the accepted kit verbatim so menu and HUD cannot
+    // disagree about the stores actually available in flight.
+    const loadoutValue=value=>Number.isFinite(value)?Math.max(0,Math.floor(value)):value;
     const effectiveWeapons={
       ...this.difficulty.player.weapons,
-      airMissiles:scaleLoadout(Number.isFinite(campaignStores.airMissiles)
+      airMissiles:loadoutValue(Number.isFinite(campaignStores.airMissiles)
         ? campaignStores.airMissiles
         : this.difficulty.player.weapons.airMissiles),
-      groundMissiles:scaleLoadout(Number.isFinite(campaignStores.groundMissiles)
+      groundMissiles:loadoutValue(Number.isFinite(campaignStores.groundMissiles)
         ? campaignStores.groundMissiles
         : this.difficulty.player.weapons.groundMissiles),
       airMissileType: campaignStores.airMissileType ?? 'amraam',
       groundMissileType: campaignStores.groundMissileType ?? 'maverick',
-      gunRounds:scaleLoadout(campaignStores.gunRounds !== undefined
+      gunRounds:loadoutValue(campaignStores.gunRounds !== undefined
         ? campaignStores.gunRounds
         : this.difficulty.player.weapons.gunRounds),
     };
-    missionConfig.optionalObjectives=scaleMissileReserveObjectives(
-      missionConfig.optionalObjectives,
-      effectiveWeapons,
-      getDifficultyPreset('standard').player.weapons,
-    );
+    if (!missionConfig.campaignOptionalObjectivesResolved) {
+      missionConfig.optionalObjectives=scaleMissileReserveObjectives(
+        missionConfig.optionalObjectives,
+        effectiveWeapons,
+        getDifficultyPreset('standard').player.weapons,
+      );
+    }
     this.input = new CombatInput(window, inputTarget);
     this.scoreSystem=new ScoreSystem();
     this.damageTaken=0;
@@ -258,8 +262,8 @@ export class CombatWorld {
       playerShots: this.projectileSystem.playerShots, hostileShots: this.projectileSystem.hostiles,
       hostileAircraft: this.airBattle.enemies,
       addTransientGlow,
-      initialCount:scaleLoadout(campaignStores.flares ?? this.difficulty?.player?.countermeasures),
-      initialChaff:scaleLoadout(campaignStores.chaff ?? this.difficulty?.player?.chaff?.count),
+      initialCount:loadoutValue(campaignStores.flares ?? this.difficulty?.player?.countermeasures),
+      initialChaff:loadoutValue(campaignStores.chaff ?? this.difficulty?.player?.chaff?.count),
       chaffConfig:this.difficulty?.player?.chaff,
       random:this.random,
       onInventoryChange: () => this.updateHud(),
@@ -1271,6 +1275,10 @@ export class CombatWorld {
       playerMaxHull:this.feedback.maxHull,
       wingmenSurvived:this.airBattle.allies.reduce((count,wingman)=>count+Number(!wingman.dead),0),
       wingmenTotal:this.airBattle.allies.length,
+      wingmenRoster: this.airBattle.allies.map(wingman => ({
+        radioId: wingman.radioId,
+        status: wingman.dead ? 'lost' : wingman.returnedToBase ? 'returned' : 'survived',
+      })),
       objectivesCompleted:this.missionSystem.objectiveSatisfied?1:0,
       objectiveCount:1,
       missionTime:Math.max(0,elapsed),

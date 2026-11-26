@@ -1,4 +1,24 @@
-# Release baseline — 2026-11-25
+# Current implementation baseline — 2026-11-26
+
+The implementation work started from commit `1ca1e33` (`docs: record beta9
+release gate`) with a clean worktree. Node.js was `v20.19.2`, npm was invoked
+through `/home/kusivelho/.nvm/versions/node/v22.21.0/bin/npm`, and the lockfile
+was present. `npm ci` completed successfully in 6 seconds. The baseline unit
+suite passed with 70 files and 412 tests in 19.07 seconds; lint passed; and the
+production build passed after transforming 100 modules in 23.46 seconds.
+The implementation result passed 70 files and 421 tests in 16.82 seconds,
+lint, and the production build after transforming 100 modules in 8.96 seconds.
+The final browser matrix ran for 53.1 seconds: Firefox passed 3 tests, while
+Chrome and Edge binaries were absent and WebKit lacked host libraries. Six
+tests were skipped by project conditions.
+
+The install reported six existing npm audit findings (five moderate, one high);
+dependencies were not changed. The baseline findings addressed by this pass
+were temporary campaign persistence during development/replay, retry consuming
+readiness/support, loadout scaling after kit selection, briefing/flying reserve
+divergence, and the missing distinct StormBreaker profile.
+
+## Historical beta9 release gate
 
 This records the completed `0.3.0-beta.9` release gate. Tag `v0.3.0-beta.9`
 points to commit `ed7b75d`; GitHub Actions release run `#143` completed the
@@ -15,16 +35,16 @@ staging preflight, beta deployment, and live browser smoke on 2026-11-25.
 
 | Command | Result |
 | --- | --- |
-| `npm ci` | Passed in the beta8 release quality and browser jobs. |
+| `npm ci` | Passed locally in 6 seconds; no dependency files changed. |
 | `npm run lint` | Passed locally; no warnings. |
-| `npm test` | Passed locally with 412 tests. |
-| `npm run build` | Passed locally; Vite transformed 100 modules with no warnings. |
+| `npm test` | Passed locally with 421 tests in 16.82 seconds. |
+| `npm run build` | Passed locally in 8.96 seconds; Vite transformed 100 modules with no warnings. |
 
 ## Production browser smoke
 
-The beta9 production-build matrix passed in Chrome, Edge, Firefox, and WebKit.
-The tag workflow also passed staging preflight and deployed live-site smoke,
-including build identity, launch, pause/resume, return-to-menu,
-repeated-launch, and terrain-package checks documented in [testing](testing.md).
-Linux WebKit exercises the recoverable Pointer Lock failure path and does not
-establish Apple Safari support.
+The historical beta9 production-build matrix passed in Chrome, Edge, Firefox,
+and WebKit. The implementation-pass matrix could only launch Firefox locally;
+Chrome/Edge executables and WebKit host libraries were unavailable. Linux
+WebKit therefore remains an environment-blocked check here and does not
+establish Apple Safari support. The historical tag workflow still records its
+separate staging and deployed-site smoke in the release section above.

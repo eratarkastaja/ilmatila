@@ -11,6 +11,23 @@ function memoryStorage() {
 }
 
 describe('CampaignSession', () => {
+  it('keeps every ordinary success benefit in the decisive result', () => {
+    const session = new CampaignSession({
+      progress: new CampaignProgress(memoryStorage()),
+      seedFactory: () => 1,
+    });
+    for (const chapter of session.definition.chapters) {
+      const decisive = chapter.effects.decisive;
+      const success = chapter.effects.success;
+      for (const key of ['airControl', 'defenseIntegrity', 'sortieReadiness']) {
+        expect(decisive[key] ?? 0, `${chapter.id}/${key}`).toBeGreaterThanOrEqual(success[key] ?? 0);
+      }
+      for (const flag of success.addFlags ?? []) {
+        expect(decisive.addFlags ?? [], `${chapter.id}/${flag}`).toContain(flag);
+      }
+    }
+  });
+
   it('resolves the same chapter and encounter plan across retries', () => {
     const progress = new CampaignProgress(memoryStorage());
     const seeds = [0x12345678];
@@ -32,7 +49,7 @@ describe('CampaignSession', () => {
     expect(first.preview.mission.weather.timeOfDay).toBe(5.5);
 
     expect(session.retryCurrent()).toBe(true);
-    expect(session.state.sortieReadiness).toBe(67);
+    expect(session.state.sortieReadiness).toBe(70);
     const retry = session.resolveCurrentMission();
     expect(retry.seed).toBe(first.seed);
     expect(retry.preview.variant).toEqual(first.preview.variant);
@@ -42,7 +59,7 @@ describe('CampaignSession', () => {
     expect(retry.attemptId).not.toBe(first.attemptId);
   });
 
-  it('consumes a selected sustainment window when retrying and does not restore it', () => {
+  it('keeps the selected sustainment window and strategic state across retries', () => {
     const storage = memoryStorage();
     const progress = new CampaignProgress(storage);
     const session = new CampaignSession({
@@ -56,7 +73,7 @@ describe('CampaignSession', () => {
     expect(session.selectSustainmentChoice('sparrow-wingman')).toBe(true);
     expect(session.getStoresAfterChoice('sparrow-wingman').airMissiles)
       .toBe(4);
-    expect(session.retryReadinessCost).toBe(3);
+    expect(session.retryReadinessCost).toBe(0);
     expect(session.resolveCurrentMission().mission).toMatchObject({
       wingmen: 3,
       campaignWingmanRadioId: 'varpunen',
@@ -65,10 +82,9 @@ describe('CampaignSession', () => {
 
     expect(session.retryCurrent()).toBe(true);
 
-    expect(session.state.sortieReadiness).toBe(67);
-    expect(session.state.sustainmentChoice).toBeNull();
-    expect(session.state.sustainmentUsed).toBe(true);
-    expect(session.selectSustainmentChoice('sparrow-wingman')).toBe(false);
+    expect(session.state.sortieReadiness).toBe(70);
+    expect(session.state.sustainmentChoice).toBe('sparrow-wingman');
+    expect(session.selectSustainmentChoice('sparrow-wingman')).toBe(true);
     expect(session.resolveCurrentMission().mission.campaignStores).toEqual({
       airMissiles: 4,
       groundMissiles: 4,
@@ -81,10 +97,9 @@ describe('CampaignSession', () => {
     });
 
     expect(session.retryCurrent()).toBe(true);
-    expect(session.state.sortieReadiness).toBe(64);
+    expect(session.state.sortieReadiness).toBe(70);
     expect(session.state.chapterRetryCount).toBe(2);
-    expect(session.state.sustainmentUsed).toBe(true);
-    expect(session.selectSustainmentChoice('sparrow-wingman')).toBe(false);
+    expect(session.selectSustainmentChoice('sparrow-wingman')).toBe(true);
 
     const reloaded = new CampaignSession({
       progress: new CampaignProgress(storage),
@@ -94,8 +109,8 @@ describe('CampaignSession', () => {
       },
     });
     expect(reloaded.state.currentSeed).toBe(321);
-    expect(reloaded.state.sustainmentUsed).toBe(true);
-    expect(reloaded.selectSustainmentChoice('sparrow-wingman')).toBe(false);
+    expect(reloaded.state.sustainmentChoice).toBe('sparrow-wingman');
+    expect(reloaded.selectSustainmentChoice('sparrow-wingman')).toBe(true);
   });
 
   it('authors an acceptable operational setback for every campaign chapter', () => {
@@ -140,7 +155,7 @@ describe('CampaignSession', () => {
     expect(lowMission.campaignFriendlyGroundHealthScale).toBeLessThan(highMission.campaignFriendlyGroundHealthScale);
     expect(lowMission.groundIto90Count).toBeLessThan(highMission.groundIto90Count);
     expect(lowMission.groundFriendlyTrucks).toBeLessThan(highMission.groundFriendlyTrucks);
-    expect(lowMission.campaignLoadoutScale).toBeLessThan(highMission.campaignLoadoutScale);
+    expect(low.getKitState().inventory.airMissiles).toBeLessThan(high.getKitState().inventory.airMissiles);
     expect(lowMission.campaignDefenseFrontOffset).toBeLessThan(highMission.campaignDefenseFrontOffset);
     expect(lowMission.wingmen).toBeLessThan(highMission.wingmen);
     expect(highMission.campaignWingmanRadioIds).toContain('owl');
@@ -196,6 +211,62 @@ describe('CampaignSession', () => {
       reason: 'stale-or-duplicate',
     });
     expect(session.state.history).toHaveLength(1);
+  });
+
+  it('keeps temporary development results out of the persistent campaign save', () => {
+    const storage = memoryStorage();
+    const progress = new CampaignProgress(storage);
+    const session = new CampaignSession({ progress, seedFactory: () => 44 });
+    const before = progress.getSave('standard');
+
+    expect(session.selectDevelopmentChapter(5)).toBe(true);
+    session.resolveCurrentMission();
+    expect(session.retryCurrent()).toBe(true);
+    expect(session.acceptResult('complete', {
+      campaignAttemptId: session.state.currentAttemptId,
+      optionalObjectives: [],
+    })).toMatchObject({ applied: true });
+    expect(progress.getSave('standard')).toEqual(before);
+    expect(session.exitChapterSelection()).toBe(true);
+    expect(session.state.chapterIndex).toBe(0);
+    expect(progress.getSave('standard')).toEqual(before);
+  });
+
+  it('stores a validated launch snapshot and replays it without committing results', () => {
+    const storage = memoryStorage();
+    const progress = new CampaignProgress(storage);
+    const session = new CampaignSession({ progress, seedFactory: () => 0x1234 });
+    session.state.roster = { 'owl-1': 'returned' };
+    const first = session.resolveCurrentMission();
+    const seed = first.seed;
+    const variant = first.preview.variant;
+
+    expect(session.acceptResult('complete', {
+      campaignAttemptId: first.attemptId,
+      wingmenRoster: [{ radioId: 'owl-1', status: 'survived' }],
+      optionalObjectives: [],
+    }).applied).toBe(true);
+    const saved = progress.getSave('standard');
+    expect(saved.history[0].launchSnapshot).toMatchObject({
+      chapterId: 'unknown-track',
+      seed,
+      difficulty: 'standard',
+      kit: expect.objectContaining({ airMissileType: 'amraam' }),
+    });
+
+    expect(session.selectCompletedChapter(0)).toBe(true);
+    expect(session.isReplay).toBe(true);
+    expect(session.isReplayPractice).toBe(false);
+    const replay = session.resolveCurrentMission();
+    expect(replay.seed).toBe(seed);
+    expect(session.state.roster).toEqual({ 'owl-1': 'returned' });
+    expect(replay.preview.variant).toEqual(variant);
+    expect(replay.resolvedSortie.effectiveKit).toEqual(first.resolvedSortie.effectiveKit);
+    expect(session.retryCurrent()).toBe(true);
+    expect(session.acceptResult('complete', {
+      campaignAttemptId: session.state.currentAttemptId,
+    })).toMatchObject({ applied: false, reason: 'replay-not-committable' });
+    expect(progress.getSave('standard').chapterIndex).toBe(1);
   });
 
   it('does not commit aircraft losses or boundary aborts', () => {
@@ -475,10 +546,10 @@ describe('CampaignSession', () => {
       campaignKitHardpointDelta: 4,
       campaignKitPayloadDeltaKg: 800,
     });
-    expect(session.retryReadinessCost).toBe(3);
+    expect(session.retryReadinessCost).toBe(0);
     expect(session.selectSustainmentChoice(null)).toBe(true);
     expect(session.selectedSustainmentChoice).toBeNull();
-    expect(session.retryReadinessCost).toBe(3);
+    expect(session.retryReadinessCost).toBe(0);
   });
 
   it('refills to the selected difficulty cap, including Hard cannon ammunition', () => {
@@ -688,6 +759,39 @@ describe('CampaignSession', () => {
     expect(new Set(visited).size).toBe(10);
     expect(session.state.ending).toBeTruthy();
     expect(session.resolveCurrentMission()).toBeNull();
+  });
+
+  it('keeps the three campaign endings deterministic and separate', () => {
+    const makeSession = flags => {
+      const session = new CampaignSession({
+        progress: new CampaignProgress(memoryStorage()),
+        seedFactory: () => 500,
+      });
+      session.state.chapterIndex = 9;
+      session.state.defenseIntegrity = flags.includes('border-line-stabilized') ? 75 : 50;
+      session.state.flags = flags;
+      return session;
+    };
+    const secured = makeSession(['border-line-stabilized', 'local-air-defense-breached']);
+    const securedMission = secured.resolveCurrentMission();
+    expect(secured.acceptResult('complete', {
+      campaignAttemptId: securedMission.attemptId,
+      optionalObjectives: [],
+    }).ending).toBe('border-secured');
+
+    const contained = makeSession([]);
+    const containedMission = contained.resolveCurrentMission();
+    expect(contained.acceptResult('complete', {
+      campaignAttemptId: containedMission.attemptId,
+      optionalObjectives: [],
+    }).ending).toBe('invasion-contained');
+
+    const unresolved = makeSession([]);
+    const unresolvedMission = unresolved.resolveCurrentMission();
+    expect(unresolved.acceptResult('setback', {
+      campaignAttemptId: unresolvedMission.attemptId,
+      optionalObjectives: [],
+    }).ending).toBe('unresolved-front');
   });
 });
 

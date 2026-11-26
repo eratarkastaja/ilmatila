@@ -943,7 +943,7 @@ function validateCampaignSustainmentDecision(decision, path, errors) {
       return;
     }
     const choiceKeys = new Set([
-      'id', 'titleKey', 'descriptionKey', 'restore', 'mission', 'optionalObjective',
+      'id', 'titleKey', 'descriptionKey', 'mission', 'optionalObjective',
       'optionalObjectiveByChapter', 'optionalObjectiveEffects', 'requiredMetric',
     ]);
     for (const key of Object.keys(choice)) {
@@ -965,15 +965,6 @@ function validateCampaignSustainmentDecision(decision, path, errors) {
         }
         validateNode(metric.key, string, `${choicePath}.requiredMetric.key`, errors);
         validateNode(metric.minimum, number(0, 100), `${choicePath}.requiredMetric.minimum`, errors);
-      }
-    }
-    if (choice.restore !== undefined && (!choice.restore || typeof choice.restore !== 'object' || Array.isArray(choice.restore))) {
-      errors.push(`${choicePath}.restore must be an object`);
-    } else if (choice.restore) {
-      const restoreKeys = new Set(['airMissiles', 'groundMissiles', 'gunRounds', 'flares', 'chaff']);
-      for (const key of Object.keys(choice.restore)) {
-        if (!restoreKeys.has(key)) errors.push(`${choicePath}.restore.${key} is not a recognized store`);
-        else validateNode(choice.restore[key], number(0, 10000), `${choicePath}.restore.${key}`, errors);
       }
     }
     if (choice.mission !== undefined && (!choice.mission || typeof choice.mission !== 'object' || Array.isArray(choice.mission))) {
@@ -1127,7 +1118,7 @@ export function validateCampaigns(campaigns = CAMPAIGNS, missions = MISSIONS) {
       }
       const chapterKeys = new Set([
         'id', 'day', 'timeOfDay', 'areaId', 'baseMissionId', 'titleKey', 'briefingKey',
-        'radioBriefingKey',
+        'radioBriefingKey', 'debriefNarrativeKeys',
         'decisiveObjectiveId', 'effects', 'missionOverrides', 'sustainmentDecision', 'optionalObjectives',
         'optionalObjectiveEffects',
       ]);
@@ -1136,6 +1127,13 @@ export function validateCampaigns(campaigns = CAMPAIGNS, missions = MISSIONS) {
       }
       validateNode(chapter.id, string, `${chapterPath}.id`, errors);
       validateNode(chapter.radioBriefingKey, string, `${chapterPath}.radioBriefingKey`, errors);
+      if (!chapter.debriefNarrativeKeys || typeof chapter.debriefNarrativeKeys !== 'object') {
+        errors.push(`${chapterPath}.debriefNarrativeKeys must be an object`);
+      } else {
+        for (const type of ['decisive', 'success', 'setback']) {
+          validateNode(chapter.debriefNarrativeKeys[type], string, `${chapterPath}.debriefNarrativeKeys.${type}`, errors);
+        }
+      }
       if (chapterIds.has(chapter.id)) errors.push(`${path}.chapters contains duplicate id "${chapter.id}"`);
       chapterIds.add(chapter.id);
       validateNode(chapter.day, number(1, 365, true), `${chapterPath}.day`, errors);

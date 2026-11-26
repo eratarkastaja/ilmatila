@@ -28,6 +28,11 @@ const chapter = ({
   titleKey: `campaign.shadowBorder.chapter.${id}.title`,
   briefingKey: `campaign.shadowBorder.chapter.${id}.briefing`,
   radioBriefingKey: `campaign.radio.${id}`,
+  debriefNarrativeKeys: Object.freeze({
+    decisive: `campaign.debrief.chapter.${id}.decisive`,
+    success: `campaign.debrief.chapter.${id}.success`,
+    setback: `campaign.debrief.chapter.${id}.setback`,
+  }),
   decisiveObjectiveId,
   effects: { decisive, success, setback },
   ...(missionOverrides ? { missionOverrides } : {}),
@@ -102,15 +107,6 @@ const LIMITED_SUSTAINMENT = {
         minimumAlive: 1,
         titleKey: 'campaign.objective.supportIto90.title',
         briefingKey: 'campaign.objective.supportIto90.briefing',
-      },
-      optionalObjectiveByChapter: {
-        'disperse': {
-          id: 'support-ito90', type: 'preserveForce', targetLifecycle: 'snapshot',
-          target: { collection: 'friendlyGround', role: 'airDefense', platform: 'ito90', labelKey: 'mission.optionalTarget.ito90' },
-          minimumAlive: 1,
-          titleKey: 'campaign.objective.supportIto90.title',
-          briefingKey: 'campaign.objective.supportIto90.briefing',
-        },
       },
       optionalObjectiveEffects: {
         completed: { defenseIntegrity: 2 },
@@ -588,7 +584,7 @@ export const CAMPAIGNS = deepFreeze({
             briefingKey: 'campaign.objective.ordnanceReserve.briefing',
           },
         ],
-        decisive: { airControl: 7, defenseIntegrity: 4, sortieReadiness: 4, addFlags: ['relay-logistics-broken', 'local-air-defense-breached'] },
+        decisive: { airControl: 7, defenseIntegrity: 4, sortieReadiness: 4, addFlags: ['relay-logistics-broken', 'counterattack-window-open', 'local-air-defense-breached'] },
         success: { airControl: 4, defenseIntegrity: 2, sortieReadiness: 2, addFlags: ['relay-logistics-broken', 'counterattack-window-open'] },
         setback: { airControl: -8, defenseIntegrity: -5 },
         optionalObjectiveEffects: {

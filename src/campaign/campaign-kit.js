@@ -6,6 +6,14 @@ export const KIT_LIMITS = Object.freeze({
   maxFuelMinutes: 480,
 });
 
+// This is the boundary between campaign persistence, the standalone menu and
+// the combat loadout. Keep it in the shared kit module so those systems cannot
+// silently grow different store sets.
+export const KIT_STORE_KEYS = Object.freeze([
+  'airMissiles', 'groundMissiles', 'gunRounds', 'flares', 'chaff', 'fuelMinutes',
+]);
+export const KIT_TYPE_KEYS = Object.freeze(['airMissileType', 'groundMissileType']);
+
 export const AIR_WEAPON_OPTIONS = Object.freeze({
   amraam: Object.freeze({ designation: 'AIM-120D-3 · AMRAAM', massKg: 161 }),
   sidewinder: Object.freeze({ designation: 'AIM-9X Block II+', massKg: 85 }),
@@ -57,12 +65,33 @@ export function getKitHardpoints(stores) {
 }
 
 export function validateKit(stores, inventory, limits = KIT_LIMITS) {
-  const keys = ['airMissiles', 'groundMissiles', 'gunRounds', 'flares', 'chaff', 'fuelMinutes'];
-  for (const key of keys) {
-    if (stores[key] !== null && (!Number.isFinite(stores[key]) || stores[key] < 0)) return false;
-    if (Number.isFinite(inventory?.[key]) && stores[key] > inventory[key]) return false;
+  if (!stores || typeof stores !== 'object' || Array.isArray(stores)) return false;
+  if (!inventory || typeof inventory !== 'object' || Array.isArray(inventory)) return false;
+  if (!limits || !Number.isInteger(limits.hardpoints) || limits.hardpoints < 0
+    || !Number.isFinite(limits.payloadKg) || limits.payloadKg < 0) return false;
+  const allowedKeys = new Set([...KIT_STORE_KEYS, ...KIT_TYPE_KEYS]);
+  if (Object.keys(stores).some(key => !allowedKeys.has(key))) return false;
+  if (KIT_STORE_KEYS.some(key => !Object.hasOwn(stores, key) || !Object.hasOwn(inventory, key))) return false;
+  for (const key of KIT_STORE_KEYS) {
+    const value = stores[key];
+    const capacity = inventory[key];
+    if (value === null) {
+      // null is the explicit unlimited-inventory representation. A finite
+      // inventory can never be bypassed by writing null into a saved kit.
+      if (capacity !== null) return false;
+      continue;
+    }
+    if (!Number.isInteger(value) || value < 0) return false;
+    if (capacity === null) continue;
+    const validCapacity = key === 'fuelMinutes'
+      ? Number.isFinite(capacity) && capacity >= 0
+      : Number.isInteger(capacity) && capacity >= 0;
+    if (!validCapacity || value > capacity) return false;
   }
-  if (!AIR_WEAPON_OPTIONS[stores.airMissileType] || !GROUND_WEAPON_OPTIONS[stores.groundMissileType]) return false;
+  if (typeof stores.airMissileType !== 'string'
+    || typeof stores.groundMissileType !== 'string'
+    || !AIR_WEAPON_OPTIONS[stores.airMissileType]
+    || !GROUND_WEAPON_OPTIONS[stores.groundMissileType]) return false;
   return getKitHardpoints(stores) <= limits.hardpoints && getKitWeight(stores) <= limits.payloadKg;
 }
 
@@ -81,5 +110,38 @@ export function getRecommendedKit(inventory, mission = {}) {
     fuelMinutes: inventory.fuelMinutes === null
       ? null
       : Math.min(inventory.fuelMinutes ?? KIT_LIMITS.maxFuelMinutes, mission.navigationDistance > 5500 ? 300 : 240),
+  };
+}
+
+function fitPreset(candidate, inventory, limits) {
+  const next = { ...candidate };
+  const reduce = ['groundMissiles', 'airMissiles', 'fuelMinutes'];
+  while (!validateKit(next, inventory, limits)) {
+    const key = reduce.find(item => Number.isInteger(next[item]) && next[item] > 0);
+    if (!key) return getRecommendedKit(inventory, {});
+    next[key] = Math.max(0, next[key] - (key === 'fuelMinutes' ? 15 : 1));
+  }
+  return next;
+}
+
+/** Returns three valid starting points; manual editing remains available. */
+export function getKitPresets(inventory, mission = {}, limits = getKitLimits('standard', mission)) {
+  const balanced = getRecommendedKit(inventory, mission);
+  const light = {
+    ...balanced,
+    airMissiles: Math.min(balanced.airMissiles, 2),
+    groundMissiles: Math.min(balanced.groundMissiles, 1),
+    fuelMinutes: balanced.fuelMinutes === null ? null : Math.min(balanced.fuelMinutes, 180),
+  };
+  const heavy = {
+    ...balanced,
+    airMissiles: Math.min(inventory.airMissiles ?? 0, mission.groundBattle ? 6 : 8),
+    groundMissiles: Math.min(inventory.groundMissiles ?? 0, mission.groundBattle ? 4 : 3),
+    fuelMinutes: inventory.fuelMinutes === null ? null : Math.min(inventory.fuelMinutes ?? 0, 240),
+  };
+  return {
+    light: fitPreset(light, inventory, limits),
+    balanced: fitPreset(balanced, inventory, limits),
+    heavy: fitPreset(heavy, inventory, limits),
   };
 }

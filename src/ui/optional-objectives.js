@@ -45,10 +45,12 @@ export function renderOptionalObjectives(container, objectives = [], results = n
     const title = document.createElement('strong');
     title.textContent = t(objective.titleKey ?? `mission.optionalObjective.${objective.type}.title`);
     const description = document.createElement('p');
-    description.textContent = t(
-      objective.briefingKey ?? `mission.optionalObjective.${objective.type}.briefing`,
-      descriptionParams(objective),
-    );
+    description.textContent = objective.applicability === 'notApplicable'
+      ? t(objective.notApplicableReasonKey ?? 'mission.optionalObjective.result.notApplicable')
+      : t(
+        objective.briefingKey ?? `mission.optionalObjective.${objective.type}.briefing`,
+        descriptionParams(objective),
+      );
     content.append(title, description);
     item.append(content);
 

@@ -88,8 +88,12 @@ battlespace-link support window, which extends air radar by 35% and the AMRAAM
 launch envelope by 10% without changing missile flight physics. Defense
 Integrity 65 unlocks the ITO 90 window; its Crotale missiles remain finite.
 The campaign RSRAKH is player-requested with the ground radar and L key, has a
-2.4-second tasking delay, and provides two six-rocket salvos. Support windows
-do not charge strategic metrics and are consumed if the attempt is retried.
+2.4-second tasking delay, and provides two six-rocket salvos.
+Support windows do not charge strategic metrics and remain available on retry.
+Retry is practice: it keeps the same chapter seed and does not change
+readiness, accepted history, roster state, flags, or the selected support. New
+accepted sorties record a versioned launch snapshot; replays use it when
+available, while legacy history without one is clearly a practice replay.
 Optional objectives can change air control, defense integrity, or sortie
 readiness when their results are accepted.
 

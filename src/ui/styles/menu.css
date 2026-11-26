@@ -797,6 +797,39 @@
   margin-top: 10px;
 }
 
+.campaign-kit-presets {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 2px;
+}
+
+.campaign-kit-presets small {
+  margin-right: 4px;
+  color: #8fa99a;
+  font: 700 10px Rajdhani,sans-serif;
+  letter-spacing: .08em;
+}
+
+.campaign-kit-preset {
+  padding: 5px 8px;
+  border: 1px solid #557465;
+  color: #cce8d2;
+  background: #0b1c18;
+  font: 700 10px Rajdhani,sans-serif;
+  letter-spacing: .06em;
+  cursor: pointer;
+}
+
+.campaign-kit-preset:hover,
+.campaign-kit-preset:focus-visible {
+  border-color: var(--menu-accent);
+  color: #f0fff2;
+  outline: 0;
+}
+
 .campaign-kit-form label {
   display: grid;
   grid-template-columns: 1fr 126px;

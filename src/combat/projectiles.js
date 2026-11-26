@@ -16,6 +16,10 @@ export const MISSILE_PROFILES = {
     designation: 'AGM-65D · MAVERICK', count: 10, damage: 9, seeker: 'ir', maxLaunchRange: 6800,
     speed: 440, burnTime: 14, life: 18, coastDrag: 0.11, turnRate: 1.05, proximityRadius: 17, proximityDamage: .82,
   },
+  playerGroundStormbreaker: {
+    designation: 'GBU-53/B · STORMBREAKER', count: 10, damage: 8, seeker: 'radar', maxLaunchRange: 7200,
+    speed: 455, burnTime: 13, life: 20, coastDrag: 0.1, turnRate: 1.12, proximityRadius: 18, proximityDamage: .84,
+  },
   playerGroundJassm: {
     designation: 'AGM-158B · JASSM-ER', count: 10, damage: 14, seeker: 'radar', maxLaunchRange: 15000,
     speed: 520, burnTime: 18, life: 35, coastDrag: 0.06, turnRate: .6, proximityRadius: 24, proximityDamage: .9,
@@ -36,6 +40,9 @@ export function getPlayerMissileProfile(domain, type = null) {
   if (type === 'jassm') return MISSILE_PROFILES.playerGroundJassm;
   if (type === 'aargm') return MISSILE_PROFILES.playerGroundAargm;
   if (type === 'jdam') return MISSILE_PROFILES.playerGroundJdam;
+  if (type === 'stormbreaker') return MISSILE_PROFILES.playerGroundStormbreaker;
+  // Keep the legacy standalone Maverick profile available for old saves and
+  // direct standalone loadouts. Campaign StormBreaker is a distinct profile.
   return MISSILE_PROFILES.playerGround;
 }
 

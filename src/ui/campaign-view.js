@@ -4,6 +4,7 @@ import {
   AIR_WEAPON_OPTIONS,
   GROUND_WEAPON_OPTIONS,
   getKitHardpoints,
+  getKitPresets,
   getKitWeight,
   validateKit,
 } from '../campaign/campaign-kit.js';
@@ -228,8 +229,8 @@ export class CampaignView {
       return;
     }
     const current = session.getCurrentStores();
-    const planned = this.scaleStores(session.getKitState().inventory, resolution.mission.campaignLoadoutScale ?? 1);
-    const forecast = this.scaleStores(session.getKitState().selected, resolution.mission.campaignLoadoutScale ?? 1);
+    const planned = session.getKitState().inventory;
+    const forecast = session.getKitState().selected;
     const rows = [
       ['airMissiles', 'campaign.stores.airMissiles'],
       ['groundMissiles', 'campaign.stores.groundMissiles'],
@@ -258,6 +259,10 @@ export class CampaignView {
   renderKit(session) {
     if (!this.kitForm) return;
     const kit = session.getKitState();
+    const mission = typeof session.resolveCurrentMission === 'function'
+      ? session.resolveCurrentMission()?.mission ?? {}
+      : {};
+    const presets = getKitPresets(kit.inventory, mission, kit.limits);
     const fields = [
       ['fuelMinutes', 'campaign.kit.fuel', 15],
       ['airMissiles', 'campaign.stores.airMissiles', 1],
@@ -267,6 +272,21 @@ export class CampaignView {
       ['chaff', 'campaign.stores.chaff', 1],
     ];
     this.kitForm.replaceChildren();
+    const presetsRow = this.documentObject.createElement('div');
+    presetsRow.className = 'campaign-kit-presets';
+    const presetsTitle = this.documentObject.createElement('small');
+    presetsTitle.textContent = t('campaign.kit.presets');
+    presetsRow.append(presetsTitle);
+    for (const [presetId, preset] of Object.entries(presets)) {
+      const button = this.documentObject.createElement('button');
+      button.type = 'button';
+      button.className = 'campaign-kit-preset';
+      button.dataset.preset = presetId;
+      button.textContent = t(`campaign.kit.preset.${presetId}`);
+      button.addEventListener('click', () => this.onKitChange?.(preset));
+      presetsRow.append(button);
+    }
+    this.kitForm.append(presetsRow);
     const selectFields = [
       ['airMissileType', 'campaign.kit.airWeapon', AIR_WEAPON_OPTIONS],
       ['groundMissileType', 'campaign.kit.groundWeapon', GROUND_WEAPON_OPTIONS],
@@ -511,15 +531,13 @@ export class CampaignView {
     if (this.sustainmentChoices) this.sustainmentChoices.hidden = false;
     this.sustainment.hidden = false;
     if (this.sustainmentStatus) {
-      this.sustainmentStatus.textContent = session.state.sustainmentUsed
-        ? t('campaign.sustainment.consumed')
-        : selected
+      this.sustainmentStatus.textContent = selected
         ? t('campaign.sustainment.selected')
         : t('campaign.sustainment.available');
     }
     if (this.sustainmentReset) {
-      this.sustainmentReset.hidden = !selected || session.state.sustainmentUsed;
-      this.sustainmentReset.disabled = session.state.sustainmentUsed;
+      this.sustainmentReset.hidden = !selected;
+      this.sustainmentReset.disabled = false;
     }
     if (this.sustainmentDescription) {
       this.sustainmentDescription.textContent = decision
@@ -533,7 +551,7 @@ export class CampaignView {
       const button = this.documentObject.createElement('button');
       button.type = 'button';
       button.className = 'campaign-sustainment-choice';
-      button.disabled = session.state.sustainmentUsed || !choice.available;
+      button.disabled = !choice.available;
       button.classList.toggle('selected', selected?.id === choice.id);
       button.setAttribute('aria-pressed', String(selected?.id === choice.id));
       const title = this.documentObject.createElement('strong');
@@ -562,13 +580,16 @@ export class CampaignView {
     this.continueButton.disabled = !preview.canAccept;
     if (!preview.canAccept) {
       this.debriefTitle.textContent = t('campaign.debrief.retryRequired');
-      this.debriefChanges.textContent = `${t('campaign.debrief.noCommit')} ${t('campaign.debrief.retryCost', {
-        readiness: preview.retryReadinessCost,
-      })}`;
+      this.debriefChanges.textContent = `${t('campaign.debrief.noCommit')} ${t('campaign.debrief.retryPractice')}`;
       return;
     }
     this.debriefTitle.textContent = t(`campaign.debrief.${preview.classification}`);
-    if (this.debriefNarrative) this.debriefNarrative.textContent = t(preview.narrativeKey ?? 'campaign.debrief.narrative.success');
+    if (this.debriefNarrative) {
+      const narrative = t(preview.narrativeKey ?? 'campaign.debrief.narrative.success');
+      this.debriefNarrative.textContent = preview.practice
+        ? `${t('campaign.debrief.practice')} ${narrative}`
+        : narrative;
+    }
     this.debriefChanges.textContent = t('campaign.debrief.changes', {
       air: signed(preview.changes.airControl),
       defense: signed(preview.changes.defenseIntegrity),

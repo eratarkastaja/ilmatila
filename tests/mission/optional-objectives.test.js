@@ -41,6 +41,20 @@ describe('MissionOptionalObjectives', () => {
     expect(objectives[0].minimumRemaining).toBe(16);
   });
 
+  it('marks a positive missile reserve not applicable when the selected kit has none', () => {
+    const [objective] = scaleMissileReserveObjectives(
+      [{ id: 'missiles', type: 'preserveMissiles', minimumRemaining: 8 }],
+      { airMissiles: 0, groundMissiles: 0 },
+      { airMissiles: 10, groundMissiles: 10 },
+    );
+    expect(objective).toMatchObject({
+      applicability: 'notApplicable',
+      notApplicableReasonKey: 'mission.optionalObjective.result.noMissileReserve',
+    });
+    const tracker = new MissionOptionalObjectives([objective]);
+    expect(tracker.update(makeState({ missilesRemaining: 0 }), true)[0].status).toBe('notApplicable');
+  });
+
   it('evaluates the built-in data-driven objective types at extraction', () => {
     const objectives = [
       { id: 'wingmen', type: 'allWingmenSurvive' },

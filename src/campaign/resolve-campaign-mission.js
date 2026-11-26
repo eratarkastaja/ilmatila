@@ -89,13 +89,10 @@ function applyDefenseIntegrityPressure(config, defenseIntegrity) {
 function applyReadinessPressure(config, readiness) {
   const pressured = { ...config };
   if (readiness < 35) {
-    pressured.campaignLoadoutScale = .8;
     pressured.campaignAirframeHealthScale = .88;
   } else if (readiness >= 80) {
-    pressured.campaignLoadoutScale = 1;
     pressured.campaignAirframeHealthScale = 1.08;
   } else {
-    pressured.campaignLoadoutScale = 1;
     pressured.campaignAirframeHealthScale = 1;
   }
   return pressured;

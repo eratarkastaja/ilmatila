@@ -428,7 +428,11 @@ describe('main game session lifecycle', () => {
     await completeTriggeredLaunch(document, expectedWorldCount);
 
     const { MISSIONS } = await import('../../src/mission/missions.js');
-    expect(harness.worlds.at(-1).mission).toBe(MISSIONS.training);
+    expect(harness.worlds.at(-1).mission).toMatchObject({
+      id: MISSIONS.training.id,
+      campaignOptionalObjectivesResolved: true,
+      campaignKit: expect.objectContaining({ groundMissileType: 'stormbreaker' }),
+    });
     expect(quickStart.open).toBe(false);
   });
 
@@ -629,7 +633,7 @@ describe('main game session lifecycle', () => {
     expect(retrySave).toMatchObject({
       chapterIndex: 0,
       chapterRetryCount: 1,
-      sortieReadiness: 67,
+      sortieReadiness: 70,
     });
     expect(retrySave.currentSeed).toBe(firstWorld.seed);
     expect(retrySave.currentAttemptId).not.toBe(firstWorld.mission.campaignAttemptId);
@@ -697,10 +701,10 @@ describe('main game session lifecycle', () => {
 
     const reserveText = missileObjective.children[0].children[1].textContent;
     const reserve = Number(reserveText.match(/\d+/)?.[0]);
-    // Patrol variants author a 15- or 16-missile reserve. Hard scales those
-    // targets to the eight-plus-eight missile loadout (12 or 13 missiles).
-    expect(reserve).toBeGreaterThanOrEqual(12);
-    expect(reserve).toBeLessThanOrEqual(13);
+    // The briefing uses the actual recommended hard loadout (six air and two
+    // ground missiles), not the full difficulty inventory.
+    expect(reserve).toBeGreaterThanOrEqual(6);
+    expect(reserve).toBeLessThanOrEqual(7);
   });
 
   it('resumes with one click after an application pause releases pointer lock programmatically', async () => {
