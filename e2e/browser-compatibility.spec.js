@@ -146,10 +146,10 @@ test('desktop browser completes the menu, controls, combat, and repeat-sortie pa
   // Refocus the active flight surface before sending the keyboard control input.
   await page.bringToFront();
   await page.locator('#game canvas').hover();
-  await page.keyboard.down('Shift');
+  await page.keyboard.down('ShiftLeft');
   await expect.poll(async () => Number(await page.locator('#speed').textContent()), { timeout: 8_000 })
     .toBeGreaterThan(speedBeforeKeyboard);
-  await page.keyboard.up('Shift');
+  await page.keyboard.up('ShiftLeft');
 
   await page.keyboard.press('Escape');
   await expect.poll(() => page.evaluate(() => document.pointerLockElement)).toBeNull();
